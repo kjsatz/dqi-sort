@@ -1,0 +1,42 @@
+# Example config; copy into the year's data repo as config.yaml and fill in.
+division_code: "17"           # DQI's sorting-category prefix (17 in 2026; check each year)
+virtual_session_min: 120
+session_lengths_min: [144, 108]
+talk_lengths_min: {oral: 12, invited: 36}
+block_min: 36
+session_budget: null          # from APS: total sessions DQI may use
+max_same_institution: 4       # soft rule, per session
+dqi_categories:               # this year's DQI submission categories: code: name
+  # "17.01.01": "Superconducting Systems Relying on Cavity States"
+other_units:
+  DAMOP: Atomic, Molecular, and Optical Physics
+  DCMP: Condensed Matter Physics
+  DLS: Laser Science
+  GPMFC: Precision Measurement and Fundamental Constants
+  DMP: Materials Physics
+  GQMS: Quantum Materials Synthesis
+  DSNP: Statistical and Nonlinear Physics
+  GMAG: Magnetism and Its Applications
+  GIMS: Instrument and Measurement Science
+  DCOMP: Computational Physics
+  GFB: Few-Body Systems and Multiparticle Dynamics
+  DCP: Chemical Physics
+  DPF: Particles and Fields
+  GDS: Data Science
+  DGRAV: Gravitational Physics
+  GPER: Physics Education Research
+  GHP: Hadronic Physics
+  DNP: Nuclear Physics
+  DBIO: Biological Physics
+  DSOFT: Soft Matter
+  DPB: Physics of Beams
+  DAP: Astrophysics
+  DPOLY: Polymer Physics
+  GERA: Energy Research and Applications
+  GMED: Medical Physics
+  DFD: Fluid Dynamics
+  DPP: Plasma Physics
+  GCCM: Shock Compression of Condensed Matter
+  GPC: Physics of Climate
+aps_columns: {}               # map from APS workbook headers to talks.csv columns
+scheduling_weights: {}        # set after the scheduling interview

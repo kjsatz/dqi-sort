@@ -1,0 +1,295 @@
+<title>Superconducting Abstract Map</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@500;700&family=Source+Sans+3:wght@400;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: one working screen. Map on the left, a control + detail rail on the right; stacks on phones. */
+:root{
+  --bg:#f4f6f8; --surface:#ffffff; --ink:#14171c; --muted:#5a6270; --faint:#c4cad3; --rule:#e2e6eb;
+  --s1:#2a78d6; --s2:#eb6834; --s3:#1baf7a; --line:#2a78d6; --hl:#fff5c2;
+  --f-display:"Schibsted Grotesk","Helvetica Neue",Arial,sans-serif;
+  --f-body:"Source Sans 3","Segoe UI",Arial,sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#111317; --surface:#191c21; --ink:#eef0f3; --muted:#a2a9b5; --faint:#464c57; --rule:#2b3038;
+  --s1:#3987e5; --s2:#d95926; --s3:#199e70; --line:#6da7ec; --hl:#3a3518; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#111317; --surface:#191c21; --ink:#eef0f3; --muted:#a2a9b5; --faint:#464c57; --rule:#2b3038;
+  --s1:#3987e5; --s2:#d95926; --s3:#199e70; --line:#6da7ec; --hl:#3a3518; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:15px;line-height:1.45;margin:0}
+.wrap{max-width:1320px;margin:0 auto;padding-inline:20px;padding-block:22px 40px}
+header{display:flex;flex-wrap:wrap;gap:8px 28px;align-items:baseline;margin-bottom:14px}
+h1{font-family:var(--f-display);font-weight:700;font-size:1.65rem;letter-spacing:-.01em;margin:0;text-wrap:balance}
+.sub{color:var(--muted);max-width:72ch;margin:0}
+.grid{display:grid;grid-template-columns:minmax(0,1fr) 360px;gap:18px;align-items:start}
+@media (max-width:900px){.grid{grid-template-columns:minmax(0,1fr)}}
+.panel{background:var(--surface);border:1px solid var(--rule);border-radius:10px}
+.mapbox{position:relative;padding:8px}
+svg{display:block;width:100%;height:auto;max-width:100%;touch-action:manipulation}
+.pt{cursor:pointer}
+.famlab{font-family:var(--f-display);font-size:13px;font-weight:500;fill:var(--muted);paint-order:stroke;stroke:var(--surface);stroke-width:4px;pointer-events:none}
+.note{font-size:12.5px;color:var(--muted);padding:2px 10px 6px;margin:0}
+.rail{display:flex;flex-direction:column;gap:14px;min-width:0}
+.rail .panel{padding:14px 14px 12px}
+.lbl{font-family:var(--f-display);font-size:11.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:0 0 6px}
+.seg{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:10px}
+.seg button{font:inherit;font-size:13.5px;border:1px solid var(--rule);background:var(--bg);color:var(--ink);padding:4px 10px;border-radius:6px;cursor:pointer}
+.seg button[aria-pressed="true"]{background:var(--ink);color:var(--surface);border-color:var(--ink)}
+button:focus-visible,input:focus-visible,.chip:focus-visible{outline:2px solid var(--s1);outline-offset:2px}
+.chips{display:flex;flex-direction:column;gap:2px;max-height:300px;overflow-y:auto;margin-inline:-4px;padding-inline:4px}
+.chip{display:grid;grid-template-columns:14px minmax(0,1fr) auto;gap:8px;align-items:center;text-align:left;font:inherit;font-size:13.5px;
+  background:none;border:0;border-radius:6px;padding:4px 6px;color:var(--ink);cursor:pointer}
+.chip:hover{background:var(--bg)}
+.sw{width:12px;height:12px;border-radius:3px;border:1.5px solid var(--faint)}
+.chip .n{font-family:var(--f-mono);font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
+.chip .t{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.code{font-family:var(--f-mono);font-size:12px;color:var(--muted)}
+input[type=search]{width:100%;font:inherit;font-size:14px;padding:6px 9px;border:1px solid var(--rule);border-radius:6px;background:var(--bg);color:var(--ink)}
+.hint{font-size:12.5px;color:var(--muted);margin:6px 0 0}
+#detail h3{font-family:var(--f-display);font-size:15px;font-weight:700;margin:0 0 4px;text-wrap:balance}
+.meta{display:grid;grid-template-columns:auto minmax(0,1fr);gap:2px 10px;font-size:13px;margin:6px 0 10px}
+.meta dt{color:var(--muted)} .meta dd{margin:0}
+.nbs{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:5px}
+.nbs li{font-size:13px;display:grid;grid-template-columns:38px minmax(0,1fr);gap:8px;cursor:pointer;border-radius:5px;padding:2px 4px}
+.nbs li:hover{background:var(--bg)}
+.nbs .sim{font-family:var(--f-mono);font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
+.same{font-family:var(--f-mono);font-size:11px;padding:0 4px;border-radius:3px;border:1px solid var(--rule);color:var(--muted);margin-left:4px;white-space:nowrap}
+.same.y{border-color:var(--ink);color:var(--ink)}
+#tip{position:absolute;pointer-events:none;background:var(--surface);border:1px solid var(--rule);border-radius:8px;padding:8px 10px;font-size:13px;max-width:320px;box-shadow:0 4px 18px rgba(0,0,0,.12)}
+#tip b{font-weight:600}
+section.tests{margin-top:26px}
+h2{font-family:var(--f-display);font-size:1.15rem;margin:0 0 6px}
+.tests p{max-width:78ch;color:var(--muted);margin:0 0 10px}
+.tbl{overflow-x:auto}
+table{border-collapse:collapse;font-size:14px;min-width:640px;width:100%}
+th,td{text-align:left;padding:7px 10px;border-bottom:1px solid var(--rule);vertical-align:top}
+th{font-family:var(--f-display);font-weight:500;font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+td.num{font-family:var(--f-mono);font-variant-numeric:tabular-nums;text-align:right}
+th.num{text-align:right}
+tr.best td{background:var(--hl)}
+tr.ref td{color:var(--muted)}
+@media (prefers-reduced-motion:no-preference){.pt{transition:opacity .15s}}
+</style>
+
+<div class="wrap">
+<header>
+  <h1>Superconducting Abstract Map</h1>
+  <p class="sub">567 talks from the 2026 superconducting sorting sheet, embedded with an open model (bge-small) and projected to 2D with UMAP. Highlight up to three groups from either sort and click a talk to see its ten nearest neighbours in the full embedding.</p>
+</header>
+
+<div class="grid">
+  <div class="panel mapbox" id="mapbox">
+    <svg id="map" viewBox="0 0 1000 760" role="img" aria-label="Scatter map of talks; nearby points have similar abstracts"></svg>
+    <div id="tip" hidden></div>
+    <p class="note">Large rings are invited talks. 2D positions are approximate. The neighbour lines and list use the full 384-dimension vectors, so trust those over apparent distance on the map.</p>
+  </div>
+
+  <div class="rail">
+    <div class="panel">
+      <p class="lbl">Grouping</p>
+      <div class="seg" id="sortSeg">
+        <button data-v="human" aria-pressed="true">Human 2026</button>
+        <button data-v="claude" aria-pressed="false">Claude run A</button>
+        <button data-v="emb" aria-pressed="false">Embedding clusters</button>
+      </div>
+      <div class="seg" id="levelSeg">
+        <button data-v="family" aria-pressed="true">Families</button>
+        <button data-v="session" aria-pressed="false">Sessions</button>
+      </div>
+      <p class="lbl" id="chipsLbl">Pick up to 3 to highlight</p>
+      <div class="chips" id="chips"></div>
+    </div>
+    <div class="panel">
+      <p class="lbl">Find a talk</p>
+      <input type="search" id="q" placeholder="Title, speaker or keyword">
+      <p class="hint" id="qcount">Matches are drawn with a dark ring.</p>
+    </div>
+    <div class="panel" id="detail">
+      <p class="lbl">Selected talk</p>
+      <p class="hint" style="margin:0">Click any point on the map.</p>
+    </div>
+  </div>
+</div>
+
+<section class="tests">
+  <h2>How well do the vectors match real sessions?</h2>
+  <p>For each talk we took its nearest other talk (multi-part partners excluded) and checked whether the humans put both in the same 2026 session or session family. We also cut each representation into 43 clusters and scored those against the sessions (ARI: 0 = chance, 1 = identical). Human sessions are only one valid answer, so treat these as relative scores.</p>
+  <div class="tbl"><table>
+    <thead><tr><th>Representation</th><th class="num">Nearest talk in same session</th><th class="num">… same family</th><th class="num">43 clusters vs human (ARI)</th><th class="num">vs Claude run A (ARI)</th></tr></thead>
+    <tbody id="tb"></tbody>
+  </table></div>
+</section>
+</div>
+
+<script>
+const D = __DATA__;
+const TESTS = __TESTS__;
+const P = D.points, byId = Object.fromEntries(P.map((p,i)=>[p.id,i]));
+const SL = ['--s1','--s2','--s3'];
+const css = v => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+const svg = document.getElementById('map'), NS='http://www.w3.org/2000/svg';
+const X = p => 30 + p.x*940, Y = p => 20 + (1-p.y)*700;
+let sort='human', level='family', picked=[], sel=null, query='';
+
+function groupOf(p){
+  if(sort==='emb') return p.ec;
+  const s = sort==='human' ? p.hs : p.cs;
+  if(level==='session') return s;
+  return (sort==='human' ? D.human_sessions : D.claude_sessions)[s].family;
+}
+function groupTitle(g){
+  if(sort==='emb') return D.emb_clusters[g].title;
+  if(level==='family') return g;
+  return (sort==='human' ? D.human_sessions : D.claude_sessions)[g].title;
+}
+function groups(){
+  const c={}; P.forEach(p=>{const g=groupOf(p); c[g]=(c[g]||0)+1});
+  let keys;
+  if(sort!=='emb' && level==='family') keys = sort==='human'?D.human_families:D.claude_families;
+  else keys = Object.keys(c).sort((a,b)=> sort==='emb' ? c[b]-c[a] : a.localeCompare(b));
+  return keys.map(k=>[k,c[k]||0]);
+}
+function defaultPicks(){
+  if(sort==='human' && level==='family') return ['Readout & amplifiers','Materials & fabrication','Bosonic & erasure'];
+  if(sort==='claude' && level==='family') return ['Readout & amplifiers','Materials & surfaces','Bosonic & erasure qubits'];
+  return groups().slice(0,3).map(g=>g[0]);
+}
+
+// static layers
+const gLines=document.createElementNS(NS,'g'), gPts=document.createElementNS(NS,'g'), gLab=document.createElementNS(NS,'g');
+svg.append(gLines,gPts,gLab);
+const dots = P.map((p,i)=>{
+  const c=document.createElementNS(NS,'circle');
+  c.setAttribute('cx',X(p).toFixed(1)); c.setAttribute('cy',Y(p).toFixed(1)); c.setAttribute('r', p.inv?7:4.2);
+  c.setAttribute('class','pt'); c.setAttribute('tabindex','-1');
+  c.addEventListener('mouseenter',e=>showTip(i,e)); c.addEventListener('mouseleave',hideTip);
+  c.addEventListener('click',()=>select(i));
+  gPts.appendChild(c); return c;
+});
+
+function render(){
+  const col = {}; picked.forEach((g,k)=>col[g]=css(SL[k]));
+  const faint=css('--faint'), surf=css('--surface'), ink=css('--ink');
+  const q=query.toLowerCase(); let qn=0;
+  P.forEach((p,i)=>{
+    const g=groupOf(p), c=col[g], d=dots[i];
+    const match = q && (p.title.toLowerCase().includes(q)||p.speaker.toLowerCase().includes(q)||p.kw.toLowerCase().includes(q));
+    if(match) qn++;
+    d.setAttribute('fill', p.inv ? (c? surf : surf) : (c||faint));
+    d.setAttribute('stroke', match? ink : p.inv ? (c||faint) : surf);
+    d.setAttribute('stroke-width', match? 2.5 : p.inv? 3 : 1.2);
+    d.style.opacity = (sel!==null && i!==sel && !P[sel].nb.some(n=>n[0]===i)) ? .35 : 1;
+  });
+  // bring highlighted to front
+  P.forEach((p,i)=>{ if(col[groupOf(p)]) gPts.appendChild(dots[i]) });
+  if(sel!==null) gPts.appendChild(dots[sel]);
+  document.getElementById('qcount').textContent = q ? `${qn} matching talk${qn===1?'':'s'} drawn with a dark ring.` : 'Matches are drawn with a dark ring.';
+  // labels at medians of highlighted groups (and all families when in family mode)
+  gLab.replaceChildren();
+  const showAll = sort!=='emb' && level==='family';
+  groups().forEach(([g])=>{
+    if(!showAll && !col[g]) return;
+    const m=P.filter(p=>groupOf(p)===g); if(!m.length) return;
+    const med=a=>{a=[...a].sort((x,y)=>x-y);return a[Math.floor(a.length/2)]};
+    const t=document.createElementNS(NS,'text');
+    let x=med(m.map(X)), y=med(m.map(Y))-12;
+    x=Math.min(Math.max(x,90),910);
+    t.setAttribute('x',x); t.setAttribute('y',y); t.setAttribute('text-anchor','middle'); t.setAttribute('class','famlab');
+    if(col[g]) t.style.fill=ink;
+    const label = groupTitle(g); t.textContent = label.length>34? label.slice(0,32)+'…' : label;
+    gLab.appendChild(t);
+  });
+  // neighbour lines
+  gLines.replaceChildren();
+  if(sel!==null){
+    const s=P[sel];
+    s.nb.forEach(([j,sim])=>{
+      const l=document.createElementNS(NS,'line');
+      l.setAttribute('x1',X(s)); l.setAttribute('y1',Y(s)); l.setAttribute('x2',X(P[j])); l.setAttribute('y2',Y(P[j]));
+      l.setAttribute('stroke',css('--line')); l.setAttribute('stroke-width',1.2+ (sim-0.6)*6); l.setAttribute('stroke-opacity',.75);
+      gLines.appendChild(l);
+    });
+  }
+  drawChips(col);
+}
+function drawChips(col){
+  const box=document.getElementById('chips'); box.replaceChildren();
+  groups().forEach(([g,n])=>{
+    const b=document.createElement('button'); b.className='chip'; b.setAttribute('aria-pressed', col[g]?'true':'false');
+    const sw=document.createElement('span'); sw.className='sw'; if(col[g]){sw.style.background=col[g]; sw.style.borderColor=col[g];}
+    const t=document.createElement('span'); t.className='t';
+    t.textContent = (sort!=='emb' && level==='session') ? `${g}  ${groupTitle(g)}` : groupTitle(g);
+    t.title = t.textContent;
+    const c=document.createElement('span'); c.className='n'; c.textContent=n;
+    b.append(sw,t,c);
+    b.addEventListener('click',()=>{
+      if(picked.includes(g)) picked=picked.filter(x=>x!==g);
+      else { picked.push(g); if(picked.length>3) picked.shift(); }
+      render();
+    });
+    box.appendChild(b);
+  });
+}
+function sessLine(p){
+  return {h:`${p.hs} · ${D.human_sessions[p.hs].title}`, c:`${p.cs} · ${D.claude_sessions[p.cs].title}`};
+}
+const tip=document.getElementById('tip'), mapbox=document.getElementById('mapbox');
+function showTip(i,e){
+  const p=P[i], s=sessLine(p);
+  tip.replaceChildren();
+  const b=document.createElement('b'); b.textContent=p.title;
+  const d=document.createElement('div'); d.className='code'; d.textContent=`${p.speaker}${p.inv?' · invited':''}`;
+  const h=document.createElement('div'); h.textContent='Human: '+s.h;
+  const c=document.createElement('div'); c.textContent='Claude: '+s.c;
+  tip.append(b,d,h,c); tip.hidden=false;
+  const r=mapbox.getBoundingClientRect(), cx=e.clientX-r.left, cy=e.clientY-r.top;
+  tip.style.left=Math.min(cx+14, r.width-330)+'px'; tip.style.top=(cy+14)+'px';
+}
+function hideTip(){tip.hidden=true}
+function select(i){
+  sel = (sel===i)? null : i; render();
+  const box=document.getElementById('detail'); box.replaceChildren();
+  const l=document.createElement('p'); l.className='lbl'; l.textContent='Selected talk'; box.append(l);
+  if(sel===null){const h=document.createElement('p'); h.className='hint'; h.style.margin='0'; h.textContent='Click any point on the map.'; box.append(h); return;}
+  const p=P[sel], s=sessLine(p);
+  const h3=document.createElement('h3'); h3.textContent=p.title;
+  const dl=document.createElement('dl'); dl.className='meta';
+  [['Speaker',p.speaker+(p.inv?' (invited)':'')],['ID',p.id],['Keywords',p.kw],['Human',s.h],['Claude',s.c]].forEach(([k,v])=>{
+    const dt=document.createElement('dt'); dt.textContent=k; const dd=document.createElement('dd'); dd.textContent=v; dl.append(dt,dd);
+  });
+  const l2=document.createElement('p'); l2.className='lbl'; l2.textContent='10 nearest talks (cosine similarity)';
+  const ul=document.createElement('ul'); ul.className='nbs';
+  p.nb.forEach(([j,sim])=>{
+    const q=P[j], li=document.createElement('li');
+    const a=document.createElement('span'); a.className='sim'; a.textContent=sim.toFixed(2);
+    const b=document.createElement('span'); b.textContent=q.title+' ';
+    const hs=document.createElement('span'); hs.className='same'+(q.hs===p.hs?' y':''); hs.textContent='H '+q.hs;
+    const cs=document.createElement('span'); cs.className='same'+(q.cs===p.cs?' y':''); cs.textContent='C '+q.cs;
+    b.append(hs,cs); li.append(a,b); li.addEventListener('click',()=>select(j)); ul.append(li);
+  });
+  const sh=P[sel].nb.filter(([j])=>P[j].hs===p.hs).length, sc=P[sel].nb.filter(([j])=>P[j].cs===p.cs).length;
+  const sum=document.createElement('p'); sum.className='hint'; sum.textContent=`${sh} of 10 share its human session; ${sc} of 10 share its Claude session. Outlined tags mark a match.`;
+  box.append(h3,dl,l2,ul,sum);
+}
+function seg(id,cb){
+  const el=document.getElementById(id);
+  el.addEventListener('click',e=>{const b=e.target.closest('button'); if(!b) return;
+    el.querySelectorAll('button').forEach(x=>x.setAttribute('aria-pressed', x===b?'true':'false')); cb(b.dataset.v);});
+}
+seg('sortSeg',v=>{sort=v; document.getElementById('levelSeg').hidden = v==='emb'; picked=defaultPicks(); render();});
+seg('levelSeg',v=>{level=v; picked=defaultPicks(); render();});
+document.getElementById('q').addEventListener('input',e=>{query=e.target.value.trim(); render();});
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change',render);
+new MutationObserver(render).observe(document.documentElement,{attributes:true,attributeFilter:['data-theme']});
+picked=defaultPicks(); render();
+
+// results table
+const tb=document.getElementById('tb');
+TESTS.forEach(r=>{
+  const tr=document.createElement('tr'); if(r.cls) tr.className=r.cls;
+  const td=document.createElement('td'); td.textContent=r.name; tr.append(td);
+  r.v.forEach(v=>{const c=document.createElement('td'); c.className='num'; c.textContent = v==null?'—':(typeof v==='number'? (v<1? Math.round(v*100)+(r.pct?'%':'') : v) : v); if(typeof v==='number' && !r.pct) c.textContent=v.toFixed(2); tr.append(c)});
+  tb.append(tr);
+});
+</script>

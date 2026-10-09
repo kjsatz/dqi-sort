@@ -1,0 +1,7 @@
+numpy
+scikit-learn
+# embeddings: install what your chosen model needs
+# EmbeddingGemma / nomic via Ollama: nothing extra (needs a running Ollama)
+# SPECTER2:            torch transformers adapters
+# sentence-transformers models: sentence-transformers
+# local ONNX test model: onnxruntime tokenizers
