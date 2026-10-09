@@ -10,7 +10,7 @@ The process is designed and was tested on the 2026 superconducting sessions (see
 
 ## Giving feedback on the process
 
-Comment on the open PROCESS.md review pull request: click the `+` next to any line to leave a comment there, or add a general comment on the pull request. Questions, objections and "this won't work because..." are all welcome.
+Comment on the [PROCESS.md review pull request](https://github.com/kjsatz/dqi-sort/pull/1): in its Files changed tab, click the `+` next to any line to leave a comment there, or add a general comment on the pull request. Questions, objections and "this won't work because..." are all welcome.
 
 ## Contributing
 
