@@ -1,0 +1,23 @@
+# Made-up test data folder for dqi_sort.intake. No real talks or people.
+talk_lengths_min: {oral: 12, invited: 36}
+dqi_categories:
+  "17.01.01": "Test category A"
+  "17.01.02": "Test category B"
+aps_input:
+  in_person: {file: input/in_person.csv}
+  virtual: {file: input/virtual.csv}
+aps_columns:
+  ID: talk_id
+  First Name: first_name
+  Last Name: last_name
+  Affiliation: affiliation
+  SC: submitted_category
+  Type: type
+  Title: title
+  Body: body
+  Submitter Notes: submitter_notes
+  Time Zone/Country: time_windows
+  Session Abbreviation: session_id
+  Speaking Order: order
+  Sorter Notes: sorter_note
+aps_types: {Oral: oral, Invited: invited}

@@ -1,0 +1,7 @@
+ID,First Name,Last Name,Affiliation,SC,Type,Title,Body,Submitter Notes,Session Abbreviation,Speaking Order,Sorter Notes,0
+1000003,Ada,Example,Universit√§t Musterstadt,17.01.01,Oral,Many‚ÄëBody Zeno effect in a toy model,We study a <em>toy</em> model with &mu;s coherence and √π scaling.,,,,,
+1000001,Bo,Placeholder,√É‚Ä∞cole Fictive,17.01.02,Invited,An invited overview of nothing in particular,,,TESTS1,1,keep first,
+1000002,Cy,Sample,Nowhere Institute,99.01.01,Oral,Fake title<!-- notionvc: 00000000-0000-0000-0000-000000000000 -->,Infidelity below <!--[if gte msEquation 12]><m:oMath><m:r>10</m:r></m:oMath><![endif]-->10-5 for an imaginary gate.,Please schedule after talk 1000003.,,,,
+1000004,Di,Sample,Nowhere Institute,17.01.01,Oral,"Imaginary results, part I",Identical abstract shared by a two-part talk about imaginary results.,,,,,
+1000005,Ed,Sample,Nowhere Institute,17.01.01,Oral,"Imaginary results, part II",Identical abstract shared by a two-part talk about imaginary results.,,,,,
+,,,,,,,,,,,,

@@ -12,7 +12,8 @@ Tools for sorting the APS Global Physics Summit DQI (Division of Quantum Informa
 ## Layout
 
 - `PROCESS.md`: the process, data format and rules.
-- `dqi_sort/`: the pipeline package. So far: `embed.py` (embeddings, saved as .npz), `score_embeddings.py` (score embeddings against a reference sort).
+- `dqi_sort/`: the pipeline package. So far: `intake.py` (stage 1: APS export to `talks.csv` and `abstracts.jsonl`; re-runnable, keeps later-stage columns), `textfix.py` (minimal text repair: encoding damage and hidden HTML comments only; other HTML is left as submitted), `embed.py` (embeddings, saved as .npz), `score_embeddings.py` (score embeddings against a reference sort).
+- `tests/`: pytest, with made-up fixtures in `tests/fixtures/`. Set up with `python3 -m venv .venv && .venv/bin/pip install -r requirements.txt`; run `.venv/bin/python -m pytest tests`.
 - `prompts/card_spec.md`: the Haiku presentation-card prompt (`{CATEGORIES}` and `{UNITS}` are filled from config).
 - `config.example.yaml`: config template, including the list of other APS units.
 - `docs/embeddings.md`: how to run and compare embedding models.
@@ -20,11 +21,11 @@ Tools for sorting the APS Global Physics Summit DQI (Division of Quantum Informa
 
 ## Status (Oct 9, 2026)
 
-Done: the 2026 superconducting test (see `prototype/README.md`), the process design, the card spec, the embedding step (tested with a small local model only).
+Done: the 2026 superconducting test (see `prototype/README.md`), the process design, the card spec, the embedding step (tested with a small local model only), the APS parser (`python -m dqi_sort.intake DATA_DIR`), run on the dry run.
 
 Next, for a dry run on the full 2026 DQI workbook before abstracts arrive on about Nov 9:
 
-1. APS workbook parser into the data format, driven by the column map in `config.yaml`: repairs encoding damage (keeping the raw text), and splits any existing session assignments into `reference/`. Plus the reverse writer for the final APS sheet.
+1. The reverse writer for the final APS sheet (the parser is done).
 2. Card generation through the Haiku API (Batch API), including the malformed-text flag, then the linking step (multi-part series across categories; affiliation to institution).
 3. Validators (the checks listed in `PROCESS.md`) as one command, and a pre-commit hook here that refuses data files.
 4. Run EmbeddingGemma (via Ollama) and SPECTER2 on Kevin's Mac and score them (`docs/embeddings.md`).

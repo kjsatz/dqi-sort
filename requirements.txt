@@ -1,5 +1,9 @@
 numpy
 scikit-learn
+pyyaml
+ftfy
+openpyxl     # only for .xlsx APS exports
+pytest
 # embeddings: install what your chosen model needs
 # EmbeddingGemma / nomic via Ollama: nothing extra (needs a running Ollama)
 # SPECTER2:            torch transformers adapters

@@ -38,5 +38,22 @@ other_units:
   DPP: Plasma Physics
   GCCM: Shock Compression of Condensed Matter
   GPC: Physics of Climate
-aps_columns: {}               # map from APS workbook headers to talks.csv columns
+aps_input:                    # APS exports, relative to the data folder (CSV, or .xlsx with sheet:)
+  in_person: {file: input/in_person.csv}
+  virtual: {file: input/virtual.csv}
+aps_columns:                  # APS header -> field (see FIELDS in dqi_sort/intake.py); unmapped columns are ignored
+  ID: talk_id
+  First Name: first_name
+  Last Name: last_name
+  Affiliation: affiliation
+  SC: submitted_category
+  Type: type
+  Title: title
+  Body: body
+  Submitter Notes: submitter_notes
+  Time Zone/Country: time_windows     # virtual only
+  Session Abbreviation: session_id    # split into reference/ on intake; written back on delivery
+  Speaking Order: order
+  Sorter Notes: sorter_note
+aps_types: {Oral: oral, Invited: invited}
 scheduling_weights: {}        # set after the scheduling interview
