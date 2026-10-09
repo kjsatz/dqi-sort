@@ -8,11 +8,14 @@ Tools for sorting the APS Global Physics Summit DQI (Division of Quantum Informa
 - **Sorting never reads the reference sort.** Data repos may hold a past human sort under `reference/` (split out by the parser on intake). Only scoring and comparison read it; no sorting, proposal, packing or review step may.
 - People decide at the checkpoints in `PROCESS.md`. Claude drafts, proposes and flags; it does not make the checkpoint decisions.
 - Data in the private repo is plain CSV / JSONL, sorted by stable ID, so diffs are readable. Never delete talk rows; change their status.
+- `main` is protected: never push to it. Work on a branch and open a pull request; the `checks` workflow (no data files, tests) must pass. Enable the local hook once per clone with `git config core.hooksPath .githooks`.
+- `review/process-base` and `review/process` exist only for the PROCESS.md review pull request (the base lacks PROCESS.md so every line can take a comment). Never merge it. Agreed changes to PROCESS.md go to `main` in their own pull request.
 
 ## Layout
 
 - `PROCESS.md`: the process, data format and rules.
 - `dqi_sort/`: the pipeline package. So far: `intake.py` (stage 1: APS export to `talks.csv` and `abstracts.jsonl`; re-runnable, keeps later-stage columns), `textfix.py` (minimal text repair: encoding damage and hidden HTML comments only; other HTML is left as submitted), `embed.py` (embeddings, saved as .npz), `score_embeddings.py` (score embeddings against a reference sort).
+- `scripts/check_no_data.py`: refuses data files (run by `.githooks/pre-commit` and by `.github/workflows/checks.yml`).
 - `tests/`: pytest, with made-up fixtures in `tests/fixtures/`. Set up with `python3 -m venv .venv && .venv/bin/pip install -r requirements.txt`; run `.venv/bin/python -m pytest tests`.
 - `prompts/card_spec.md`: the Haiku presentation-card prompt (`{CATEGORIES}` and `{UNITS}` are filled from config).
 - `config.example.yaml`: config template, including the list of other APS units.
@@ -27,7 +30,7 @@ Next, for a dry run on the full 2026 DQI workbook before abstracts arrive on abo
 
 1. The reverse writer for the final APS sheet (the parser is done).
 2. Card generation through the Haiku API (Batch API), including the malformed-text flag, then the linking step (multi-part series across categories; affiliation to institution).
-3. Validators (the checks listed in `PROCESS.md`) as one command, and a pre-commit hook here that refuses data files.
+3. Validators (the checks listed in `PROCESS.md`) as one command.
 4. Run EmbeddingGemma (via Ollama) and SPECTER2 on Kevin's Mac and score them (`docs/embeddings.md`).
 5. Area proposals and packing (from the prototype prompts), with the packing report as a pull-request description.
 6. Review sheets: `sync-sheets` (shared sheet updated in place, new area sheet per checked-in area, stamped with the commit) and intake with three-way comparison.
