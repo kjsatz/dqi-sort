@@ -157,7 +157,7 @@ Packing changes the whole sort at once, so it arrives as a GitHub pull request. 
 - each talk that moved, with where it moved from and to, and a one-line reason
 - talks drawn into a session from another area or category
 - each session's fill
-- any session below a fill threshold
+- any session with more than one empty talk slot. Session lengths are not fixed in advance: a 144-minute session with three empty slots is a full 108-minute session. So packing picks each session's length to keep it full, within the number of 144- and 108-minute slots available (roughly half of each), and the report shows how many sessions of each length were built against the slots for each
 - any session with more than the allowed talks from one institution
 - the total against the session budget
 - any talk proposed for another unit, as a last resort
@@ -334,9 +334,3 @@ One person, the chair coordinator, runs all chair correspondence from a single h
 - **Google Sheets API (service account):** `sync-sheets`, run by a GitHub Action in the private repo.
 
 Speaker names are not sent to Claude for the cards; affiliations are, for the single-group rule.
-
-## Open questions
-
-- Which scheduling preferences are missing, and how should they be ranked?
-- What fill threshold should the packing report flag?
-- Who reviews each area?
