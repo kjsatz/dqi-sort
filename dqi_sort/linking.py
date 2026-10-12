@@ -12,6 +12,8 @@ prepare writes DATA_DIR/work/linking/:
 Claude reviews these and writes the decisions into the data repo:
     linking/series.csv     series_id, talk_id, part, sure (yes / no), note
     institutions.csv       affiliation, institution
+    linking/institution_overrides.csv   (optional) talk_id, institution, note: for talks whose affiliation
+                           string does not settle the institution (e.g. "NIST" with no site)
 
 apply checks both files and fills series, series_part and institution in talks.csv; talks in a series
 that is not sure get the flag series_uncertain, for the lead.
@@ -157,6 +159,11 @@ def apply(data_dir):
         for e in errs:
             print('ERROR', e)
         sys.exit(f'{len(errs)} errors; nothing written')
+    ov_path = os.path.join(data_dir, 'linking', 'institution_overrides.csv')
+    overrides = {r['talk_id']: r['institution'] for r in read_csv(ov_path)} if os.path.exists(ov_path) else {}
+    bad = [i for i in overrides if i not in talks]
+    if bad:
+        sys.exit(f'institution overrides for unknown talks: {bad}')
     member = {r['talk_id']: r for r in series}
     unsure = {sid for sid, rs in groups.items() if any(r['sure'].strip().lower() != 'yes' for r in rs)}
     for t in rows:
@@ -166,11 +173,11 @@ def apply(data_dir):
         if r and r['series_id'] in unsure:
             flags.append('series_uncertain')
         t['flags'] = ';'.join(sorted(flags))
-        t['institution'] = inst.get(t['affiliation'], t['institution'])
+        t['institution'] = overrides.get(t['talk_id']) or inst.get(t['affiliation'], t['institution'])
     write_csv(path, cols, rows)
-    n_inst = len(set(inst.values()))
+    n_inst = len({t['institution'] for t in rows if t['institution']})
     print(f'{len(groups)} series ({len(unsure)} uncertain) covering {len(series)} talks; '
-          f'{len(inst)} affiliations -> {n_inst} institutions; talks.csv updated')
+          f'{len(inst)} affiliations -> {n_inst} institutions ({len(overrides)} per-talk overrides); talks.csv updated')
 
 
 def main():
