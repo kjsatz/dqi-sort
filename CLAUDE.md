@@ -38,6 +38,7 @@ Next, for a dry run on the full 2026 DQI workbook before abstracts arrive on abo
 - Stage 0: made-up venue in the 2027 format (`venue/rooms.csv`, `schedule/slots.csv`; see the dry-run repo's `CLAUDE.md`).
 - Stage 2, cards: full run (`docs/cards.md`), then embed. 66 invited talks have no abstract (title is the speaker's name) and get no card until their topic is supplied.
 - Stage 3, linking: done on the dry run (82 series, 393 institutions); 4 uncertain series and one duplicate submission wait for the lead.
+- Stage 3 to do: `linking prepare` should also list cards whose `constraints` ask to follow or share a session with another talk, so they become two-part series (`PROCESS.md`). On the dry run, stage 5 met several such requests across areas (e.g. a donor series asking to follow a talk in another area) too late.
 - Stage 4: proposed on the dry run (10 areas + virtual; 99 flags in `views/flags.md`), waiting for the lead's checkpoint.
 - Stages 5-6: session proposals, packing (OR-Tools; packing chooses 144 or 108 minutes per session within the slots available), with the packing report as a pull request in the data repo.
 - Scoring: blind judge of Claude's sort against the 2026 human sort; check flagged talks against those that left DQI.
