@@ -1,15 +1,19 @@
-You are proposing the sessions for one review area of the APS Global Physics Summit, Division of Quantum
-Information (DQI). Researchers who know the field will review your proposal in a spreadsheet, so make it a
-program they would recognise as good.
+You are drafting the sessions for one work area of the APS Global Physics Summit, Division of Quantum
+Information (DQI). After all areas are drafted, a global pass fits the whole meeting to its time slots, combining
+released talks from different areas and trading a few talks between sessions; then researchers who know the
+field review it. Make the draft a program they would recognise as good.
 
 ## Input
 
 Read `{DIR}/brief.md` (the area, its numbers and its limits), then every card in `{DIR}/cards.txt`. The file
-is long: read it in chunks until you have seen every card. Read only these two files.
+is long: read it in chunks until you have seen every card. Read only these two files. Keep any helper scripts in `{DIR}/scratch/` (other agents run at the same time and share the
+general scratchpad).
 
 Each card is a standard summary of one talk: ID, type (oral or INVITED), title, speaker and institution, then platform,
-problem, approach, key claim and keywords, and sometimes a series (multi-part talks), a scheduling request from
-the submitter, or a note that the talk could go to another APS unit. Cards are sorted by the DQI category that fits
+problem, approach, key claim and keywords, and sometimes a series (multi-part talks, including pairs whose
+submitter asked to follow another talk), a scheduling request from the submitter, a note that the talk could go to
+another APS unit, or a bridge mark ("near SCMAT 7/10": most of its nearest neighbours by content are in other
+areas). Cards are sorted by the DQI category that fits
 them best, so neighbouring cards are often related, but categories do not matter; content does.
 
 ## Session rules
@@ -38,38 +42,30 @@ Titles are what people see in the program: short, specific, in title case, with 
 
 ## Released talks
 
-Release a talk only when it fits poorly in every session you can build here and would fit better somewhere
-else in DQI: another area's topic, or a session drawn from several areas. Released talks go to the pool of
-lonely abstracts, and the next stage (packing) places them across all of DQI using the slots you did not use.
-Release sparingly: most areas should release under 5% of their units. Never release a talk that has a
-reasonable home here just to make the numbers work. Talks marked "other unit" are the first candidates
-if something has to go, but keep them when they fit.
+Release a talk when it fits poorly in every session you can build here: it belongs to another area's topic, or
+it would only be filler. Released talks go to the pool of lonely abstracts, and the global pass places them across
+all of DQI, often in a session drawn from several areas. When choosing what to release, prefer bridge talks
+(marked "near ...") and talks marked "other unit": they are the most likely to find a good home with similar talks
+from other areas. Never release a talk that fits a session here well, bridge mark or not. Most areas should release
+under 5% of their units.
 
 Each released talk needs a one-line reason and a suggested home (a session topic, and the area if it is
 another one).
-
-## Options
-
-Where part of the area could be split in clearly different reasonable ways (for example by platform versus by
-problem), you may add up to 3 alternatives. Each replaces specific sessions of your proposal with a different
-set of sessions holding exactly the same talks. Give options only where the choice genuinely matters to the
-reviewers; most areas need none or one.
 
 ## Output
 
 Write `{DIR}/proposal.json`:
 
 ```
-{"sessions": [{"title": "Fluxonium Qubits", "minutes": 144,
+{"sessions": [{"title": "Fluxonium Qubits",
                "scope": "One sentence: what belongs here, and what goes to the nearest similar session.",
                "talks": ["id", "...in presentation order..."],
                "weakest_fits": ["up to 3 ids that fit least well, if any"]}],
  "released": [{"id": "...", "reason": "...", "suggested_home": "..."}],
- "options": [{"why": "...", "replaces": [3, 4], "sessions": [...same form as above...]}],
  "notes": "Anything the reviewers should know: hard calls, rules you could not keep."}
 ```
 
-`replaces` lists session numbers, counting your `sessions` from 1. `options` and `released` may be empty lists.
+`released` may be an empty list.
 
 Then run
 
@@ -78,4 +74,5 @@ Then run
 and fix every ERROR until it prints OK. Fix WARN lines where you reasonably can, and explain the rest in
 `notes`.
 
-Finish with a short summary (3 to 5 lines): sessions by length, units released, and the hardest calls.
+Finish with a short summary (3 to 5 lines): number of sessions and their sizes, units released, and the hardest
+calls.

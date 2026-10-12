@@ -1,22 +1,20 @@
-# Session proposals
+# Session drafts and the global pass
 
-Stage 5 of `PROCESS.md`. Claude proposes the sessions for each review area, one agent per area, following `prompts/session_spec.md`. The agents run as Claude subagents inside Claude Code (Opus), not through the API. Code: `dqi_sort/sessions.py`.
+Stages 5 and 6 of `PROCESS.md` (Drafting and the global pass). Claude agents run as subagents inside Claude Code (Opus), not through the API. Code: `dqi_sort/sessions.py` (drafts) and `dqi_sort/pack.py` (global pass); prompts in `prompts/session_spec.md`, `prompts/pack_spec.md` and `prompts/critique_spec.md`.
 
-## Steps
+## Stage 5: drafts
 
-1. `python -m dqi_sort.sessions prepare DATA_DIR` splits the in-person grid (`schedule/slots.csv`) into a share for each area: at most so many 144-minute and 108-minute sessions, in proportion to the area's talks, adding up to every slot in the grid. For each area it writes `DATA_DIR/work/sessions/AREA/`: `cards.txt` (a compact card per talk, sorted by best category), `brief.md` (the area's numbers and share), `prompt.md` (the spec, filled in) and `talks.json` (what the check needs).
-2. In Claude Code, launch one Opus subagent per area (they run in parallel), each told: "Read `DATA_DIR/work/sessions/AREA/prompt.md` and do exactly what it says. Read only the files it names. Write only proposal.json in that folder." Each writes `proposal.json` and runs `python -m dqi_sort.sessions check` on it until it prints OK.
-3. `python -m dqi_sort.sessions apply DATA_DIR` checks every proposal and writes the sort: `sorting/sessions.csv`, `sorting/assignments.csv` (released talks have no session: they are the lonely abstracts), `sorting/moves.csv` (one row per release), alternative splits in `sorting/options/AREA/`, and the views `views/sessions.md` (the whole picture against the grid) and `views/sessions/AREA.md` (each session with its talks, estimated attendance and suggested room size). Ollama must be running for the attendance estimates; `--no-attendance` skips them.
-4. Commit the data repo. `work/` is not committed. `prepare` refuses to run while proposals are in `work/sessions/`; move them away to start again.
+1. `python -m dqi_sort.sessions prepare DATA_DIR` writes, per work area, `DATA_DIR/work/sessions/AREA/`: `cards.txt` (a compact card per talk; bridge talks marked "near OTHER" when at least 7 of their 10 nearest neighbours are in other areas), `brief.md`, `prompt.md` and `talks.json`.
+2. In Claude Code, launch one Opus subagent per area, in parallel: "Read `DATA_DIR/work/sessions/AREA/prompt.md` and do exactly what it says. Read only the files it names. Write only proposal.json in that folder." Each runs `python -m dqi_sort.sessions check` until it prints OK.
 
-Session IDs are the area code and a number (`QEC07`); they stay fixed when titles change.
+A draft session holds 8 to 12 units (an oral talk is 1, an invited talk 3); its length is not chosen yet. Talks with no good home in the area are released to the pool, bridge talks first. Virtual sessions are final at this stage (120 minutes; speakers share a time window).
 
-## What the check enforces
+## Stage 6: the global pass
 
-- every talk of the area placed once or released with a reason and a suggested home
-- sessions of 144 or 108 minutes, full to within one 12-minute unit; no more of each length than the area's share
-- at most 2 invited talks per session; series together, consecutive and in part order
-- virtual: 120-minute sessions whose speakers share a time window (the agent records the window it assumed for speakers who gave none)
-- warnings: more than 4 talks from one institution in a session; more than 8% of an area's units released
+1. `python -m dqi_sort.pack start DATA_DIR` collects the drafts into `work/pack/state.json` and writes the working files: `overview.md` (every session and its talks; the pool with full cards), `check.md` (the length check), `candidates.md` (short lists from the embeddings) and `prompt.md`.
+2. Launch one Opus subagent: "Read `DATA_DIR/work/pack/prompt.md` and do exactly what it says." It applies moves in batches with `python -m dqi_sort.pack ops DATA_DIR OPS.json`, each with a reason, until `pack status` says FITS.
+3. Critique round (before people see it): `python -m dqi_sort.pack critique DATA_DIR` writes one folder per review area; launch one Opus critic per folder ("Read `.../critique/AREA/prompt.md` and do exactly what it says"). Then launch the global agent again with the same prompt: it weighs the suggestions and keeps the sort fitting. Repeat if a round still changes a lot.
+4. `python -m dqi_sort.pack finish DATA_DIR --replace` writes `sorting/sessions.csv`, `sorting/assignments.csv`, `sorting/moves.csv`, `views/sessions.md`, `views/sessions/AREA.md` (with coherence, weakest fits, attendance estimates and suggested room sizes; Ollama must be running) and `views/packing_report.md`.
+5. Commit the data repo on a branch and open a pull request with `views/packing_report.md` as its description. The lead reviews and merges; then `python -m dqi_sort.sheets sync DATA_DIR` makes the review sheets.
 
-Released talks and the slots the areas left unused go to packing (stage 6), which builds sessions from them across areas.
+The length check: a 144-minute session holds 12 units (11 allowed), a 108-minute one 9 (8 allowed). Given the slots of each length, it picks the lengths that need the fewest talk moves and lists each session that must grow or shrink. Session IDs are the draft area and a number (`QEC07`), or `X01`, `X02`... for sessions built in the global pass; review areas are assigned at the end (the area most of a session's talks were drafted in).
