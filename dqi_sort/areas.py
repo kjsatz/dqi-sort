@@ -2,9 +2,11 @@
 
     python -m dqi_sort.areas propose DATA_DIR [--dry-run]
 
-Areas are defined in config.yaml (`areas`: code -> name and the DQI categories it takes). Each talk starts
+Areas are defined in config.yaml (`areas`: code -> name, the DQI categories it takes, and optionally the
+physical `modality` of a platform area: superconducting, spin, defect or amo). Each talk starts
 in the area of its card's best_category (its content, not where it was submitted). Then, using the card
-embeddings, a talk whose nearest neighbours mostly sit in one other area (MOVE_VOTES of K) is moved there.
+embeddings, a talk whose nearest neighbours mostly sit in one other area (MOVE_VOTES of K) is moved there,
+unless that would take it to another physical modality its own platform does not name.
 All parts of a series go to the area of part 1. Virtual talks go to VIRTUAL.
 
 Writes the area column of talks.csv (locked talks are left alone), and two generated views:
@@ -13,13 +15,23 @@ Writes the area column of talks.csv (locked talks are left alone), and two gener
     views/flags.md   what the lead must decide: leadership review, "belongs in another unit", malformed
                      text, uncertain series, duplicate submissions; plus the "could fit" other-unit notes
 """
-import argparse, collections, csv, json, os, sys
+import argparse, collections, csv, json, os, re, sys
 import numpy as np
 import yaml
 from dqi_sort.embed import load as load_embeddings
 
 K = 10
 MOVE_VOTES = 7
+# Physical modality of a card's platform, from its wording. Areas may declare a `modality` in config.yaml;
+# the neighbour check moves a talk between areas of different modalities only if its own platform names the
+# destination modality, so talks stay with their physical platform by default (a bosonic code on trapped
+# ions stays with atoms and photons even if its nearest neighbours are superconducting bosonic codes).
+MODALITY_WORDS = {
+    'superconducting': r'supercond|transmon|fluxonium|josephson|circuit qed|cqed|\bsquid|kinetic inductance|\btwpa|\bjpa|granular alumin|tantalum|niobium',
+    'spin': r'quantum dot|spin qubit|donor|silicon|germanium|\bsige\b|gate-defined|exchange-only|singlet-triplet|hole spin',
+    'defect': r'\bnv\b|nitrogen.vacancy|diamond|color cent|colour cent|silicon carbide|\bsic\b|defect|rare.earth|erbium|\bhbn\b|vacanc|magnon',
+    'amo': r'\bions?\b|trapped.ion|atom|rydberg|tweezer|optical|laser|molecul|\bbec\b|photonic|single.photon source|telecom',
+}
 TYPICAL_SESSION_MIN = 126    # average of 144 and 108
 
 
@@ -49,12 +61,20 @@ def assign(talks, cards, areas, ids, X):
     np.fill_diagonal(S, -np.inf)
     nn = np.argsort(-S, axis=1)[:, :K]
     start = dict(area)
+    modality = {a: v.get('modality') for a, v in areas.items()}
     for r, i in enumerate(inperson):
         votes = collections.Counter(start[inperson[j]] for j in nn[r])
         top, n = votes.most_common(1)[0]
-        if top != start[i] and n >= MOVE_VOTES:
-            area[i] = top
-            moves.append((i, start[i], top, n))
+        if top == start[i] or n < MOVE_VOTES:
+            continue
+        a, b = modality.get(start[i]), modality.get(top)
+        if a and b and a != b:                # a different physical platform: move only if the card's platform says so
+            plat = (cards.get(i) or {}).get('platform', '')
+            names = lambda m: bool(re.search(MODALITY_WORDS.get(m, '$^'), plat, re.I))
+            if not names(b) or names(a):
+                continue
+        area[i] = top
+        moves.append((i, start[i], top, n))
     series = collections.defaultdict(list)
     for i, t in talks.items():
         if t['series']:
