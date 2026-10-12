@@ -32,7 +32,7 @@ Comment on the [PROCESS.md review pull request](https://github.com/kjsatz/dqi-so
 ## Layout
 
 - `PROCESS.md`: the process, data format and rules.
-- `dqi_sort/`: the pipeline (`intake.py` reads the APS export; `embed.py` and `score_embeddings.py` handle embeddings).
+- `dqi_sort/`: the pipeline (`intake.py` reads the APS export; `embed.py` embeds each talk's card with EmbeddingGemma).
 - `prompts/`: prompts for Claude, such as the presentation-card spec.
 - `docs/`: how-to notes, e.g. [docs/embeddings.md](docs/embeddings.md).
 - `prototype/`: scripts and prompts from the first test; reference only.
