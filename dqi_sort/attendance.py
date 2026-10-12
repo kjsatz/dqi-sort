@@ -114,14 +114,20 @@ def _Phi(z):
     return 0.5 * (1 + math.erf(z / math.sqrt(2)))
 
 
-def fit_rows(rows, vectors, iterations=40):
-    """Fit the model to past sessions; returns a dict of arrays and effects."""
+def fit_rows(rows, vectors, iterations=40, same=None):
+    """Fit the model to past sessions; returns a dict of arrays and effects.
+
+    same: optional label per row; rows with equal labels are never each other's neighbours
+    (used when resampling, where a session can appear more than once)."""
     years = sorted({r['year'] for r in rows})
     X, cols = _design(rows, years)
     y_obs = np.log([r['peak'] for r in rows])
     cens = np.array([r['censored'] for r in rows])
     sim = vectors @ vectors.T
     np.fill_diagonal(sim, -np.inf)                      # a session is not its own neighbour
+    if same is not None:
+        same = np.asarray(same)
+        sim[same[:, None] == same[None, :]] = -np.inf
     W = _neighbour_weights(sim)
     y = y_obs.copy()
     title = np.zeros(len(rows))
@@ -143,7 +149,7 @@ def fit_rows(rows, vectors, iterations=40):
             z = (y_obs[i] - m[i]) / sigma
             y[i] = m[i] + sigma * _phi(z) / max(1 - _Phi(z), 1e-9)
     eff = {f'{k}:{v}': float(b) for (k, v), b in zip(cols, beta)}
-    return {'mu': float(mu), 'effects': eff, 'sigma': sigma, 'years': years,
+    return {'mu': float(mu), 'effects': eff, 'sigma': sigma, 'years': years, 'y': y, 'fitted': fixed + title,
             'r': r, 'vectors': vectors, 'titles': [r_['title'] for r_ in rows],
             'codes': [f"{r_['year']} {r_['code']}" for r_ in rows], 'types': [r_['type'] for r_ in rows]}
 
@@ -170,6 +176,20 @@ class Model:
                         'low': round(math.exp(log_mid - self.m['sigma'])), 'high': round(math.exp(log_mid + self.m['sigma'])),
                         'like': [self.m['codes'][j] + ' ' + self.m['titles'][j] for j in near if W[i, j] > 0.05]})
         return out
+
+    def size(self, estimate, typ, sizes, symposium_min=0):
+        """Suggested room size class for one estimate from interest(): (class, note).
+
+        sizes: {class: seats}. The smallest class whose room, at 90% full, holds the expected attendance;
+        symposia get at least `symposium_min` seats. The note warns when the high end would overflow."""
+        order = sorted(sizes.items(), key=lambda kv: kv[1])
+        floor = symposium_min if typ == 'symposium' else 0
+        fits = [(c, s) for c, s in order if s >= floor and FULL_AT * s >= estimate['interest']]
+        cls, seats = fits[0] if fits else order[-1]
+        note = 'may overflow' if estimate['high'] > seats else ''
+        if not fits:
+            note = 'larger than the largest class'
+        return cls, note
 
     def slot_factor(self, day, start):
         """How much a slot scales attendance relative to an average slot."""
@@ -248,11 +268,18 @@ def check(data_dir, embed=ollama_embed):
 
 
 def predict(data_dir, titles, types, day=None, start=None, embed=ollama_embed):
+    import yaml
     model = load(data_dir)
+    with open(os.path.join(data_dir, 'config.yaml'), encoding='utf-8') as f:
+        cfg = yaml.safe_load(f) or {}
+    sizes, sym_min = cfg.get('room_sizes'), cfg.get('symposium_min_seats', 0)
     res = model.interest(titles, types, embed([session_text(t, y) for t, y in zip(titles, types)]))
     for x in res:
+        if sizes:
+            x['size'], x['size_note'] = model.size(x, x['type'], sizes, sym_min)
         slot = f'  in {day} {start}: {model.in_slot(x["interest"], day, start)}' if day and start else ''
-        print(f"{x['interest']:4d} ({x['low']}-{x['high']})  {x['type']:15s} {x['title']}{slot}")
+        size = f"  room: {x['size']}" + (f" ({x['size_note']})" if x['size_note'] else '') if sizes else ''
+        print(f"{x['interest']:4d} ({x['low']}-{x['high']})  {x['type']:15s} {x['title']}{size}{slot}")
         for s in x['like']:
             print(f'       like {s}')
     return res

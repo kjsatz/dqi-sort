@@ -14,7 +14,7 @@ Tools for sorting the APS Global Physics Summit DQI (Division of Quantum Informa
 ## Layout
 
 - `PROCESS.md`: the process, data format and rules.
-- `dqi_sort/`: the pipeline package. So far: `intake.py` (stage 1: APS export to `talks.csv` and `abstracts.jsonl`; re-runnable, keeps later-stage columns), `textfix.py` (minimal text repair: encoding damage and hidden HTML comments only; other HTML is left as submitted), `embed.py` (EmbeddingGemma via Ollama on each talk's card, saved as `embeddings/cards.npz`), `cards.py` (stage 2: batch files for Haiku subagents, check, merge; `docs/cards.md`), `attendance.py` (attendance model fitted on past RFID peaks; `docs/attendance.md`).
+- `dqi_sort/`: the pipeline package. So far: `intake.py` (stage 1: APS export to `talks.csv` and `abstracts.jsonl`; re-runnable, keeps later-stage columns), `textfix.py` (minimal text repair: encoding damage and hidden HTML comments only; other HTML is left as submitted), `embed.py` (EmbeddingGemma via Ollama on each talk's card, saved as `embeddings/cards.npz`), `cards.py` (stage 2: batch files for Haiku subagents, check, merge; `docs/cards.md`), `attendance.py` (attendance model fitted on past RFID peaks; `docs/attendance.md`), `attendance_report.py` (refits and writes the model report with figures into the data repo's `history/`).
 - `scripts/check_no_data.py`: refuses data files (run by `.githooks/pre-commit` and by `.github/workflows/checks.yml`).
 - `tests/`: pytest, with made-up fixtures in `tests/fixtures/`. Set up with `python3 -m venv .venv && .venv/bin/pip install -r requirements.txt`; run `.venv/bin/python -m pytest tests`.
 - `prompts/card_spec.md`: the Haiku presentation-card prompt (`{CATEGORIES}` and `{UNITS}` are filled from config).
@@ -24,7 +24,7 @@ Tools for sorting the APS Global Physics Summit DQI (Division of Quantum Informa
 
 ## Status (Oct 12, 2026)
 
-Done: the 2026 superconducting test (see `prototype/README.md`), the process design, the card spec, the APS parser (`python -m dqi_sort.intake DATA_DIR`, run on the dry run), the embedding step (EmbeddingGemma on cards; not yet run), the card tooling (50-talk pilot done), the attendance model (fitted on 2025 and 2026; `history/` in the dry-run repo).
+Done: the 2026 superconducting test (see `prototype/README.md`), the process design, the card spec, the APS parser (`python -m dqi_sort.intake DATA_DIR`, run on the dry run), the embedding step (EmbeddingGemma on cards; not yet run), the card tooling (50-talk pilot done), the attendance model (fitted on 2025 and 2026; data, model and report in `history/` of the private `../dqi-2027` repo).
 
 Settled choices (keep it simple; pick one good approach rather than comparing options):
 

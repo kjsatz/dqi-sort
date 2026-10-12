@@ -56,4 +56,6 @@ aps_columns:                  # APS header -> field (see FIELDS in dqi_sort/inta
   Speaking Order: order
   Sorter Notes: sorter_note
 aps_types: {Oral: oral, Invited: invited}
+room_sizes: {small: 144, medium: 288, large: 500}   # seats per room size class (from venue/rooms.csv)
+symposium_min_seats: 200      # symposia never get a smaller room
 scheduling_weights: {}        # set after the scheduling interview
