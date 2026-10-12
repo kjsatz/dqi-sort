@@ -177,18 +177,18 @@ class Model:
                         'like': [self.m['codes'][j] + ' ' + self.m['titles'][j] for j in near if W[i, j] > 0.05]})
         return out
 
-    def size(self, estimate, typ, sizes, symposium_min=0):
+    def size(self, estimate, typ, cutoffs, seats=None, symposium_min=0):
         """Suggested room size class for one estimate from interest(): (class, note).
 
-        sizes: {class: seats}. The smallest class whose room, at 90% full, holds the expected attendance;
-        symposia get at least `symposium_min` seats. The note warns when the high end would overflow."""
-        order = sorted(sizes.items(), key=lambda kv: kv[1])
-        floor = symposium_min if typ == 'symposium' else 0
-        fits = [(c, s) for c, s in order if s >= floor and FULL_AT * s >= estimate['interest']]
-        cls, seats = fits[0] if fits else order[-1]
-        note = 'may overflow' if estimate['high'] > seats else ''
-        if not fits:
-            note = 'larger than the largest class'
+        cutoffs: {class: lowest estimated peak for that class}, e.g. {small: 0, medium: 90, large: 180}; set low on
+        purpose, as a starting point for people to adjust. seats: {class: seats per room}. Symposia get at least
+        a class with `symposium_min` seats. The note warns when the high end of the range exceeds the room."""
+        order = sorted(cutoffs, key=lambda c: cutoffs[c])
+        cls = [c for c in order if estimate['interest'] >= cutoffs[c]][-1:] or order[:1]
+        cls = cls[0]
+        if typ == 'symposium' and seats and seats.get(cls, 0) < symposium_min:
+            cls = next((c for c in order if seats.get(c, 0) >= symposium_min), order[-1])
+        note = 'may overflow' if seats and estimate['high'] > seats.get(cls, float('inf')) else ''
         return cls, note
 
     def slot_factor(self, day, start):
@@ -272,13 +272,13 @@ def predict(data_dir, titles, types, day=None, start=None, embed=ollama_embed):
     model = load(data_dir)
     with open(os.path.join(data_dir, 'config.yaml'), encoding='utf-8') as f:
         cfg = yaml.safe_load(f) or {}
-    sizes, sym_min = cfg.get('room_sizes'), cfg.get('symposium_min_seats', 0)
+    cutoffs, seats, sym_min = cfg.get('size_cutoffs'), cfg.get('room_sizes'), cfg.get('symposium_min_seats', 0)
     res = model.interest(titles, types, embed([session_text(t, y) for t, y in zip(titles, types)]))
     for x in res:
-        if sizes:
-            x['size'], x['size_note'] = model.size(x, x['type'], sizes, sym_min)
+        if cutoffs:
+            x['size'], x['size_note'] = model.size(x, x['type'], cutoffs, seats, sym_min)
         slot = f'  in {day} {start}: {model.in_slot(x["interest"], day, start)}' if day and start else ''
-        size = f"  room: {x['size']}" + (f" ({x['size_note']})" if x['size_note'] else '') if sizes else ''
+        size = f"  room: {x['size']}" + (f" ({x['size_note']})" if x['size_note'] else '') if cutoffs else ''
         print(f"{x['interest']:4d} ({x['low']}-{x['high']})  {x['type']:15s} {x['title']}{size}{slot}")
         for s in x['like']:
             print(f'       like {s}')

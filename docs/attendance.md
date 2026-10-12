@@ -30,7 +30,7 @@ python -m dqi_sort.attendance predict DATA_DIR --sessions DATA_DIR/sorting/sessi
 
 `python -m dqi_sort.attendance_report DATA_DIR` refits the model and writes `DATA_DIR/history/attendance_report.md` with three figures (fit on the training data; predicted vs actual on the held-out year; type, day and time effects with ranges). and the past sessions that drew the most and least. Rerun it after adding a year.
 
-With `room_sizes` (and `symposium_min_seats`) in `config.yaml`, `predict` also suggests a room size class: the smallest whose room at 90% full holds the expected attendance, symposia at least the minimum, with "may overflow" when the high end of the range exceeds the room. People keep or override it at sort review, then a budget round fits the totals to the rooms available (see Scheduling in `PROCESS.md`).
+With `size_cutoffs` in `config.yaml`, `predict` also suggests a room size class from the estimate: small below 90, medium from 90, large from 140. The cutoffs are set low on purpose: they are a starting point that people move. Symposia get at least a room of `symposium_min_seats`, and "may overflow" marks a session whose high estimate exceeds its room (`room_sizes`). People keep or override it at sort review, then a budget round fits the totals to the rooms available (see Scheduling in `PROCESS.md`).
 
 `predict` prints each session's interest with a 68% range and the past sessions it resembles, plus the expected peak in a given slot. Fitting and predicting need Ollama running with `embeddinggemma` (see `docs/embeddings.md`). In Python: `load(DATA_DIR)` returns a model with `interest(...)`, `slot_factor(day, start)` and `in_slot(...)`.
 

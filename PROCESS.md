@@ -18,7 +18,7 @@ Principles:
 | 0. Prepare | Builds `config.yaml`; turns the APS schedule into the venue files (see [Venue intake](#venue-intake)) | Provide the session format, the room list and distances, the room-time grid, the symposium schedule, invited-talk notes, the chair volunteer list and past attendance (see [Before abstracts arrive](#before-abstracts-arrive)) |
 | 1. Intake | Parses the APS workbook (one in-person table and one virtual table), repairs text-encoding damage where it can (keeping the original), flags duplicates | — |
 | 2. Presentation cards | Writes a standard card for each talk, one abstract at a time (Claude Haiku; see [Presentation cards](#presentation-cards)); repairs text the cards flag as damaged and rebuilds those cards | Spot-check a sample |
-| 3. Linking | Looks across all talks at once: groups multi-part talks into series, and normalizes affiliations to institutions | Confirm uncertain links |
+| 3. Linking | Looks across all talks at once: groups multi-part talks into series (including talks that ask to follow or share a session with another talk), and normalizes affiliations to institutions | Confirm uncertain links |
 | 4. Routing and flags | Proposes 5–10 review areas and assigns each talk to one; lists talks flagged for leadership review, as candidates for another APS unit, or as malformed | **Checkpoint:** decide each flagged talk; adjust area boundaries |
 | 5. Sessions per area | Proposes the sessions for each area. Where the split is obvious, one proposal; where it isn't, two to four options, each with fill and invited-talk placement | **Checkpoint:** each area's reviewers pick, comment on or edit the proposal in their review sheet |
 | 6. Packing | Places leftovers across all of DQI, draws together related talks from different areas and categories to fill sessions, keeps sessions within the DQI session budget, orders talks, drafts titles. Opens a pull request with a report of every move and why | **Checkpoint:** lead reviews and merges the pull request |
@@ -54,7 +54,7 @@ Malformed text is caught three times. Intake repairs what simple rules can (enco
 
 Two kinds of association need all talks in view, so they are done in stage 3, not on the card:
 
-- **Multi-part series.** Claude reads every talk with a `multi_part` entry together and assigns series IDs (`series`, `series_part` in `talks.csv`). Parts are often submitted to different categories, so matching uses titles, speakers and the card's hints, not the category. Uncertain links go to the lead.
+- **Multi-part series.** Claude reads every talk with a `multi_part` entry together and assigns series IDs (`series`, `series_part` in `talks.csv`). Parts are often submitted to different categories, so matching uses titles, speakers and the card's hints, not the category. Uncertain links go to the lead. A talk whose submitter asks to follow another talk, or to be in the same session as it, is treated as a two-part series in the order asked, so the pair stays together through areas, sessions and packing. These requests come from the card's `constraints` and name the other talk by speaker or title. A request for the same session without an order keeps the pair together, in either order.
 - **Institutions.** Claude reads the full list of submitted affiliations once and maps each to one institution name, so "MIT" and "Massachusetts Institute of Technology" match.
 
 The list of other APS units (divisions and topical groups, such as DAMOP, DCMP, GPMFC and GIMS) is kept in `config.yaml`. Moving a talk to another unit is a last resort. We use it when a talk clearly belongs elsewhere, or when a talk is left over and has nowhere good to go in DQI.
@@ -177,9 +177,10 @@ The data repo holds one set of files per year:
 | `institutions.csv` | submitted affiliation | affiliation, institution |
 | `linking/series.csv` | talk in a multi-part series | series_id, talk_id, part, sure (yes / no), note |
 | `embeddings/cards.npz` | talk | Card embeddings (EmbeddingGemma; NumPy, float16); see `docs/embeddings.md` |
-| `sorting/sessions.csv` | session | session_id, title, kind (contributed / mini-symposium / symposium), minutes (144 or 108), size (small / medium / large: the room size class people decided), area, locked, notes |
+| `sorting/sessions.csv` | session | session_id, title, kind (contributed / mini-symposium / symposium), minutes (144 or 108), size (small / medium / large: the room size class people decided), area, locked, scope (one sentence: what belongs here), notes |
 | `sorting/assignments.csv` | talk | talk_id, session_id (blank for lonely abstracts), order, locked, note |
 | `sorting/moves.csv` | move | when, commit, talk_id, from (session, area, lonely, new, or another unit), to, by, reason |
+| `sorting/sheets.csv` | review sheet made | kind (shared / area), area, round, commit, content (hash of the area's sessions when sent), sheet_id, url, made |
 | `sorting/notes.csv` | human note | round, area, reviewer, talk_id or session_id, note, resolution |
 | `venue/rooms.csv` | room | room_id, name, capacity, size (small / medium / large), zone, invited_block_144, invited_block_108 |
 | `venue/room_distances.csv` | pair of rooms | room_a, room_b, walk_minutes (rough) |
@@ -238,7 +239,7 @@ The model (`docs/attendance.md`) separates two things. A session's **interest** 
 
 **Room size.** Before scheduling, every session gets a room size class (small, medium or large; the classes and their seat counts are set in `config.yaml` from `venue/rooms.csv`). It is decided in two rounds:
 
-1. **Per session.** The model estimates each session's peak attendance and suggests a size from that session alone: the smallest class whose room, at 90% full, holds the estimate, with a note when the high end of its range would overflow. Symposia get at least a 200-seat room whatever the estimate, so invited sessions are never put in the smallest rooms. Reviewers keep or override the suggestion in their area sheet, using what the model cannot see (a topic with unusual buzz this year, a well-known speaker).
+1. **Per session.** The model estimates each session's peak attendance and suggests a size from that session alone, by cutoffs on the estimate (`size_cutoffs` in `config.yaml`; to start, small below 90, medium from 90, large from 140), with a note when the high end of its range would overflow the room. The cutoffs are deliberately low: a starting point for people to move, not a capacity calculation. Symposia get at least a 200-seat room whatever the estimate, so invited sessions are never put in the smallest rooms. Reviewers keep or override the suggestion in their area sheet, using what the model cannot see (a topic with unusual buzz this year, a well-known speaker).
 2. **Budget.** The totals are then checked against the rooms of each size. If a class is oversubscribed (say 60 sessions want medium or large rooms and there are 50), Claude lists the candidates to move down: the sessions in that class with the lowest estimated attendance, symposia excluded, as many as needed plus a few alternatives. People pick which ones move. If a class has spare rooms, the highest-attendance sessions just below it are offered the upgrade the same way.
 
 The decided size is then a hard rule for the scheduler.

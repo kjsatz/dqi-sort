@@ -66,6 +66,19 @@ the sheets** before you start.
    the folder, puts a test sheet in it, and records the folder in `DATA_DIR/config.yaml` (`sheets.folder_id`).
    Open the printed link to see it; delete the test sheet whenever you like.
 
+## Making the review sheets
+
+After every merge to the data repo (commit first; the sheets are stamped with the commit):
+
+```
+python -m dqi_sort.sheets sync DATA_DIR
+```
+
+It updates the shared sheet in place and makes a new sheet for each area whose sessions changed since its last
+sheet (`--areas SCDEV,QEC` or `--all` to choose). Ollama must be running for the attendance estimates. The links
+are printed and recorded in `DATA_DIR/sorting/sheets.csv`; commit that file. Share the Drive folder with the
+reviewers: everyone as viewer, and each area's reviewers as editors of their own area sheet.
+
 ## Living with it
 
 - **Weekly re-approval.** Because the app stays in "Testing" status, Google expires your sign-in after 7 days. The
