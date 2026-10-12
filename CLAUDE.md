@@ -24,7 +24,7 @@ Tools for sorting the APS Global Physics Summit DQI (Division of Quantum Informa
 
 ## Status (Oct 12, 2026)
 
-Done: the 2026 superconducting test (see `prototype/README.md`), the process design, the card spec, the APS parser (`python -m dqi_sort.intake DATA_DIR`, run on the dry run), the embedding step (EmbeddingGemma on cards; not yet run), the card tooling (50-talk pilot done), the attendance model (fitted on 2025 and 2026; `history/` in the dry-run repo).
+Done: the 2026 superconducting test (see `prototype/README.md`), the process design, the card spec, the APS parser (`python -m dqi_sort.intake DATA_DIR`, run on the dry run), the embedding step (EmbeddingGemma on cards; not yet run), the card tooling (50-talk pilot done), the attendance model (fitted on 2025 and 2026; data, model and report in `history/` of the private `../dqi-2027` repo).
 
 Settled choices (keep it simple; pick one good approach rather than comparing options):
 

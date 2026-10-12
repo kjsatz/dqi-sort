@@ -36,7 +36,7 @@ With `room_sizes` (and `symposium_min_seats`) in `config.yaml`, `predict` also s
 
 ## How good it is
 
-The report with its plots lives in the private data repo (`history/attendance_report.md`), since it shows per-session attendance data. Summary:
+The report with its plots lives in the year's private data repo (`history/attendance_report.md` in `dqi-2027`), since it shows per-session attendance data. Summary:
 
 
 Fitted on 2025 alone and asked to predict 2026 (175 sessions), Oct 2026:
