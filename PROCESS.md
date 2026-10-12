@@ -175,6 +175,7 @@ The data repo holds one set of files per year:
 | `abstracts.jsonl` | talk | talk_id, title, body, submitter_notes (repaired text), raw (the text as received, when a repair was made), text_fix (what was changed and by whom) |
 | `cards.jsonl` | talk | Presentation card as JSON |
 | `institutions.csv` | submitted affiliation | affiliation, institution |
+| `linking/series.csv` | talk in a multi-part series | series_id, talk_id, part, sure (yes / no), note |
 | `embeddings/cards.npz` | talk | Card embeddings (EmbeddingGemma; NumPy, float16); see `docs/embeddings.md` |
 | `sorting/sessions.csv` | session | session_id, title, kind (contributed / mini-symposium / symposium), minutes (144 or 108), size (small / medium / large: the room size class people decided), area, locked, notes |
 | `sorting/assignments.csv` | talk | talk_id, session_id (blank for lonely abstracts), order, locked, note |
