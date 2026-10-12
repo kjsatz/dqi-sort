@@ -18,7 +18,7 @@ Tools for sorting the APS Global Physics Summit DQI (Division of Quantum Informa
 - `scripts/check_no_data.py`: refuses data files (run by `.githooks/pre-commit` and by `.github/workflows/checks.yml`).
 - `tests/`: pytest, with made-up fixtures in `tests/fixtures/`. Set up with `python3 -m venv .venv && .venv/bin/pip install -r requirements.txt`; run `.venv/bin/python -m pytest tests`.
 - `prompts/card_spec.md`: the Haiku presentation-card prompt (`{CATEGORIES}` and `{UNITS}` are filled from config).
-- `prompts/session_spec.md`: the stage 5 prompt for one area's session proposal (filled in by `sessions prepare`).
+- `prompts/session_spec.md`: the stage 5 prompt for one area's sessions (filled in by `sessions prepare`; still the old design with grid shares).
 - `config.example.yaml`: config template, including the list of other APS units.
 - `docs/`: how to run the embeddings, cards and attendance model, and how to set up Google Sheets access (`google_sheets.md`).
 - `dqi_sort/gsheets.py`: Google sign-in (OAuth as the lead) and Drive folder setup. `dqi_sort/sheets.py`: `sync` (sync-sheets) writes the shared sheet and new area sheets from the sort in git; reading returned sheets back is still to do.
@@ -26,25 +26,22 @@ Tools for sorting the APS Global Physics Summit DQI (Division of Quantum Informa
 
 ## Status (Oct 12, 2026)
 
-Done: the 2026 superconducting test (see `prototype/README.md`), the process design, the card spec, the APS parser (`python -m dqi_sort.intake DATA_DIR`, run on the dry run), the embedding step (EmbeddingGemma on cards; not yet run), the card tooling (50-talk pilot done), the attendance model (fitted on 2025 and 2026; data, model and report in `history/` of the private `../dqi-2027` repo).
+Done: the 2026 superconducting test (see `prototype/README.md`), the process design, the card spec, the APS parser, the attendance model (fitted on 2025 and 2026; data, model and report in `history/` of the private `../dqi-2027` repo), review sheets (`sync-sheets`, writing only). On the dry run: stages 1-4 including the lead's checkpoint (cards and embeddings for all talks; 82 series; 10 areas + virtual), and a first stage 5 run with the old design (one agent per area with a fixed share of the grid; 201 sessions, 39 lonely talks). That run showed fixed shares leave no room to combine lonely talks, so stages 4-6 were redesigned (`PROCESS.md`, Drafting and the global pass).
 
 Settled choices (keep it simple; pick one good approach rather than comparing options):
 
-- Embeddings: EmbeddingGemma via Ollama, on the card only. No other models or recipes.
-- Haiku cards: run as Haiku subagents in Claude Code on Kevin's subscription, not the Anthropic API.
+- Embeddings: EmbeddingGemma via Ollama, on the card only. No other models or recipes. Used for routing, bridge talks, the global pass's candidate lists, session coherence and review areas.
+- Haiku cards: run as Haiku subagents in Claude Code on Kevin's subscription, not the Anthropic API. Session drafts and the global pass: Opus subagents, likewise.
 
-Next, for a dry run on the full 2026 DQI workbook before abstracts arrive on about Nov 9. Do 0-6 and scoring first; they answer whether the sort is good.
+Next, on the dry run before abstracts arrive on about Nov 9:
 
-- Stage 0: made-up venue in the 2027 format (`venue/rooms.csv`, `schedule/slots.csv`; see the dry-run repo's `CLAUDE.md`).
-- Stage 2, cards: full run (`docs/cards.md`), then embed. 66 invited talks have no abstract (title is the speaker's name) and get no card until their topic is supplied.
-- Stage 3, linking: done on the dry run (82 series, 393 institutions); 4 uncertain series and one duplicate submission wait for the lead.
-- Stage 3 to do: `linking prepare` should also list cards whose `constraints` ask to follow or share a session with another talk, so they become two-part series (`PROCESS.md`). On the dry run, stage 5 met several such requests across areas (e.g. a donor series asking to follow a talk in another area) too late.
-- Stage 4: proposed on the dry run (10 areas + virtual; 99 flags in `views/flags.md`), waiting for the lead's checkpoint.
-- Stages 5-6: session proposals, packing (OR-Tools; packing chooses 144 or 108 minutes per session within the slots available), with the packing report as a pull request in the data repo.
+- Stage 3: `linking prepare` also lists cards whose `constraints` ask to follow or share a session with another talk, so they become two-part series.
+- Stage 4: the not-DQI list in `views/flags.md` (other-unit "belongs there" plus talks with no close neighbour in DQI, with reasons); bridge-talk tags from the embeddings.
+- Stage 5: change `sessions.py` to drafts (sessions of 8-13 units, no length, no grid share; bridge talks released first).
+- Stage 6: the global pass: length check (OR-Tools), embedding candidate lists, one Opus agent, review areas from finished sessions, packing report as a pull request in the data repo.
 - Scoring: blind judge of Claude's sort against the 2026 human sort; check flagged talks against those that left DQI.
 - Validators (the checks listed in `PROCESS.md`) as one command.
-- Stages 8-9: scheduling solver (uses `dqi_sort.attendance` for room fit), talk order.
-- Stages 7, 10, 11: review sheets (`sync-sheets`), chair handoff, reverse writer for the final APS sheet.
+- Stage 7: read returned area sheets back into git. Stages 8-11: scheduling solver, talk order, chair handoff, reverse writer for the final APS sheet.
 
 Dry-run inputs are ready in `../dqi-2026-dryrun/input/` (see its `CLAUDE.md`), including the virtual track and the session-chair volunteer lists.
 

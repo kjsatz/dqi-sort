@@ -19,9 +19,9 @@ Principles:
 | 1. Intake | Parses the APS workbook (one in-person table and one virtual table), repairs text-encoding damage where it can (keeping the original), flags duplicates | — |
 | 2. Presentation cards | Writes a standard card for each talk, one abstract at a time (Claude Haiku; see [Presentation cards](#presentation-cards)); repairs text the cards flag as damaged and rebuilds those cards | Spot-check a sample |
 | 3. Linking | Looks across all talks at once: groups multi-part talks into series (including talks that ask to follow or share a session with another talk), and normalizes affiliations to institutions | Confirm uncertain links |
-| 4. Routing and flags | Proposes 5–10 review areas and assigns each talk to one; lists talks flagged for leadership review, as candidates for another APS unit, or as malformed | **Checkpoint:** decide each flagged talk; adjust area boundaries |
-| 5. Sessions per area | Proposes the sessions for each area. Where the split is obvious, one proposal; where it isn't, two to four options, each with fill and invited-talk placement | **Checkpoint:** each area's reviewers pick, comment on or edit the proposal in their review sheet |
-| 6. Packing | Places leftovers across all of DQI, draws together related talks from different areas and categories to fill sessions, keeps sessions within the DQI session budget, orders talks, drafts titles. Opens a pull request with a report of every move and why | **Checkpoint:** lead reviews and merges the pull request |
+| 4. Routing and flags | Splits the talks into 5–10 work areas for drafting; lists talks flagged for leadership review or as malformed, and a short not-DQI list: talks that belong to another APS unit or have no close neighbour anywhere in DQI, each with a reason | **Checkpoint:** remove the clear not-DQI talks (a handful); decide each other flagged talk |
+| 5. Draft sessions | One agent per work area, in parallel, groups that area's talks into coherent sessions without fixing their length; talks with no good home in the area go to the pool (see [Drafting and the global pass](#drafting-and-the-global-pass)) | — |
+| 6. Global pass | One agent with all of DQI in view builds sessions across areas from the pool, merges, splits and trades talks between sessions until the sort fits the 144- and 108-minute slots, keeps options where a split is genuinely open, and groups the finished sessions into review areas. Opens a pull request with a report of every move and why | **Checkpoint:** lead reviews and merges the pull request |
 | 7. Sort review | Generates the shared sheet and one area sheet per area; checks each returned sheet against the version sent, opens a pull request with the changes; finally places any remaining lonely abstracts | **Checkpoint:** reviewers edit their area sheet; lead merges the pull requests (see [Sort review](#sort-review)) |
 | 8. Schedule | Estimates attendance for every session; proposes room trades with symposia; then a solver assigns sessions to room-time slots (see [Scheduling](#scheduling)) | **Checkpoint:** decide the trades; approve or adjust the schedule |
 | 9. Talk order | Sets each room's invited-talk position and re-orders every session around it (see [Talk order](#talk-order)) | Spot-check |
@@ -54,32 +54,40 @@ Malformed text is caught three times. Intake repairs what simple rules can (enco
 
 Two kinds of association need all talks in view, so they are done in stage 3, not on the card:
 
-- **Multi-part series.** Claude reads every talk with a `multi_part` entry together and assigns series IDs (`series`, `series_part` in `talks.csv`). Parts are often submitted to different categories, so matching uses titles, speakers and the card's hints, not the category. Uncertain links go to the lead. A talk whose submitter asks to follow another talk, or to be in the same session as it, is treated as a two-part series in the order asked, so the pair stays together through areas, sessions and packing. These requests come from the card's `constraints` and name the other talk by speaker or title. A request for the same session without an order keeps the pair together, in either order.
+- **Multi-part series.** Claude reads every talk with a `multi_part` entry together and assigns series IDs (`series`, `series_part` in `talks.csv`). Parts are often submitted to different categories, so matching uses titles, speakers and the card's hints, not the category. Uncertain links go to the lead. A talk whose submitter asks to follow another talk, or to be in the same session as it, is treated as a two-part series in the order asked, so the pair stays together through drafting and the global pass. These requests come from the card's `constraints` and name the other talk by speaker or title. A request for the same session without an order keeps the pair together, in either order.
 - **Institutions.** Claude reads the full list of submitted affiliations once and maps each to one institution name, so "MIT" and "Massachusetts Institute of Technology" match.
 
-The list of other APS units (divisions and topical groups, such as DAMOP, DCMP, GPMFC and GIMS) is kept in `config.yaml`. Moving a talk to another unit is a last resort. We use it when a talk clearly belongs elsewhere, or when a talk is left over and has nowhere good to go in DQI.
+The list of other APS units (divisions and topical groups, such as DAMOP, DCMP, GPMFC and GIMS) is kept in `config.yaml`. Moving a talk to another unit is a last resort. We use it when a talk clearly belongs elsewhere, or when a talk is left over and has nowhere good to go in DQI. The clear cases are decided early, at the stage 4 checkpoint, from a short not-DQI list, so they do not linger in the sort; it should be a handful of talks.
 
-## Why options, and when
+## Drafting and the global pass
 
-The sessions we need depend on which abstracts arrive and how they happen to group. Many topics can be split several reasonable ways. Then Claude proposes alternatives, and the people who know the field choose. When one split is clearly right, Claude proposes just that one.
+Grouping similar talks is local work that splits well across agents; fitting the whole sort to the slots is global work that needs one view. So sessions are made in two steps.
 
-Sessions must also be nearly full, because the session budget is fixed by the total talk count with almost no slack. Topics genuinely overlap across submission categories, so filling sessions often means drawing related talks together from different categories and areas. Packing does this explicitly, and the packing report lists every such move.
+**Drafts (stage 5).** The work areas from stage 4 are only a way to divide the drafting. Each area's agent groups its talks into sessions of about 8 to 13 units (an oral talk is 1 unit, an invited talk 3), choosing coherent topics without worrying yet whether a session will be 144 or 108 minutes. A talk with no good home in the area goes to the pool of lonely abstracts. Bridge talks, whose nearest neighbours are mostly in other areas, are marked on the cards and are released first when something has to go: they are the talks most likely to make a good session together with lonely talks from other areas.
+
+**Global pass (stage 6).** One agent sees every draft session (title, scope, units and talk titles) and the pool. It builds sessions across areas from pool and bridge talks, merges thin sessions, splits fat ones, and moves talks between neighbouring sessions in any area. Nothing is frozen: the two session lengths are a source of flexibility, since adding or removing three talks (or one invited talk) turns one length into the other.
+
+A length check runs between rounds of moves. A 144-minute session holds 12 units and a 108-minute session 9; a session may be one unit short. From the unit counts and the number of slots of each length, the check lists which sessions must grow or shrink and by how much (10 units, for example, is a 144-minute session two short or a 108-minute session one over). The agent makes the moves that fit the topics best, and the two repeat until the sort fits.
+
+Rather than reading every card, the global agent works from short lists computed from the card embeddings (EmbeddingGemma, `docs/embeddings.md`): for each pool talk, the nearest sessions and the nearest other pool talks; for each session that must grow, the nearby sessions with talks to spare and which of their talks are closest; for each session that must shrink, its talks furthest from the rest. The embeddings also give each session a coherence score and its weakest-fitting talks, which reviewers see.
+
+**Options.** Many topics can be split several reasonable ways. Where the split is genuinely open, the global pass keeps two or three alternatives for that group of sessions, and the reviewers choose. When one split is clearly right, there is just that one.
 
 ## Avoiding single-group sessions
 
-A session should not feel like one group's meeting. Session proposals and packing treat this as a soft rule: try to keep any one institution to at most 4 talks per session (`max_same_institution` in `config.yaml`). Exceptions are listed in the packing report for the lead to accept or fix.
+A session should not feel like one group's meeting. Drafts and the global pass treat this as a soft rule: try to keep any one institution to at most 4 talks per session (`max_same_institution` in `config.yaml`). Exceptions are listed in the packing report for the lead to accept or fix.
 
 Institution is a proxy for research group. A large institution can host several unrelated groups, so reviewers can accept a flagged session. A multi-part series from one group still counts as several talks.
 
 ## Review areas
 
-Review is split into 5–10 areas along natural lines. Areas should be roughly equal in size, but a small topic that is clearly its own thing can be a small area, and a large block of closely related talks (superconducting qubits, for example) can be a large one. Areas are for dividing the reviewing work; they are not walls, and talks move between them.
+Review is split into 5–10 areas along natural lines, made at the end of the global pass from the finished sessions: each session goes to the area most of its talks were drafted in, then the areas are evened out by grouping sessions by their embedding centres. Areas should be roughly equal in size, but a small topic that is clearly its own thing can be a small area, and a large block of closely related sessions (superconducting qubits, for example) can be a large one. Areas are for dividing the reviewing work; they are not walls, and talks move between them.
 
-Each area holds enough talks to fill its sessions. Sessions are not all the same size: a 144-minute session holds 12 contributed talks and a 108-minute session holds 9, with an invited talk counting as 3. So fill is shown in minutes against each session's own length.
+Sessions are not all the same size: a 144-minute session holds 12 contributed talks and a 108-minute session holds 9, with an invited talk counting as 3. So fill is shown in minutes against each session's own length.
 
 ## Lonely abstracts
 
-Any talk not currently in a session is a lonely abstract. Talks become lonely when packing leaves them over, when a reviewer kicks them out, or when they arrive late. The pool should stay small. It is shown to everyone on the shared sheet (below), which is regenerated every time a change is merged, so it is always current.
+Any talk not currently in a session is a lonely abstract. Talks become lonely when a draft releases them (the global pass then places them), when a reviewer kicks them out, or when they arrive late. After the global pass the pool should be small. It is shown to everyone on the shared sheet (below), which is regenerated every time a change is merged, so it is always current.
 
 Near the end of review, one clean-up step empties the pool: Claude finds the best available home for each remaining lonely abstract (a session with room, or a small swap) and opens a pull request listing each placement and why. Moving a talk to another unit is a last resort here too. The pool must be empty at delivery.
 
@@ -148,16 +156,16 @@ Claude then applies the changes, interprets the human notes, and opens one pull 
 
 Every applied move is appended to the ledger (`sorting/moves.csv`).
 
-Session proposals in stage 5 use the same area sheets, with an extra Options tab where an area has alternative splits. Leadership-review and other-unit flags go to the lead, not to the area sheets.
+Where the global pass kept alternative splits, the area sheet has an extra Options tab. Leadership-review and other-unit flags go to the lead, not to the area sheets.
 
 ## Packing report
 
-Packing changes the whole sort at once, so it arrives as a GitHub pull request. The description lists:
+The global pass changes the whole sort at once, so it arrives as a GitHub pull request. The description lists:
 
 - each talk that moved, with where it moved from and to, and a one-line reason
 - talks drawn into a session from another area or category
-- each session's fill
-- any session with more than one empty talk slot. Session lengths are not fixed in advance: a 144-minute session with three empty slots is a full 108-minute session. So packing picks each session's length to keep it full, within the number of 144- and 108-minute slots available (roughly half of each), and the report shows how many sessions of each length were built against the slots for each
+- each session's fill and its coherence score
+- any session with more than one empty talk slot (there should be none: the length check picks each session's length to keep it full, within the number of 144- and 108-minute slots available), and how many sessions of each length were built against the slots for each
 - any session with more than the allowed talks from one institution
 - the total against the session budget
 - any talk proposed for another unit, as a last resort
@@ -218,7 +226,7 @@ Room distances can be rough, and pairs may be left out. A missing pair counts as
 
 Hard rules:
 
-- every session gets exactly one slot, of its own length (packing builds as many 144- and 108-minute sessions as there are slots of each)
+- every session gets exactly one slot, of its own length (the global pass builds as many 144- and 108-minute sessions as there are slots of each)
 - every session gets a room of its decided size class
 - no speaker is in two places at once
 - submitters' day constraints are honoured where possible
@@ -295,7 +303,7 @@ The virtual meeting is a separate, much smaller track: about 30–40 talks last 
 One person, the chair coordinator, runs all chair correspondence from a single handoff sheet. Recruiting is by topic, not by session, because session times are not set yet.
 
 1. **Link volunteers to abstracts.** APS sends one volunteer list for all of APS, with an in-person tab and a virtual tab. We keep the rows whose sub-category starts with our division number (17 in 2026; set as `division_code` in `config.yaml`). Each row carries the volunteer's abstract ID, which links them to their talk; we also match by name and email to find any other abstracts they have. Uncertain matches are flagged for the lead to confirm. The rows also say how the volunteer wants to chair (in person, virtual or both) and how they are presenting their own talk.
-2. **Build the handoff.** After packing (stage 6), the preliminary sort gives the number of sessions in each rough topic, such as "superconducting qubit readout". The handoff is one Google Sheet with three tabs:
+2. **Build the handoff.** After the global pass (stage 6), the preliminary sort gives the number of sessions in each rough topic, such as "superconducting qubit readout". The handoff is one Google Sheet with three tabs:
    - **Topics:** each topic, its area, its number of sessions, and how many chairs it needs (sessions plus a few backups). The virtual conference is one topic of its own and needs two confirmed chairs per session.
    - **Volunteers:** name and contact details from the APS volunteer list, their abstract IDs and titles, and a suggested topic. Optionally, a pre-filled invitation from `chairs/invite_template.md`. The return columns are empty.
    - **How to fill in:** the return format below and its allowed values.
@@ -333,8 +341,8 @@ One person, the chair coordinator, runs all chair correspondence from a single h
 
 ## Roles
 
-- **Lead:** runs the pipeline, decides flagged talks and routing, merges the packing pull request, approves the schedule.
-- **Area reviewers:** choose session proposals; reorder, retitle and annotate their area sheet; kick out talks or take in lonely ones or (by agreement) talks from other areas.
+- **Lead:** runs the pipeline, decides flagged talks and routing, merges the global-pass pull request, approves the schedule.
+- **Area reviewers:** choose between options where the global pass kept them; reorder, retitle and annotate their area sheet; kick out talks or take in lonely ones or (by agreement) talks from other areas.
 - **Chair coordinator:** runs all chair correspondence from the handoff sheet and fills in the returns.
 
 ## Tools
@@ -342,9 +350,9 @@ One person, the chair coordinator, runs all chair correspondence from a single h
 - **Public repo:** parser, prompts, validators, solvers, embedding and map scripts, review-sheet generator.
 - **Private repo:** one per year, holding the data above.
 - **Claude Haiku, as subagents in Claude Code:** presentation cards.
-- **Claude Opus via Claude Code:** linking, session proposals, packing, packing report, talk order and review.
+- **Claude Opus via Claude Code:** linking, session drafts, the global pass and its packing report, talk order and review.
 - **Google EmbeddingGemma, run locally:** embeds each card, for the topic map, the weak-fit checks and attendance estimates. Free; nothing leaves the machine.
-- **OR-Tools:** packing and schedule solvers.
+- **OR-Tools:** the length check and the schedule solver.
 - **Google Sheets and Drive APIs, signed in as the lead:** `sync-sheets`, run from Claude Code after each merge (`docs/google_sheets.md`).
 
 Speaker names are not sent to Claude for the cards; affiliations are, for the single-group rule.
