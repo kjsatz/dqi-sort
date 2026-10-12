@@ -96,7 +96,7 @@ Reviewers get two kinds of Google Sheet, both generated from the CSVs in git.
 
 **Area sheet (editable, one per area).** Just that area's part:
 
-- **Session summary:** one row per session, with session ID, title, length, minutes filled (computed), expected attendance and suggested room size (from the model), room size (decided; pre-filled with the suggestion) and human notes.
+- **Session summary:** one row per session, with session ID, title, type (contributed, mini-symposium or symposium), length, minutes filled (computed), estimated peak attendance and suggested room size (both from the model), a room size override (blank keeps the suggestion) and human notes.
 - **Sessions:** one row per talk, with session ID, order, talk ID, title, speaker, institution, one-line summary, a **Move to lonely abstracts** checkbox and human notes.
 
 What reviewers do:
@@ -235,7 +235,12 @@ Expected attendance comes from past RFID data in `history/attendance.csv`. Badge
 
 The model (`docs/attendance.md`) separates two things. A session's **interest** is how many people it would draw in an average slot; it is estimated from the most similar past session titles and the session type, and it does not depend on when the session is scheduled. A **slot effect** says how much a day and time raise or lower attendance (Friday, for example); it is used only to size the room once a session has its slot, never to decide which sessions get which slots.
 
-**Room size.** Before scheduling, every session gets a room size class (small, medium or large; the classes and their seat counts are set in `config.yaml` from `venue/rooms.csv`). The model suggests one: the smallest class whose room, at 90% full, holds the session's expected attendance, with a note when the high end of its range would overflow that room. Symposia get at least a 200-seat room whatever the estimate, so invited sessions are never put in the smallest rooms. Reviewers confirm or change the size in their area sheet, using what the model cannot see (a topic with unusual buzz this year, a well-known speaker); the lead then balances the totals against the number of rooms of each class. The decided size is a hard rule for the scheduler.
+**Room size.** Before scheduling, every session gets a room size class (small, medium or large; the classes and their seat counts are set in `config.yaml` from `venue/rooms.csv`). It is decided in two rounds:
+
+1. **Per session.** The model estimates each session's peak attendance and suggests a size from that session alone: the smallest class whose room, at 90% full, holds the estimate, with a note when the high end of its range would overflow. Symposia get at least a 200-seat room whatever the estimate, so invited sessions are never put in the smallest rooms. Reviewers keep or override the suggestion in their area sheet, using what the model cannot see (a topic with unusual buzz this year, a well-known speaker).
+2. **Budget.** The totals are then checked against the rooms of each size. If a class is oversubscribed (say 60 sessions want medium or large rooms and there are 50), Claude lists the candidates to move down: the sessions in that class with the lowest estimated attendance, symposia excluded, as many as needed plus a few alternatives. People pick which ones move. If a class has spare rooms, the highest-attendance sessions just below it are offered the upgrade the same way.
+
+The decided size is then a hard rule for the scheduler.
 
 **Room trades with symposia.** Right before sessions are assigned to rooms, we decide deliberately whether to trade rooms with any symposia:
 
