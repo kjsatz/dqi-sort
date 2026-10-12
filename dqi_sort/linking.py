@@ -45,6 +45,11 @@ def read_jsonl(path):
         return {r['talk_id']: r for r in map(json.loads, filter(str.strip, f))}
 
 
+def affiliation_key(a):
+    """Affiliation for matching: invisible characters and spacing ignored, so intake clean-ups do not break it."""
+    return re.sub(r'\s+', ' ', re.sub('[\u200b\u200c\u200d\u2060\ufeff]', '', a or '')).strip().lower()
+
+
 def stem(title):
     """Title without its part marker, lowercased, for matching parts of one series."""
     t = PART.split(title)[0] if PART.search(title) else title
@@ -152,8 +157,8 @@ def apply(data_dir):
         parts = sorted(int(r['part']) for r in rs)
         if parts != list(range(1, len(rs) + 1)):
             errs.append(f'series {sid} parts are {parts}, not 1..{len(rs)}')
-    inst = {r['affiliation']: r['institution'] for r in read_csv(os.path.join(data_dir, 'institutions.csv'))}
-    missing = sorted({t['affiliation'] for t in rows if t['status'] == 'active' and t['affiliation'] not in inst})
+    inst = {affiliation_key(r['affiliation']): r['institution'] for r in read_csv(os.path.join(data_dir, 'institutions.csv'))}
+    missing = sorted({t['affiliation'] for t in rows if t['status'] == 'active' and affiliation_key(t['affiliation']) not in inst})
     errs += [f'affiliation not in institutions.csv: {a!r}' for a in missing[:20]]
     if errs:
         for e in errs:
@@ -173,7 +178,7 @@ def apply(data_dir):
         if r and r['series_id'] in unsure:
             flags.append('series_uncertain')
         t['flags'] = ';'.join(sorted(flags))
-        t['institution'] = overrides.get(t['talk_id']) or inst.get(t['affiliation'], t['institution'])
+        t['institution'] = overrides.get(t['talk_id']) or inst.get(affiliation_key(t['affiliation']), t['institution'])
     write_csv(path, cols, rows)
     n_inst = len({t['institution'] for t in rows if t['institution']})
     print(f'{len(groups)} series ({len(unsure)} uncertain) covering {len(series)} talks; '
