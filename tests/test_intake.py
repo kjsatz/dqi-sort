@@ -70,6 +70,7 @@ def test_rerun_keeps_later_work_and_never_drops_talks(data):
         w = csv.DictWriter(f, rows[0].keys(), lineterminator='\n'); w.writeheader(); w.writerows(rows)
     recs = abstracts(data)
     recs['1000003']['body'] = 'Hand-fixed body.'
+    recs['1000003']['title'] = 'Hand-fixed title'
     recs['1000003']['text_fix'].append({'field': 'body', 'fix': 'test', 'by': 'lead'})
     with open(data / 'abstracts.jsonl', 'w', encoding='utf-8') as f:
         f.writelines(json.dumps(recs[i], ensure_ascii=False) + '\n' for i in sorted(recs))
@@ -85,4 +86,5 @@ def test_rerun_keeps_later_work_and_never_drops_talks(data):
     assert 'lead_checked' in t['1000004']['flags'] and 'same_abstract' not in t['1000004']['flags']
     assert 'not_in_aps_input' in t['1000005']['flags']
     assert abstracts(data)['1000003']['body'] == 'Hand-fixed body.'
+    assert t['1000003']['title'] == 'Hand-fixed title'
     assert 'Kept 1 hand-fixed' in out

@@ -248,6 +248,7 @@ def main():
     kept = [i for i, r in old_abs.items() if i in abstracts and any(x.get('by') != 'intake' for x in r.get('text_fix', []))]
     for i in kept:
         abstracts[i] = old_abs[i]
+        talks[i]['title'] = old_abs[i]['title']          # the hand-fixed title wins in talks.csv too
     for i, r in old_abs.items():
         abstracts.setdefault(i, r)
 
