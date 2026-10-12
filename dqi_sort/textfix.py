@@ -2,7 +2,8 @@
 
 Only two things are changed; everything else (HTML tags, entities, LaTeX) is left as submitted:
 
-- encoding damage (mojibake), e.g. "√É‚Ä∞cole" -> "École", "Many‚ÄëBody" -> "Many-Body" (non-breaking hyphen)
+- encoding damage (mojibake), e.g. "√É‚Ä∞cole" -> "École", "Many‚ÄëBody" -> "Many-Body" (non-breaking hyphen),
+  "\uf8ffùõø" -> "𝛿" (a math letter, four bytes)
 - HTML comments, which are invisible on the APS site anyway: editor tags such as <!-- notionvc: ... --> in
   titles, and Microsoft Office conditional comments (<!--[if gte msEquation 12]> ... <![endif]-->), which
   can hold tens of kilobytes of equation markup; the readable fallback text that follows them is kept
@@ -19,6 +20,9 @@ _FTFY = ftfy.TextFixerConfig(unescape_html=False, uncurl_quotes=False, fix_latin
 _MR_LEAD = '‡·‚„‰ÂÊÁËÈÍÎÏÌÓÔ'
 _MR_CONT = 'ÄÅÇÉÑÖÜáàâäãåçéèêëíìîïñóòôöõúùûü†°¢£§•¶ß®©™´¨≠ÆØ∞±≤≥¥µ∂∑∏π∫ªºΩæø'
 _MR3 = re.compile(f'[{_MR_LEAD}][{_MR_CONT}]{{2}}')
+# four-byte case (lead byte F0, read as the Apple-logo private-use character): math letters such as
+# "\uf8ffùõø" -> U+1D6FF (italic delta)
+_MR4 = re.compile(f'\uf8ff[{_MR_CONT}]{{3}}')
 # two-byte case, only for accented Latin letters inside a word ("Hyypp√§" -> "Hyyppä"), so that real
 # math such as "√π" is left alone
 _MR2 = re.compile(f'(?<=[A-Za-z])√[{_MR_CONT}]|√[{_MR_CONT}](?=[A-Za-z])')
@@ -49,7 +53,7 @@ def repair_encoding(s):
     """Return the text with mojibake repaired (unchanged if none found)."""
     if not s or s.isascii():
         return s
-    s = _MR3.sub(_fix_mr3, ftfy.fix_text(s, _FTFY))
+    s = _MR3.sub(_fix_mr3, _MR4.sub(_fix_mr3, ftfy.fix_text(s, _FTFY)))
     return _MR2.sub(_fix_mr2, s)
 
 
