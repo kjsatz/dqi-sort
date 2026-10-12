@@ -4,7 +4,7 @@
 
 Reads DATA_DIR/history/attendance.csv, refits the model (needs Ollama with embeddinggemma), and writes
 DATA_DIR/history/attendance_report.md with attendance_report_fit.png, attendance_report_check.png and
-attendance_report_effects.png. Optional DATA_DIR/history/attendance_labels.csv names notable sessions on the plots.
+attendance_report_effects.png.
 Rerun it whenever attendance.csv gains a year.
 """
 import argparse, datetime, math, os
@@ -75,20 +75,9 @@ def r_squared(pred, actual):
     return float(1 - ((actual - pred) ** 2).sum() / ((actual - actual.mean()) ** 2).sum())
 
 
-def read_labels(data_dir):
-    """Optional history/attendance_labels.csv (year, session_code, label): names for notable sessions on plots."""
-    import csv
-    path = os.path.join(data_dir, 'history', 'attendance_labels.csv')
-    if not os.path.exists(path):
-        return {}
-    with open(path, encoding='utf-8', newline='') as f:
-        return {(r['year'], r['session_code']): r['label'] for r in csv.DictReader(f)}
-
-
-def figure_scatter(pred, actual, rows, path, title, xlabel, ylabel, notes, labels=None, xmax=400):
+def figure_scatter(pred, actual, rows, path, title, xlabel, ylabel, notes, xmax=400):
     """Predicted vs actual on linear axes with equal data scales; the y axis is tall enough for every point."""
     style()
-    labels = labels or {}
     ymax = max(600, 100 * math.ceil(float(np.max(actual)) / 100))
     fig, ax = plt.subplots(figsize=(6.4, 2.0 + 5.4 * ymax / xmax))
     X = xmax
@@ -107,11 +96,6 @@ def figure_scatter(pred, actual, rows, path, title, xlabel, ylabel, notes, label
             ax.scatter(pred[k], actual[k], s=46 if full else 34, marker='^' if full else 'o',
                        facecolor=SURFACE if full else col, edgecolor=col if full else SURFACE, linewidth=1.4 if full else 1,
                        alpha=0.9, zorder=3, label=f'{t}' + (', room full (demand ≥ peak)' if full else ''))
-    for p_, a_, r in zip(pred, actual, rows):
-        name = labels.get((r['year'], r['code']))
-        if name:
-            ax.annotate(f'{name} ({a_:.0f})', (p_, a_), xytext=(8, 0), textcoords='offset points',
-                        fontsize=8.5, color=INK2, va='center')
     ax.set_xlim(0, X); ax.set_ylim(0, ymax); ax.set_aspect('equal')
     ax.xaxis.set_major_locator(MultipleLocator(50)); ax.yaxis.set_major_locator(MultipleLocator(50))   # square grid
     ax.set_xlabel(xlabel); ax.set_ylabel(ylabel)
@@ -123,15 +107,15 @@ def figure_scatter(pred, actual, rows, path, title, xlabel, ylabel, notes, label
     plt.close(fig)
 
 
-def figure_check(h, path, labels=None):
+def figure_check(h, path):
     figure_scatter(h['pred'], h['actual'], h['test'], path,
                    f"Predicting {h['years'][-1]} from {h['years'][0]}: {h['n_test']} sessions, one dot each",
                    f"Predicted peak (model fitted on {h['years'][0]} only)", f"Actual {h['years'][-1]} RFID peak",
                    f"R² = {h['r2']:.2f}; rank correlation {h['rank']:.2f} (type alone {h['rank_type']:.2f})\n"
-                   f"typical error ×{h['median_factor']:.2f}; within ×1.5 for {h['within_1_5']:.0%}", labels)
+                   f"typical error ×{h['median_factor']:.2f}; within ×1.5 for {h['within_1_5']:.0%}")
 
 
-def figure_fit(model, rows, path, labels=None):
+def figure_fit(model, rows, path):
     """The model fitted on all years, evaluated on those same sessions (training data)."""
     pred = np.exp(model.m['fitted'])
     actual = np.array([r['peak'] for r in rows], dtype=float)
@@ -139,7 +123,7 @@ def figure_fit(model, rows, path, labels=None):
     figure_scatter(pred, actual, rows, path,
                    f"Training data: fitted on {' and '.join(years)}, shown on the same {len(rows)} sessions",
                    'Fitted peak (each title term from other sessions, not itself)', f"Actual RFID peak ({', '.join(years)})",
-                   f"R² = {r_squared(pred, actual):.2f} on the training data", labels)
+                   f"R² = {r_squared(pred, actual):.2f} on the training data")
     return r_squared(pred, actual)
 
 
@@ -200,9 +184,8 @@ def main():
     model = A.Model(full)
     h = holdout(rows, vec)
     boot = bootstrap(rows, vec, a.bootstrap)
-    labels = read_labels(a.data_dir)
-    figure_check(h, os.path.join(hist, 'attendance_report_check.png'), labels)
-    r2_fit = figure_fit(model, rows, os.path.join(hist, 'attendance_report_fit.png'), labels)
+    figure_check(h, os.path.join(hist, 'attendance_report_check.png'))
+    r2_fit = figure_fit(model, rows, os.path.join(hist, 'attendance_report_fit.png'))
     figure_effects(model, boot, os.path.join(hist, 'attendance_report_effects.png'))
     top, bottom = topic_table(model, rows)
     years = sorted({r['year'] for r in rows})
@@ -229,7 +212,7 @@ The model fitted on all {len(rows)} past sessions, shown against those same sess
 
 ![Predicted vs actual](attendance_report_check.png)
 
-Each dot is one {h['years'][-1]} session, predicted by a model that saw only {h['years'][0]} ({h['n_train']} sessions). Triangles are sessions whose room was full, so the actual demand was at least that high. R² is computed on the plotted scale: 1 − (squared prediction errors) / (total variance of the actual peaks). Named points come from `history/attendance_labels.csv`. {h['years'][-1]} drew ×{h['scale']:.2f} the level the model expected overall; a new year's level is unknown in advance, so this was applied before comparing.
+Each dot is one {h['years'][-1]} session, predicted by a model that saw only {h['years'][0]} ({h['n_train']} sessions). Triangles are sessions whose room was full, so the actual demand was at least that high. R² is computed on the plotted scale: 1 − (squared prediction errors) / (total variance of the actual peaks). Points are not labelled: the plots show DQI as a whole, not particular sessions. {h['years'][-1]} drew ×{h['scale']:.2f} the level the model expected overall; a new year's level is unknown in advance, so this was applied before comparing.
 
 ## What it learned
 
