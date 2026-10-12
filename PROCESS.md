@@ -111,7 +111,7 @@ Anything else goes in the human notes, such as "this should follow talk 1234".
 
 ### How sheets and git stay in step
 
-`sync-sheets` runs automatically on every merge to the private data repo (a GitHub Action, with Google credentials stored as a secret of that repo, never in the public code repo). It does two things:
+`sync-sheets` runs after every merge to the private data repo. It runs from Claude Code on the lead's computer, signed in as the lead's own Google account, so the sheets belong to the lead and live in a Drive folder of their choosing (setup: `docs/google_sheets.md`; the sign-in files stay on that computer, never in a repo). It does two things:
 
 - **Updates the shared sheet in place.** Nobody edits it, so this is safe.
 - **Makes a new area sheet for each area that was checked in** since the last run. Area sheets are never changed while a reviewer has them; each round gets a fresh copy, named with its area, round and commit. A talk that moves away in the meantime shows up in the shared Moves ledger, but the reviewer's own sheet is left alone.
@@ -344,6 +344,6 @@ One person, the chair coordinator, runs all chair correspondence from a single h
 - **Claude Opus via Claude Code:** linking, session proposals, packing, packing report, talk order and review.
 - **Google EmbeddingGemma, run locally:** embeds each card, for the topic map, the weak-fit checks and attendance estimates. Free; nothing leaves the machine.
 - **OR-Tools:** packing and schedule solvers.
-- **Google Sheets API (service account):** `sync-sheets`, run by a GitHub Action in the private repo.
+- **Google Sheets and Drive APIs, signed in as the lead:** `sync-sheets`, run from Claude Code after each merge (`docs/google_sheets.md`).
 
 Speaker names are not sent to Claude for the cards; affiliations are, for the single-group rule.
