@@ -363,11 +363,11 @@ def estimates(data_dir, sessions, cfg):
     except Exception as e:           # no model file, or Ollama not running
         print(f'no attendance estimates ({e.__class__.__name__}: {e})')
         return {}
-    sizes, sym_min = cfg.get('room_sizes'), cfg.get('symposium_min_seats', 0)
+    cutoffs, seats, sym_min = cfg.get('size_cutoffs'), cfg.get('room_sizes'), cfg.get('symposium_min_seats', 0)
     out = {}
     for s, x in zip(sessions, res):
-        if sizes:
-            x['size'], x['size_note'] = model.size(x, s['kind'], sizes, sym_min)
+        if cutoffs:
+            x['size'], x['size_note'] = model.size(x, s['kind'], cutoffs, seats, sym_min)
         out[s['session_id']] = x
     return out
 

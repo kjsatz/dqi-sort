@@ -58,5 +58,6 @@ aps_columns:                  # APS header -> field (see FIELDS in dqi_sort/inta
 aps_types: {Oral: oral, Invited: invited}
 room_sizes: {small: 144, medium: 288, large: 500}   # seats per room size class (from venue/rooms.csv)
 symposium_min_seats: 200      # symposia never get a smaller room
+size_cutoffs: {small: 0, medium: 90, large: 180}   # suggested room size by estimated peak attendance (a low starting point; people adjust)
 areas: {}                     # stage 4: code: {name: ..., categories: [DQI category codes]}; see dqi_sort/areas.py
 scheduling_weights: {}        # set after the scheduling interview
