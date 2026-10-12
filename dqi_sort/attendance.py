@@ -149,7 +149,7 @@ def fit_rows(rows, vectors, iterations=40, same=None):
             z = (y_obs[i] - m[i]) / sigma
             y[i] = m[i] + sigma * _phi(z) / max(1 - _Phi(z), 1e-9)
     eff = {f'{k}:{v}': float(b) for (k, v), b in zip(cols, beta)}
-    return {'mu': float(mu), 'effects': eff, 'sigma': sigma, 'years': years, 'y': y,
+    return {'mu': float(mu), 'effects': eff, 'sigma': sigma, 'years': years, 'y': y, 'fitted': fixed + title,
             'r': r, 'vectors': vectors, 'titles': [r_['title'] for r_ in rows],
             'codes': [f"{r_['year']} {r_['code']}" for r_ in rows], 'types': [r_['type'] for r_ in rows]}
 

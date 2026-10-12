@@ -3,7 +3,8 @@
     python -m dqi_sort.attendance_report DATA_DIR [--bootstrap 200]
 
 Reads DATA_DIR/history/attendance.csv, refits the model (needs Ollama with embeddinggemma), and writes
-DATA_DIR/history/attendance_report.md with attendance_report_check.png and attendance_report_effects.png.
+DATA_DIR/history/attendance_report.md with attendance_report_fit.png, attendance_report_check.png and
+attendance_report_effects.png. Optional DATA_DIR/history/attendance_labels.csv names notable sessions on the plots.
 Rerun it whenever attendance.csv gains a year.
 """
 import argparse, datetime, math, os
@@ -49,7 +50,7 @@ def holdout(rows, vec):
     inside = np.mean((a >= p * math.exp(-s)) & (a <= p * math.exp(s)))
     err = np.abs(np.log(p / a))
     return {'years': years, 'test': test, 'pred': p, 'actual': a, 'scale': scale, 'sigma': s,
-            'rank': A._spearman(p, a), 'rank_type': A._spearman([model._base(r['type']) for r in test], a),
+            'rank': A._spearman(p, a), 'r2': r_squared(p, a), 'rank_type': A._spearman([model._base(r['type']) for r in test], a),
             'median_factor': math.exp(np.median(err)), 'within_1_5': float(np.mean(err < math.log(1.5))), 'inside_range': float(inside),
             'n_train': len(tr), 'n_test': len(te)}
 
@@ -67,10 +68,27 @@ def bootstrap(rows, vec, n, seed=0):
     return {k: np.array(v) for k, v in out.items()}
 
 
-def figure_check(h, path, top=400):
-    """Predicted vs actual on linear axes, equal scales; sessions above `top` sit on the edge with their value."""
+def r_squared(pred, actual):
+    """R^2 of predictions on the plotted (linear) scale: 1 - squared errors / total variance."""
+    pred, actual = np.asarray(pred, float), np.asarray(actual, float)
+    return float(1 - ((actual - pred) ** 2).sum() / ((actual - actual.mean()) ** 2).sum())
+
+
+def read_labels(data_dir):
+    """Optional history/attendance_labels.csv (year, session_code, label): names for notable sessions on plots."""
+    import csv
+    path = os.path.join(data_dir, 'history', 'attendance_labels.csv')
+    if not os.path.exists(path):
+        return {}
+    with open(path, encoding='utf-8', newline='') as f:
+        return {(r['year'], r['session_code']): r['label'] for r in csv.DictReader(f)}
+
+
+def figure_scatter(pred, actual, rows, path, title, xlabel, ylabel, notes, labels=None, top=400):
+    """Predicted vs actual on linear, equal axes. Points above `top` sit on the edge with their value."""
     style()
-    fig, ax = plt.subplots(figsize=(6.6, 6.9))
+    labels = labels or {}
+    fig, ax = plt.subplots(figsize=(6.6, 7.9))
     L = top
     ax.fill_between([0, L], [0, L / 1.5], [0, L * 1.5], color=GRID, alpha=0.6, zorder=1, linewidth=0)
     ax.plot([0, L], [0, L], color=INK2, linewidth=1.2, zorder=2)
@@ -81,27 +99,48 @@ def figure_check(h, path, top=400):
             rotation=45, rotation_mode='anchor', transform_rotates_text=True, zorder=2)
     for t, col in TYPE_COLOR.items():
         for full in (False, True):
-            k = [i for i, r in enumerate(h['test']) if r['type'] == t and r['censored'] == full]
+            k = [i for i, r in enumerate(rows) if r['type'] == t and r['censored'] == full]
             if not k:
                 continue
-            ax.scatter(h['pred'][k], np.minimum(h['actual'][k], L), s=46 if full else 34, marker='^' if full else 'o',
+            ax.scatter(pred[k], np.minimum(actual[k], L), s=46 if full else 34, marker='^' if full else 'o',
                        facecolor=SURFACE if full else col, edgecolor=col if full else SURFACE, linewidth=1.4 if full else 1,
-                       alpha=0.9, zorder=3, clip_on=False, label=f'{t}' + (' (room full: demand was at least this)' if full else ''))
-    for p_, a_ in zip(h['pred'], h['actual']):
-        if a_ > L:                                      # off the chart: mark it on the top edge with its value
-            ax.annotate(f'{a_:.0f} (off scale)', (p_, L), xytext=(7, -2), textcoords='offset points', fontsize=8.5, color=INK2, va='top')
+                       alpha=0.9, zorder=3, clip_on=False, label=f'{t}' + (', room full (demand ≥ peak)' if full else ''))
+    notes_at = sorted(((p_, a_, labels.get((r['year'], r['code']))) for p_, a_, r in zip(pred, actual, rows)
+                       if a_ > L or labels.get((r['year'], r['code']))), key=lambda t: t[0])
+    for k, (p_, a_, name) in enumerate(notes_at):    # stagger neighbouring notes; right-align near the right edge
+        text = (f'{name}: ' if name else '') + (f'{a_:.0f} (off scale)' if a_ > L else f'{a_:.0f}')
+        right = p_ > 0.6 * L
+        ax.annotate(text, (p_, min(a_, L)), xytext=(-7 if right else 7, -2 - 12 * (k % 2)), textcoords='offset points',
+                    fontsize=8.5, color=INK2, va='top', ha='right' if right else 'left')
     ax.set_xlim(0, L); ax.set_ylim(0, L); ax.set_aspect('equal')
-    ax.set_xlabel(f"Predicted peak (model fitted on {h['years'][0]} only)")
-    ax.set_ylabel(f"Actual {h['years'][-1]} RFID peak")
-    ax.set_title(f"Predicting {h['years'][-1]} from {h['years'][0]}: {h['n_test']} sessions, one dot each", loc='left', fontsize=11, weight='bold', pad=10)
-    ax.legend(frameon=False, loc='upper left', fontsize=8.5)
-    ax.text(0.98, 0.03, f"rank correlation {h['rank']:.2f} (session type alone {h['rank_type']:.2f})\n"
-            f"typical error ×{h['median_factor']:.2f}; within ×1.5 for {h['within_1_5']:.0%}",
-            transform=ax.transAxes, ha='right', va='bottom', fontsize=9, color=INK2, linespacing=1.4)
+    ax.set_xlabel(xlabel); ax.set_ylabel(ylabel)
+    ax.set_title(title, loc='left', fontsize=11, weight='bold', pad=10)
+    ax.legend(frameon=False, loc='upper center', bbox_to_anchor=(0.5, -0.12), ncol=2, fontsize=8.5)
+    ax.text(0.98, 0.03, notes, transform=ax.transAxes, ha='right', va='bottom', fontsize=9, color=INK2, linespacing=1.4)
     tidy(ax)
     fig.tight_layout()
     fig.savefig(path, dpi=200)
     plt.close(fig)
+
+
+def figure_check(h, path, labels=None):
+    figure_scatter(h['pred'], h['actual'], h['test'], path,
+                   f"Predicting {h['years'][-1]} from {h['years'][0]}: {h['n_test']} sessions, one dot each",
+                   f"Predicted peak (model fitted on {h['years'][0]} only)", f"Actual {h['years'][-1]} RFID peak",
+                   f"R² = {h['r2']:.2f}; rank correlation {h['rank']:.2f} (type alone {h['rank_type']:.2f})\n"
+                   f"typical error ×{h['median_factor']:.2f}; within ×1.5 for {h['within_1_5']:.0%}", labels)
+
+
+def figure_fit(model, rows, path, labels=None):
+    """The model fitted on all years, evaluated on those same sessions (training data)."""
+    pred = np.exp(model.m['fitted'])
+    actual = np.array([r['peak'] for r in rows], dtype=float)
+    years = sorted({r['year'] for r in rows})
+    figure_scatter(pred, actual, rows, path,
+                   f"Training data: fitted on {' and '.join(years)}, shown on the same {len(rows)} sessions",
+                   'Fitted peak (each title term from other sessions, not itself)', f"Actual RFID peak ({', '.join(years)})",
+                   f"R² = {r_squared(pred, actual):.2f} on the training data", labels)
+    return r_squared(pred, actual)
 
 
 def figure_effects(model, boot, path):
@@ -161,7 +200,9 @@ def main():
     model = A.Model(full)
     h = holdout(rows, vec)
     boot = bootstrap(rows, vec, a.bootstrap)
-    figure_check(h, os.path.join(hist, 'attendance_report_check.png'))
+    labels = read_labels(a.data_dir)
+    figure_check(h, os.path.join(hist, 'attendance_report_check.png'), labels)
+    r2_fit = figure_fit(model, rows, os.path.join(hist, 'attendance_report_fit.png'), labels)
     figure_effects(model, boot, os.path.join(hist, 'attendance_report_effects.png'))
     top, bottom = topic_table(model, rows)
     years = sorted({r['year'] for r in rows})
@@ -175,14 +216,20 @@ Generated {datetime.date.today():%b %d, %Y} by `python -m dqi_sort.attendance_re
 
 - For a proposed session, the model gives its **interest**: the expected RFID peak in an average slot, from its type and the most similar past session titles. Typical interest is {base['contributed']:.0f} for a contributed session, {base['mini-symposium']:.0f} for a mini-symposium and {base['symposium']:.0f} for a symposium.
 - Interest does not depend on when a session runs. A separate **slot factor** (Monday ×{day['Mon']:.2f} … Friday ×{day['Fri']:.2f}) turns interest into the expected peak in a given slot, for sizing the room.
-- Fitted on {h['years'][0]} alone, it ranked {h['years'][-1]}'s sessions with correlation {h['rank']:.2f}, against {h['rank_type']:.2f} for session type alone. Typical error is a factor of {h['median_factor']:.2f}; {h['inside_range']:.0%} of sessions fell inside the predicted range (meant to hold about 68%).
+- Fitted on {h['years'][0]} alone, it ranked {h['years'][-1]}'s sessions with correlation {h['rank']:.2f}, against {h['rank_type']:.2f} for session type alone. R² = {h['r2']:.2f}; typical error is a factor of {h['median_factor']:.2f}; {h['inside_range']:.0%} of sessions fell inside the predicted range (meant to hold about 68%).
 - Use it to rank sessions for the larger rooms, and size a room from the high end of the range when overflow would be costly. It does not know this year's hot topics; reviewers do.
 
-## How well it predicts
+## How well it fits the data it was trained on
 
-![Predicted vs actual]({os.path.basename('attendance_report_check.png')})
+![Fit on the training data](attendance_report_fit.png)
 
-Each dot is one {h['years'][-1]} session, predicted by a model that saw only {h['years'][0]} ({h['n_train']} sessions). Triangles are sessions whose room was full, so the actual demand was at least that high. {h['years'][-1]} drew ×{h['scale']:.2f} the level the model expected overall; a new year's level is unknown in advance, so this was applied before comparing.
+The model fitted on all {len(rows)} past sessions, shown against those same sessions. Each session's title term comes from the other sessions most like it, never from the session itself, so this is not memorization; it shows how much of the past attendance the model's ingredients (type, similar titles, slot, year) account for: R² = {r2_fit:.2f}.
+
+## How well it predicts a new year
+
+![Predicted vs actual](attendance_report_check.png)
+
+Each dot is one {h['years'][-1]} session, predicted by a model that saw only {h['years'][0]} ({h['n_train']} sessions). Triangles are sessions whose room was full, so the actual demand was at least that high. R² is computed on the plotted scale: 1 − (squared prediction errors) / (total variance of the actual peaks). Named points come from `history/attendance_labels.csv`. {h['years'][-1]} drew ×{h['scale']:.2f} the level the model expected overall; a new year's level is unknown in advance, so this was applied before comparing.
 
 ## What it learned
 
@@ -219,7 +266,7 @@ Next year: add the new RFID export and room grid to `input/attendance/`, extend 
 """
     with open(os.path.join(hist, 'attendance_report.md'), 'w', encoding='utf-8') as f:
         f.write(md)
-    print('wrote', os.path.join(hist, 'attendance_report.md'), 'and its two figures; refitted', A.model_path(a.data_dir))
+    print('wrote', os.path.join(hist, 'attendance_report.md'), 'and its three figures; refitted', A.model_path(a.data_dir))
 
 
 if __name__ == '__main__':
