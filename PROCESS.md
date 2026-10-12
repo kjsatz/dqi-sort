@@ -177,9 +177,10 @@ The data repo holds one set of files per year:
 | `institutions.csv` | submitted affiliation | affiliation, institution |
 | `linking/series.csv` | talk in a multi-part series | series_id, talk_id, part, sure (yes / no), note |
 | `embeddings/cards.npz` | talk | Card embeddings (EmbeddingGemma; NumPy, float16); see `docs/embeddings.md` |
-| `sorting/sessions.csv` | session | session_id, title, kind (contributed / mini-symposium / symposium), minutes (144 or 108), size (small / medium / large: the room size class people decided), area, locked, notes |
+| `sorting/sessions.csv` | session | session_id, title, kind (contributed / mini-symposium / symposium), minutes (144 or 108), size (small / medium / large: the room size class people decided), area, locked, scope (one sentence: what belongs here), notes |
 | `sorting/assignments.csv` | talk | talk_id, session_id (blank for lonely abstracts), order, locked, note |
 | `sorting/moves.csv` | move | when, commit, talk_id, from (session, area, lonely, new, or another unit), to, by, reason |
+| `sorting/sheets.csv` | review sheet made | kind (shared / area), area, round, commit, content (hash of the area's sessions when sent), sheet_id, url, made |
 | `sorting/notes.csv` | human note | round, area, reviewer, talk_id or session_id, note, resolution |
 | `venue/rooms.csv` | room | room_id, name, capacity, size (small / medium / large), zone, invited_block_144, invited_block_108 |
 | `venue/room_distances.csv` | pair of rooms | room_a, room_b, walk_minutes (rough) |
