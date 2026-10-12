@@ -44,4 +44,4 @@ Next, for a dry run on the full 2026 DQI workbook before abstracts arrive on abo
 
 Dry-run inputs are ready in `../dqi-2026-dryrun/input/` (see its `CLAUDE.md`), including the virtual track and the session-chair volunteer lists.
 
-Still needed from Kevin: RFID attendance for 2025 and 2026 (and whether it records entries or occupancy over time; whether 2025 abstracts and sessions exist or only titles); a Google service account for `sync-sheets` (not needed until review sheets); this year's division number (24?); the real 2027 room grid and room distances; the chair invitation template and the return format agreed with the coordinator; reviewers for each area.
+Still needed from Kevin: RFID attendance for 2025 and 2026 (per session: entries, peak inside, average visit; we model the peak, with peak at 90% or more of capacity treated as full) and whether 2025 abstracts and sessions exist or only titles; a Google service account for `sync-sheets` (not needed until review sheets); this year's division number (24?); the real 2027 room grid and room distances; the chair invitation template and the return format agreed with the coordinator; reviewers for each area.
