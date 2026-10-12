@@ -12,6 +12,7 @@ import numpy as np
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
+from matplotlib.ticker import MultipleLocator
 from dqi_sort import attendance as A
 
 # categorical slots 1-3 of the reference palette (validated all-pairs for scatter); text in ink tokens
@@ -112,6 +113,7 @@ def figure_scatter(pred, actual, rows, path, title, xlabel, ylabel, notes, label
             ax.annotate(f'{name} ({a_:.0f})', (p_, a_), xytext=(8, 0), textcoords='offset points',
                         fontsize=8.5, color=INK2, va='center')
     ax.set_xlim(0, X); ax.set_ylim(0, ymax); ax.set_aspect('equal')
+    ax.xaxis.set_major_locator(MultipleLocator(50)); ax.yaxis.set_major_locator(MultipleLocator(50))   # square grid
     ax.set_xlabel(xlabel); ax.set_ylabel(ylabel)
     ax.set_title(title, loc='left', fontsize=11, weight='bold', pad=10)
     ax.legend(frameon=False, loc='upper center', bbox_to_anchor=(0.5, -0.08), ncol=2, fontsize=8.5)

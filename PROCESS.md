@@ -96,7 +96,7 @@ Reviewers get two kinds of Google Sheet, both generated from the CSVs in git.
 
 **Area sheet (editable, one per area).** Just that area's part:
 
-- **Session summary:** one row per session, with session ID, title, length, minutes filled (computed) and human notes.
+- **Session summary:** one row per session, with session ID, title, length, minutes filled (computed), expected attendance and suggested room size (from the model), room size (decided; pre-filled with the suggestion) and human notes.
 - **Sessions:** one row per talk, with session ID, order, talk ID, title, speaker, institution, one-line summary, a **Move to lonely abstracts** checkbox and human notes.
 
 What reviewers do:
@@ -176,7 +176,7 @@ The data repo holds one set of files per year:
 | `cards.jsonl` | talk | Presentation card as JSON |
 | `institutions.csv` | submitted affiliation | affiliation, institution |
 | `embeddings/cards.npz` | talk | Card embeddings (EmbeddingGemma; NumPy, float16); see `docs/embeddings.md` |
-| `sorting/sessions.csv` | session | session_id, title, kind (contributed / mini-symposium / symposium), minutes (144 or 108), area, locked, notes |
+| `sorting/sessions.csv` | session | session_id, title, kind (contributed / mini-symposium / symposium), minutes (144 or 108), size (small / medium / large: the room size class people decided), area, locked, notes |
 | `sorting/assignments.csv` | talk | talk_id, session_id (blank for lonely abstracts), order, locked, note |
 | `sorting/moves.csv` | move | when, commit, talk_id, from (session, area, lonely, new, or another unit), to, by, reason |
 | `sorting/notes.csv` | human note | round, area, reviewer, talk_id or session_id, note, resolution |
@@ -217,13 +217,14 @@ Room distances can be rough, and pairs may be left out. A missing pair counts as
 Hard rules:
 
 - every session gets exactly one slot, of its own length (packing builds as many 144- and 108-minute sessions as there are slots of each)
+- every session gets a room of its decided size class
 - no speaker is in two places at once
 - submitters' day constraints are honoured where possible
 - confirmed chairs are not scheduled against their own talks or stated unavailability (if returns are in)
 
 Preferences, with weights set in `config.yaml`:
 
-- expected attendance fits the room
+- within a size class, sessions with higher expected attendance get the larger rooms
 - high-interest sessions are spread across the week, Friday included, so every slot has strong content; expected attendance is never a reason to put weaker sessions in a slot
 - similar topics do not run at the same time
 - a theme does not run too many sessions in a row
@@ -233,6 +234,8 @@ Preferences, with weights set in `config.yaml`:
 Expected attendance comes from past RFID data in `history/attendance.csv`. Badges are tracked in and out of each room; we use the peak number inside at once, which is what a room must seat and does not depend on session length. A session whose peak reached 90% of the room's capacity counts as full: its peak is treated as a lower bound, because a full room hides the real demand.
 
 The model (`docs/attendance.md`) separates two things. A session's **interest** is how many people it would draw in an average slot; it is estimated from the most similar past session titles and the session type, and it does not depend on when the session is scheduled. A **slot effect** says how much a day and time raise or lower attendance (Friday, for example); it is used only to size the room once a session has its slot, never to decide which sessions get which slots.
+
+**Room size.** Before scheduling, every session gets a room size class (small, medium or large; the classes and their seat counts are set in `config.yaml` from `venue/rooms.csv`). The model suggests one: the smallest class whose room, at 90% full, holds the session's expected attendance, with a note when the high end of its range would overflow that room. Symposia get at least a 200-seat room whatever the estimate, so invited sessions are never put in the smallest rooms. Reviewers confirm or change the size in their area sheet, using what the model cannot see (a topic with unusual buzz this year, a well-known speaker); the lead then balances the totals against the number of rooms of each class. The decided size is a hard rule for the scheduler.
 
 **Room trades with symposia.** Right before sessions are assigned to rooms, we decide deliberately whether to trade rooms with any symposia:
 

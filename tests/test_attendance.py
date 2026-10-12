@@ -68,3 +68,13 @@ def test_report_pieces_run(tmp_path):
     R.figure_effects(model, boot, str(tmp_path / 'e.png'))
     top, bottom = R.topic_table(model, rows)
     assert (tmp_path / 'c.png').exists() and 'qubit' in top and '| Interest |' in bottom
+
+
+def test_size_suggestion():
+    m = A.Model({'mu': 0, 'effects': {}, 'sigma': 0.4, 'years': []})
+    sizes = {'small': 144, 'medium': 288, 'large': 500}
+    assert m.size({'interest': 90, 'high': 130}, 'contributed', sizes) == ('small', '')
+    assert m.size({'interest': 120, 'high': 180}, 'contributed', sizes) == ('small', 'may overflow')
+    assert m.size({'interest': 140, 'high': 210}, 'mini-symposium', sizes) == ('medium', '')
+    assert m.size({'interest': 60, 'high': 90}, 'symposium', sizes, symposium_min=200) == ('medium', '')
+    assert m.size({'interest': 700, 'high': 900}, 'symposium', sizes) == ('large', 'larger than the largest class')
