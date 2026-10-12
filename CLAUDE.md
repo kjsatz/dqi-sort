@@ -33,13 +33,12 @@ Settled choices (keep it simple; pick one good approach rather than comparing op
 - Embeddings: EmbeddingGemma via Ollama, on the card only. No other models or recipes. Used for routing, bridge talks, the global pass's candidate lists, session coherence and review areas.
 - Haiku cards: run as Haiku subagents in Claude Code on Kevin's subscription, not the Anthropic API. Session drafts and the global pass: Opus subagents, likewise.
 
+Second dry-run sort (Oct 12) with the new design: pair requests linked (25 pairs), not-DQI list (8), drafts (196 sessions, 57 released), global pass (fits 197 slots; 1 cross-area session; 11 held), one critique round (79 suggestions, 20 applied: most were blocked by full sessions, so the candidates now list swap partners). Data-repo pull request kjsatz/dqi-2026-dryrun#1 holds the packing report.
+
 Next, on the dry run before abstracts arrive on about Nov 9:
 
-- Stage 3: `linking prepare` also lists cards whose `constraints` ask to follow or share a session with another talk, so they become two-part series.
-- Stage 4: the not-DQI list in `views/flags.md` (other-unit "belongs there" plus talks with no close neighbour in DQI, with reasons); bridge-talk tags from the embeddings.
-- Stage 5: change `sessions.py` to drafts (sessions of 8-13 units, no length, no grid share; bridge talks released first).
-- Stage 6: the global pass: length check (OR-Tools), embedding candidate lists, one Opus agent, review areas from finished sessions, packing report as a pull request in the data repo.
-- Scoring: blind judge of Claude's sort against the 2026 human sort; check flagged talks against those that left DQI.
+- Scoring: blind Claude judge of sampled sessions from the v1 sort, the v2 sort and the 2026 human sort (embedding coherence barely separates them); check flagged talks against those that left DQI.
+- Review areas from session content (X01, a neutral-atom session, landed in SCDEV because its talks were drafted there).
 - Validators (the checks listed in `PROCESS.md`) as one command.
 - Stage 7: read returned area sheets back into git. Stages 8-11: scheduling solver, talk order, chair handoff, reverse writer for the final APS sheet.
 

@@ -41,7 +41,9 @@ general scratchpad).
 3. **Keep the drafts' good structure.** Do not move a talk without a reason a reviewer would accept. Fewer, better
    moves beat many small ones. Edit a title or scope when a session's content changes.
 4. **In round 2 and later**, weigh each critic suggestion: apply those that make a session clearly better and keep
-   the sort fitting (a suggestion that breaks the fit needs a compensating move); skip the rest. Note in your
+   the sort fitting. A move into a full session is still possible as a swap: candidates.md lists, for each suggested
+   move, the target session's talks that fit the source session best. Skip suggestions only when no reasonable swap
+   or compensating move exists. Note in your
    summary which you applied and which you skipped, and why for the notable ones.
 
 Write each batch of moves as a JSON list to `{DIR}/ops/round<R>_<NN>.json` and apply it with

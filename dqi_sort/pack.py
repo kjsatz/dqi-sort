@@ -381,6 +381,23 @@ def candidates_text(srt, c, space):
                 alt = [sids[j] for j in np.argsort(-sims) if sids[j] != k][:2]
                 out.append(f"  - {i} {s:.3f} {srt.talks[i]['title'][:60]} -> " + ', '.join(tag(a) for a in alt))
         out.append('')
+    sug = []
+    for f in sorted(glob.glob(os.path.join(wdir(srt.data_dir), 'critique', '*', 'suggestions.json'))):
+        with open(f, encoding='utf-8') as fh:
+            sug += [x for x in json.load(fh) if x.get('talk') and x.get('to')]
+    if sug:
+        out += ['## Critic moves with swap partners', '',
+                'For each suggested move: where the talk is now, and the talks in the target session that fit that session best. '
+                'Swapping one of them back (same units) keeps both lengths, so a suggestion into a full session is still possible.', '']
+        for x in sug:
+            i, to, frm = x['talk'], x['to'], srt.where(x['talk'])
+            if frm in (None, 'pool', to) or not srt.session(to) or cent.get(frm) is None:
+                continue
+            u = S.units(srt.talks[i])
+            back = sorted(((float(space.vec(j) @ cent[frm]), j) for j in srt.session(to)['talks']
+                           if space.vec(j) is not None and S.units(srt.talks[j]) == u and not srt.talks[j]['series']), reverse=True)[:3]
+            out.append(f"- {i} {tag(frm)} -> {tag(to)}: swap back " + ', '.join(f'{j} {v:.3f} {srt.talks[j]["title"][:40]}' for v, j in back))
+        out.append('')
     coh = sorted((coherence(space, s['talks'])[0], s['id']) for s in sess)
     out += ['## Least coherent sessions (mean similarity of each talk to the rest of its session)', '']
     out += [f'- {k} {v:.3f} {title[k][:80]}' for v, k in coh[:12]]
