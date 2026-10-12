@@ -175,7 +175,7 @@ The data repo holds one set of files per year:
 | `abstracts.jsonl` | talk | talk_id, title, body, submitter_notes (repaired text), raw (the text as received, when a repair was made), text_fix (what was changed and by whom) |
 | `cards.jsonl` | talk | Presentation card as JSON |
 | `institutions.csv` | submitted affiliation | affiliation, institution |
-| `embeddings/<model>__<recipe>.npz` | talk | Embedding vectors (NumPy, float16); see `docs/embeddings.md` |
+| `embeddings/cards.npz` | talk | Card embeddings (EmbeddingGemma; NumPy, float16); see `docs/embeddings.md` |
 | `sorting/sessions.csv` | session | session_id, title, kind (contributed / focus / symposium), minutes (144 or 108), area, locked, notes |
 | `sorting/assignments.csv` | talk | talk_id, session_id (blank for lonely abstracts), order, locked, note |
 | `sorting/moves.csv` | move | when, commit, talk_id, from (session, area, lonely, new, or another unit), to, by, reason |
@@ -327,9 +327,9 @@ One person, the chair coordinator, runs all chair correspondence from a single h
 
 - **Public repo:** parser, prompts, validators, solvers, embedding and map scripts, review-sheet generator.
 - **Private repo:** one per year, holding the data above.
-- **Claude Haiku via the API:** presentation cards. Under $1 for 5,000 talks.
+- **Claude Haiku, as subagents in Claude Code:** presentation cards.
 - **Claude Opus via Claude Code:** linking, session proposals, packing, packing report, talk order and review.
-- **Local embedding model:** for the topic map and the weak-fit checks. Free; nothing leaves the machine.
+- **Google EmbeddingGemma, run locally:** embeds each card, for the topic map, the weak-fit checks and attendance estimates. Free; nothing leaves the machine.
 - **OR-Tools:** packing and schedule solvers.
 - **Google Sheets API (service account):** `sync-sheets`, run by a GitHub Action in the private repo.
 
