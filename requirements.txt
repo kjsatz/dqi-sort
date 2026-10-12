@@ -4,3 +4,4 @@ ftfy
 openpyxl     # only for .xlsx APS exports
 pytest
 # embeddings: Ollama with EmbeddingGemma (see docs/embeddings.md); no Python packages needed
+matplotlib   # attendance report figures

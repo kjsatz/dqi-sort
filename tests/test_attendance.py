@@ -53,3 +53,18 @@ def test_check_writes_report(tmp_path):
     d = make_history(tmp_path)
     report = A.check(str(d), embed=fake_embed)
     assert 'Rank correlation' in report and (d / 'history' / 'attendance_check.txt').exists()
+
+
+def test_report_pieces_run(tmp_path):
+    from dqi_sort import attendance_report as R
+    d = make_history(tmp_path)
+    rows = A.read_history(str(d))
+    vec = fake_embed([A.session_text(r['title'], r['type']) for r in rows])
+    h = R.holdout(rows, vec)
+    assert -1 <= h['rank'] <= 1 and 0 <= h['inside_range'] <= 1
+    boot = R.bootstrap(rows, vec, 3)
+    model = A.Model(A.fit_rows(rows, vec))
+    R.figure_check(h, str(tmp_path / 'c.png'))
+    R.figure_effects(model, boot, str(tmp_path / 'e.png'))
+    top, bottom = R.topic_table(model, rows)
+    assert (tmp_path / 'c.png').exists() and 'qubit' in top and '| Interest |' in bottom

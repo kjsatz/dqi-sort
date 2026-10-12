@@ -114,14 +114,20 @@ def _Phi(z):
     return 0.5 * (1 + math.erf(z / math.sqrt(2)))
 
 
-def fit_rows(rows, vectors, iterations=40):
-    """Fit the model to past sessions; returns a dict of arrays and effects."""
+def fit_rows(rows, vectors, iterations=40, same=None):
+    """Fit the model to past sessions; returns a dict of arrays and effects.
+
+    same: optional label per row; rows with equal labels are never each other's neighbours
+    (used when resampling, where a session can appear more than once)."""
     years = sorted({r['year'] for r in rows})
     X, cols = _design(rows, years)
     y_obs = np.log([r['peak'] for r in rows])
     cens = np.array([r['censored'] for r in rows])
     sim = vectors @ vectors.T
     np.fill_diagonal(sim, -np.inf)                      # a session is not its own neighbour
+    if same is not None:
+        same = np.asarray(same)
+        sim[same[:, None] == same[None, :]] = -np.inf
     W = _neighbour_weights(sim)
     y = y_obs.copy()
     title = np.zeros(len(rows))
@@ -143,7 +149,7 @@ def fit_rows(rows, vectors, iterations=40):
             z = (y_obs[i] - m[i]) / sigma
             y[i] = m[i] + sigma * _phi(z) / max(1 - _Phi(z), 1e-9)
     eff = {f'{k}:{v}': float(b) for (k, v), b in zip(cols, beta)}
-    return {'mu': float(mu), 'effects': eff, 'sigma': sigma, 'years': years,
+    return {'mu': float(mu), 'effects': eff, 'sigma': sigma, 'years': years, 'y': y,
             'r': r, 'vectors': vectors, 'titles': [r_['title'] for r_ in rows],
             'codes': [f"{r_['year']} {r_['code']}" for r_ in rows], 'types': [r_['type'] for r_ in rows]}
 

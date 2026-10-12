@@ -28,6 +28,8 @@ python -m dqi_sort.attendance predict DATA_DIR --title "Superconducting Qubit Re
 python -m dqi_sort.attendance predict DATA_DIR --sessions DATA_DIR/sorting/sessions.csv
 ```
 
+`python -m dqi_sort.attendance_report DATA_DIR` refits the model and writes `DATA_DIR/history/attendance_report.md` with two figures (predicted vs actual on the held-out year; type, day and time effects with ranges) and the past sessions that drew the most and least. Rerun it after adding a year.
+
 `predict` prints each session's interest with a 68% range and the past sessions it resembles, plus the expected peak in a given slot. Fitting and predicting need Ollama running with `embeddinggemma` (see `docs/embeddings.md`). In Python: `load(DATA_DIR)` returns a model with `interest(...)`, `slot_factor(day, start)` and `in_slot(...)`.
 
 ## How good it is
