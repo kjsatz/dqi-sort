@@ -1,6 +1,6 @@
 """Stage 2: presentation cards, written by Claude Haiku subagents in Claude Code.
 
-    python -m dqi_sort.cards prepare DATA_DIR [--ids FILE] [--batch-size 100]
+    python -m dqi_sort.cards prepare DATA_DIR [--ids FILE] [--batch-size 50]
     python -m dqi_sort.cards check BATCH.out.json        (a subagent runs this on its own output)
     python -m dqi_sort.cards merge DATA_DIR
 
@@ -215,7 +215,7 @@ def merge(data_dir):
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest='cmd', required=True)
-    p = sub.add_parser('prepare'); p.add_argument('data_dir'); p.add_argument('--ids'); p.add_argument('--batch-size', type=int, default=100)
+    p = sub.add_parser('prepare'); p.add_argument('data_dir'); p.add_argument('--ids'); p.add_argument('--batch-size', type=int, default=50)
     c = sub.add_parser('check'); c.add_argument('out_json')
     m = sub.add_parser('merge'); m.add_argument('data_dir')
     a = ap.parse_args()
