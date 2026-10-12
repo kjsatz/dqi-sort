@@ -4,12 +4,18 @@ Stage 2 of `PROCESS.md`. Claude Haiku writes one card per talk from its title, a
 
 ## Steps
 
-1. `python -m dqi_sort.cards prepare DATA_DIR --batch-size 100` writes `DATA_DIR/work/cards/prompt.md` (the spec with this year's categories and other units filled in) and `batch_NNN.json` files for every active talk without a card. Speaker names are never included. Talks with no abstract are skipped and listed.
+1. `python -m dqi_sort.cards prepare DATA_DIR` (batches of 50) writes `DATA_DIR/work/cards/prompt.md` (the spec with this year's categories and other units filled in) and `batch_NNN.json` files for every active talk without a card. Speaker names are never included. Talks with no abstract are skipped and listed.
 2. In Claude Code, launch one Haiku subagent per batch (they run in parallel). Each reads `prompt.md` and its batch, writes `batch_NNN.out.json`, and runs `python -m dqi_sort.cards check` on it until it prints OK.
 3. `python -m dqi_sort.cards merge DATA_DIR` checks every output against its batch and adds the valid cards to `cards.jsonl`. A batch with problems is listed and skipped; rerun it alone.
 4. Delete the merged outputs in `work/cards/` (`prepare` refuses to run while unmerged outputs are there). `work/` is not committed.
 
 To redo particular talks (a fixed abstract, a late addition), list their IDs in a file and run `prepare --ids FILE`.
+
+## Full run (Oct 2026, 2026 dry run)
+
+All 1,929 talks in 20 batches of about 100, one Haiku subagent each, all in parallel: about 15 minutes of wall time and about 4 million Haiku tokens. Every batch passed the checker. Flags: 18 leadership review, 155 other unit (11 "belongs there"), 65 malformed, 164 parts of multi-part talks. Several agents hit their output limit writing 100 cards in one go and had to write in pieces, so the default batch is now 50 (about 40 agents).
+
+The malformed flag earned its keep: it caught an abstract whose only copy of a number was inside a Word equation that intake removes, and the lead restored it.
 
 ## Pilot (Oct 2026, 50 talks)
 
