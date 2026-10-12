@@ -4,7 +4,7 @@ Estimates how many people a proposed session will draw, so popular sessions get 
 
 ## Data
 
-`DATA_DIR/history/attendance.csv`: one row per past session, from the APS RFID badge data (badges are tracked in and out of each room) and the APS room grids. The header lists the source spreadsheets. The target is **peak**, the most people inside at once: it is what a room must seat, and it barely depends on session length. A session whose peak reached 90% of its room's capacity counts as **full**, so its peak is only a lower bound on demand.
+`DATA_DIR/history/attendance.csv`: one row per past session, from the APS RFID badge data (badges are tracked in and out of each room) and the APS room grids. The header lists the source spreadsheets. The target is **peak**, the most people inside at once: it is what a room must seat. A session whose peak reached 90% of its room's capacity counts as **full**, so its peak is only a lower bound on demand.
 
 ## Model
 
@@ -45,4 +45,4 @@ Fitted on 2025 alone and asked to predict 2026 (175 sessions), Oct 2026:
 
 So it ranks sessions well and is useful for deciding which sessions should get the larger rooms, but it misses many individual crowds. Treat it as one input next to the reviewers' judgment, and use the upper end of the range when a full room would be costly.
 
-Known limits: two years of data (about 310 sessions); past sessions were 180 minutes, 2027 sessions are 144 or 108; the time-of-day blocks are coarse.
+Known limits: two years of data (about 310 sessions); the time-of-day blocks are coarse.

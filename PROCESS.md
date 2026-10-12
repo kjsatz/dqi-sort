@@ -231,7 +231,7 @@ Preferences, with weights set in `config.yaml`:
 - each room keeps a coherent identity
 - related sessions held back to back are in rooms physically close to each other (short walk between them)
 
-Expected attendance comes from past RFID data in `history/attendance.csv`. Badges are tracked in and out of each room; we use the peak number inside at once, which is what a room must seat and does not depend on session length. A session whose peak reached 90% of the room's capacity counts as full: its peak is treated as a lower bound, because a full room hides the real demand.
+Expected attendance comes from past RFID data in `history/attendance.csv`. Badges are tracked in and out of each room; we use the peak number inside at once, which is what a room must seat. A session whose peak reached 90% of the room's capacity counts as full: its peak is treated as a lower bound, because a full room hides the real demand.
 
 The model (`docs/attendance.md`) separates two things. A session's **interest** is how many people it would draw in an average slot; it is estimated from the most similar past session titles and the session type, and it does not depend on when the session is scheduled. A **slot effect** says how much a day and time raise or lower attendance (Friday, for example); it is used only to size the room once a session has its slot, never to decide which sessions get which slots.
 

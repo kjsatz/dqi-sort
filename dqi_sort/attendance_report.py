@@ -260,7 +260,7 @@ Next year: add the new RFID export and room grid to `input/attendance/`, extend 
 
 ## Limits
 
-- Two years, about {len(rows)} sessions. Both years had 180-minute sessions; 2027's are 144 or 108 minutes. Peak occupancy should carry over, but that is untested.
+- Two years, about {len(rows)} sessions.
 - Session titles only, by choice: talk lists would add a little, but "hot topic" context is missing either way.
 - Time of day is three coarse blocks (morning, midday, afternoon).
 """
