@@ -7,7 +7,8 @@ Stage 2 of `PROCESS.md`. Claude Haiku writes one card per talk from its title, a
 1. `python -m dqi_sort.cards prepare DATA_DIR` (batches of 50) writes `DATA_DIR/work/cards/prompt.md` (the spec with this year's categories and other units filled in) and `batch_NNN.json` files for every active talk without a card. Speaker names are never included. Talks with no abstract are skipped and listed.
 2. In Claude Code, launch one Haiku subagent per batch (they run in parallel). Each reads `prompt.md` and its batch, writes `batch_NNN.out.json`, and runs `python -m dqi_sort.cards check` on it until it prints OK.
 3. `python -m dqi_sort.cards merge DATA_DIR` checks every output against its batch and adds the valid cards to `cards.jsonl`. A batch with problems is listed and skipped; rerun it alone.
-4. Delete the merged outputs in `work/cards/` (`prepare` refuses to run while unmerged outputs are there). `work/` is not committed.
+4. Repair: for talks whose card is `malformed`, Claude drafts mechanical fixes following `prompts/repair_spec.md`, applies them with `python -m dqi_sort.fixes apply DATA_DIR FIXES.csv --by claude`, and rebuilds those cards (`prepare --ids`). Talks it cannot repair are listed for the lead.
+5. Delete the merged outputs in `work/cards/` (`prepare` refuses to run while unmerged outputs are there). `work/` is not committed.
 
 To redo particular talks (a fixed abstract, a late addition), list their IDs in a file and run `prepare --ids FILE`.
 

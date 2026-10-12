@@ -88,3 +88,12 @@ def test_rerun_keeps_later_work_and_never_drops_talks(data):
     assert abstracts(data)['1000003']['body'] == 'Hand-fixed body.'
     assert t['1000003']['title'] == 'Hand-fixed title'
     assert 'Kept 1 hand-fixed' in out
+
+
+def test_title_and_zero_width_rules():
+    assert textfix.clean('New SubmissionImaginary Devices for Nothing', 'title')[0] == 'Imaginary Devices for Nothing'
+    assert textfix.clean('Title: Imaginary Devices', 'title')[0] == 'Imaginary Devices'
+    assert textfix.clean('Imaginary Devices with Noisy QubitsAuthors: Ada Example (Presenter)', 'title')[0] == 'Imaginary Devices with Noisy Qubits'
+    assert textfix.clean('New Submission', 'title')[0] == 'New Submission'          # nothing left: keep for the cards to flag
+    assert textfix.clean('systems\u200b\u200b', 'body')[0] == 'systems'
+    assert textfix.clean('Title: of a talk', 'body')[0] == 'Title: of a talk'          # title rules only for titles

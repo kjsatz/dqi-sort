@@ -114,7 +114,7 @@ def process(rec, cfg):
     text, raw, fixes, flags = {}, {}, [], []
     for f in TEXT_FIELDS:
         orig = rec.get(f, '') or ''
-        new, what = textfix.clean(orig)
+        new, what = textfix.clean(orig, f)
         text[f] = new
         if what:
             raw[f] = orig

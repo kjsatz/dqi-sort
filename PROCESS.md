@@ -17,7 +17,7 @@ Principles:
 | --- | --- | --- |
 | 0. Prepare | Builds `config.yaml`; turns the APS schedule into the venue files (see [Venue intake](#venue-intake)) | Provide the session format, the room list and distances, the room-time grid, the symposium schedule, invited-talk notes, the chair volunteer list and past attendance (see [Before abstracts arrive](#before-abstracts-arrive)) |
 | 1. Intake | Parses the APS workbook (one in-person table and one virtual table), repairs text-encoding damage where it can (keeping the original), flags duplicates | — |
-| 2. Presentation cards | Writes a standard card for each talk, one abstract at a time (Claude Haiku; see [Presentation cards](#presentation-cards)) | Spot-check a sample |
+| 2. Presentation cards | Writes a standard card for each talk, one abstract at a time (Claude Haiku; see [Presentation cards](#presentation-cards)); repairs text the cards flag as damaged and rebuilds those cards | Spot-check a sample |
 | 3. Linking | Looks across all talks at once: groups multi-part talks into series, and normalizes affiliations to institutions | Confirm uncertain links |
 | 4. Routing and flags | Proposes 5–10 review areas and assigns each talk to one; lists talks flagged for leadership review, as candidates for another APS unit, or as malformed | **Checkpoint:** decide each flagged talk; adjust area boundaries |
 | 5. Sessions per area | Proposes the sessions for each area. Where the split is obvious, one proposal; where it isn't, two to four options, each with fill and invited-talk placement | **Checkpoint:** each area's reviewers pick, comment on or edit the proposal in their review sheet |
@@ -50,7 +50,7 @@ Each talk gets a card, written by Claude Haiku from its title, abstract, submitt
 | `other_unit` | Empty, or another APS unit the talk could go to, with a strength (`could fit` or `belongs there`) and a one-line reason |
 | `malformed` | Empty, or a note that the text looks garbled or broken (for example unreadable characters from an encoding problem, or a cut-off abstract), with what seems wrong and a suggested fix if one is clear |
 
-Malformed text is caught twice. Intake repairs common encoding damage automatically (for example Japanese or accented text turned into nonsense characters) and records what it changed. The card's `malformed` field catches what is left. Malformed talks go to the lead with a suggested fix; once fixed, the card is rebuilt.
+Malformed text is caught three times. Intake repairs what simple rules can (encoding damage, such as Japanese or accented text turned into nonsense characters; hidden markup; labels and author lists pasted into titles) and records what it changed. The card's `malformed` field catches what is left, mostly damage from copying out of PDF or Word: lost superscripts, words run together, cut-off titles, author blocks pasted into abstracts. Claude then repairs those talks mechanically: it deletes pasted-in text, rejoins words, completes a cut-off word and restores an exponent only where the text leaves no doubt, never inventing a missing value. Each repair keeps the original text and is listed for the lead to spot-check, and the repaired talks' cards are rebuilt. Talks that cannot be repaired that way go to the lead.
 
 Two kinds of association need all talks in view, so they are done in stage 3, not on the card:
 
