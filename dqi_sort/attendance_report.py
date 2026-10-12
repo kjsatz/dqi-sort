@@ -11,7 +11,6 @@ import numpy as np
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
-from matplotlib.ticker import FixedLocator, FuncFormatter, NullLocator
 from dqi_sort import attendance as A
 
 # categorical slots 1-3 of the reference palette (validated all-pairs for scatter); text in ink tokens
@@ -68,27 +67,32 @@ def bootstrap(rows, vec, n, seed=0):
     return {k: np.array(v) for k, v in out.items()}
 
 
-def figure_check(h, path):
+def figure_check(h, path, top=400):
+    """Predicted vs actual on linear axes, equal scales; sessions above `top` sit on the edge with their value."""
     style()
-    fig, ax = plt.subplots(figsize=(7.2, 6.2))
-    lim = (15, 900)
-    ax.plot(lim, lim, color=INK2, linewidth=1.2, zorder=2)
-    ax.fill_between(lim, [v / 1.5 for v in lim], [v * 1.5 for v in lim], color=GRID, alpha=0.6, zorder=1)
-    ax.text(600, 600 / 1.5 * 0.82, 'within a factor of 1.5', color=MUTED, fontsize=8.5, ha='right', rotation=45, rotation_mode='anchor')
+    fig, ax = plt.subplots(figsize=(6.6, 6.9))
+    L = top
+    ax.fill_between([0, L], [0, L / 1.5], [0, L * 1.5], color=GRID, alpha=0.6, zorder=1, linewidth=0)
+    ax.plot([0, L], [0, L], color=INK2, linewidth=1.2, zorder=2)
+    edge = math.degrees(math.atan(1 / 1.5))             # the band's lower edge, y = x / 1.5
+    ax.text(0.82 * L, 0.82 * L / 1.5, 'within a factor of 1.5', color=INK2, fontsize=9, ha='center', va='bottom',
+            rotation=edge, rotation_mode='anchor', transform_rotates_text=True, zorder=2)
+    ax.text(0.80 * L, 0.80 * L, 'predicted = actual', color=INK2, fontsize=9, ha='center', va='bottom',
+            rotation=45, rotation_mode='anchor', transform_rotates_text=True, zorder=2)
     for t, col in TYPE_COLOR.items():
         for full in (False, True):
             k = [i for i, r in enumerate(h['test']) if r['type'] == t and r['censored'] == full]
             if not k:
                 continue
-            ax.scatter(h['pred'][k], h['actual'][k], s=46 if full else 34, marker='^' if full else 'o',
+            ax.scatter(h['pred'][k], np.minimum(h['actual'][k], L), s=46 if full else 34, marker='^' if full else 'o',
                        facecolor=SURFACE if full else col, edgecolor=col if full else SURFACE, linewidth=1.4 if full else 1,
-                       alpha=0.9, zorder=3, label=f'{t}' + (' (room full: demand was at least this)' if full else ''))
-    ax.set_xscale('log'); ax.set_yscale('log'); ax.set_xlim(*lim); ax.set_ylim(*lim)
-    for axis in (ax.xaxis, ax.yaxis):
-        axis.set_major_locator(FixedLocator([20, 50, 100, 200, 500])); axis.set_minor_locator(NullLocator())
-        axis.set_major_formatter(FuncFormatter(lambda v, _: f'{v:g}'))
-    ax.set_xlabel(f"Predicted peak (fitted on {h['years'][0]} only, log scale)")
-    ax.set_ylabel(f"Actual {h['years'][-1]} RFID peak (log scale)")
+                       alpha=0.9, zorder=3, clip_on=False, label=f'{t}' + (' (room full: demand was at least this)' if full else ''))
+    for p_, a_ in zip(h['pred'], h['actual']):
+        if a_ > L:                                      # off the chart: mark it on the top edge with its value
+            ax.annotate(f'{a_:.0f} (off scale)', (p_, L), xytext=(7, -2), textcoords='offset points', fontsize=8.5, color=INK2, va='top')
+    ax.set_xlim(0, L); ax.set_ylim(0, L); ax.set_aspect('equal')
+    ax.set_xlabel(f"Predicted peak (model fitted on {h['years'][0]} only)")
+    ax.set_ylabel(f"Actual {h['years'][-1]} RFID peak")
     ax.set_title(f"Predicting {h['years'][-1]} from {h['years'][0]}: {h['n_test']} sessions, one dot each", loc='left', fontsize=11, weight='bold', pad=10)
     ax.legend(frameon=False, loc='upper left', fontsize=8.5)
     ax.text(0.98, 0.03, f"rank correlation {h['rank']:.2f} (session type alone {h['rank_type']:.2f})\n"
