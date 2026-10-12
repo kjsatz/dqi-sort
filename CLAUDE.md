@@ -19,7 +19,8 @@ Tools for sorting the APS Global Physics Summit DQI (Division of Quantum Informa
 - `tests/`: pytest, with made-up fixtures in `tests/fixtures/`. Set up with `python3 -m venv .venv && .venv/bin/pip install -r requirements.txt`; run `.venv/bin/python -m pytest tests`.
 - `prompts/card_spec.md`: the Haiku presentation-card prompt (`{CATEGORIES}` and `{UNITS}` are filled from config).
 - `config.example.yaml`: config template, including the list of other APS units.
-- `docs/`: how to run the embeddings, cards and attendance model.
+- `docs/`: how to run the embeddings, cards and attendance model, and how to set up Google Sheets access (`google_sheets.md`).
+- `dqi_sort/gsheets.py`: Google sign-in (OAuth as the lead) and Drive folder setup; `sync-sheets` builds on it.
 - `prototype/`: scripts and prompts from the first test on the 2026 superconducting sheet. Reference only; hard-coded paths.
 
 ## Status (Oct 12, 2026)
@@ -45,4 +46,4 @@ Next, for a dry run on the full 2026 DQI workbook before abstracts arrive on abo
 
 Dry-run inputs are ready in `../dqi-2026-dryrun/input/` (see its `CLAUDE.md`), including the virtual track and the session-chair volunteer lists.
 
-Still needed from Kevin: how invited-talk topics reach the pipeline (they arrive with no abstract); a Google service account for `sync-sheets` (not needed until review sheets); this year's division number (24?); the real 2027 room grid and room distances; the chair invitation template and the return format agreed with the coordinator; reviewers for each area.
+Still needed from Kevin: how invited-talk topics reach the pipeline (they arrive with no abstract); this year's division number (24?); the real 2027 room grid and room distances; the chair invitation template and the return format agreed with the coordinator; reviewers for each area.
