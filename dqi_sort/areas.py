@@ -113,7 +113,8 @@ def write_views(data_dir, talks, cards, areas, area, moves, abstracts=None):
     for s, ids in sorted(su.items()):
         for i in sorted(ids, key=lambda i: int(talks[i]['series_part'])):
             sec.append(row(i, f"{s} part {talks[i]['series_part']}"))
-    dup = [i for i in talks if any(f.startswith('same_title') for f in talks[i]['flags'].split(';')) and not talks[i]['series']]
+    dup = [i for i in talks if not talks[i]['series'] and any(
+        p in talks for f in talks[i]['flags'].split(';') if f.startswith('same_title:') for p in f.split(':', 1)[1].split('+'))]
     sec += ['', f'## Possible duplicate submissions ({len(dup)})', '', 'Same title as another talk and not a series.', '', head]
     sec += [row(i, ' '.join(f for f in talks[i]['flags'].split(';') if f.startswith('same_'))) for i in sorted(dup, key=id_key)]
     cf = [i for i in talks if ((cards.get(i) or {}).get('other_unit') or {}).get('strength') == 'could fit']
