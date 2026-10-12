@@ -84,42 +84,40 @@ def read_labels(data_dir):
         return {(r['year'], r['session_code']): r['label'] for r in csv.DictReader(f)}
 
 
-def figure_scatter(pred, actual, rows, path, title, xlabel, ylabel, notes, labels=None, top=400):
-    """Predicted vs actual on linear, equal axes. Points above `top` sit on the edge with their value."""
+def figure_scatter(pred, actual, rows, path, title, xlabel, ylabel, notes, labels=None, xmax=400):
+    """Predicted vs actual on linear axes with equal data scales; the y axis is tall enough for every point."""
     style()
     labels = labels or {}
-    fig, ax = plt.subplots(figsize=(6.6, 7.9))
-    L = top
-    ax.fill_between([0, L], [0, L / 1.5], [0, L * 1.5], color=GRID, alpha=0.6, zorder=1, linewidth=0)
-    ax.plot([0, L], [0, L], color=INK2, linewidth=1.2, zorder=2)
+    ymax = max(600, 100 * math.ceil(float(np.max(actual)) / 100))
+    fig, ax = plt.subplots(figsize=(6.4, 2.0 + 5.4 * ymax / xmax))
+    X = xmax
+    ax.fill_between([0, X], [0, X / 1.5], [0, X * 1.5], color=GRID, alpha=0.6, zorder=1, linewidth=0)
+    ax.plot([0, X], [0, X], color=INK2, linewidth=1.2, zorder=2)
     edge = math.degrees(math.atan(1 / 1.5))             # the band's lower edge, y = x / 1.5
-    ax.text(0.82 * L, 0.82 * L / 1.5, 'within a factor of 1.5', color=INK2, fontsize=9, ha='center', va='bottom',
+    ax.text(0.82 * X, 0.82 * X / 1.5, 'within a factor of 1.5', color=INK2, fontsize=9, ha='center', va='bottom',
             rotation=edge, rotation_mode='anchor', transform_rotates_text=True, zorder=2)
-    ax.text(0.80 * L, 0.80 * L, 'predicted = actual', color=INK2, fontsize=9, ha='center', va='bottom',
+    ax.text(0.80 * X, 0.80 * X, 'predicted = actual', color=INK2, fontsize=9, ha='center', va='bottom',
             rotation=45, rotation_mode='anchor', transform_rotates_text=True, zorder=2)
     for t, col in TYPE_COLOR.items():
         for full in (False, True):
             k = [i for i, r in enumerate(rows) if r['type'] == t and r['censored'] == full]
             if not k:
                 continue
-            ax.scatter(pred[k], np.minimum(actual[k], L), s=46 if full else 34, marker='^' if full else 'o',
+            ax.scatter(pred[k], actual[k], s=46 if full else 34, marker='^' if full else 'o',
                        facecolor=SURFACE if full else col, edgecolor=col if full else SURFACE, linewidth=1.4 if full else 1,
-                       alpha=0.9, zorder=3, clip_on=False, label=f'{t}' + (', room full (demand ≥ peak)' if full else ''))
-    notes_at = sorted(((p_, a_, labels.get((r['year'], r['code']))) for p_, a_, r in zip(pred, actual, rows)
-                       if a_ > L or labels.get((r['year'], r['code']))), key=lambda t: t[0])
-    for k, (p_, a_, name) in enumerate(notes_at):    # stagger neighbouring notes; right-align near the right edge
-        text = (f'{name}: ' if name else '') + (f'{a_:.0f} (off scale)' if a_ > L else f'{a_:.0f}')
-        right = p_ > 0.6 * L
-        ax.annotate(text, (p_, min(a_, L)), xytext=(-7 if right else 7, -2 - 12 * (k % 2)), textcoords='offset points',
-                    fontsize=8.5, color=INK2, va='top', ha='right' if right else 'left')
-    ax.set_xlim(0, L); ax.set_ylim(0, L); ax.set_aspect('equal')
+                       alpha=0.9, zorder=3, label=f'{t}' + (', room full (demand ≥ peak)' if full else ''))
+    for p_, a_, r in zip(pred, actual, rows):
+        name = labels.get((r['year'], r['code']))
+        if name:
+            ax.annotate(f'{name} ({a_:.0f})', (p_, a_), xytext=(8, 0), textcoords='offset points',
+                        fontsize=8.5, color=INK2, va='center')
+    ax.set_xlim(0, X); ax.set_ylim(0, ymax); ax.set_aspect('equal')
     ax.set_xlabel(xlabel); ax.set_ylabel(ylabel)
     ax.set_title(title, loc='left', fontsize=11, weight='bold', pad=10)
-    ax.legend(frameon=False, loc='upper center', bbox_to_anchor=(0.5, -0.12), ncol=2, fontsize=8.5)
-    ax.text(0.98, 0.03, notes, transform=ax.transAxes, ha='right', va='bottom', fontsize=9, color=INK2, linespacing=1.4)
+    ax.legend(frameon=False, loc='upper center', bbox_to_anchor=(0.5, -0.08), ncol=2, fontsize=8.5)
+    ax.text(0.98, 0.02, notes, transform=ax.transAxes, ha='right', va='bottom', fontsize=9, color=INK2, linespacing=1.4)
     tidy(ax)
-    fig.tight_layout()
-    fig.savefig(path, dpi=200)
+    fig.savefig(path, dpi=200, bbox_inches='tight', pad_inches=0.25)
     plt.close(fig)
 
 
