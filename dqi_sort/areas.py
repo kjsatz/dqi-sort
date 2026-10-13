@@ -162,8 +162,8 @@ def held_candidates(data_dir, talks, cards, iso, area):
     with open(os.path.join(d, 'held_candidates.md'), 'w', encoding='utf-8') as f:
         f.write(f'# Talks that may leave the oral program ({len(out)})\n\nKeep only the clear cases (a handful). Write them to '
                 'sorting/held.csv (talk_id, stage 4, action, unit, reason): action other_unit, with the unit, for a talk with no '
-                'real home in a quantum-information meeting; action poster for a talk with no identifiable scientific content '
-                'or with claims that contradict established physics without evidence. A promotional tone is no reason to list '
+                'real home in a quantum-information meeting; action poster only for a talk with no scientific content at all (an essay, '
+                'or claims outside physics with no physics argument). Bold claims, unconventional foundations and a promotional tone are no reason to list '
                 'a talk. Virtual talks are never listed: the virtual track keeps every talk.\n\n')
         for i in out:
             t, c = talks[i], cards[i]
@@ -287,8 +287,8 @@ def flags(data_dir, talks=None, cards=None, area=None, abstracts=None):
         sec += ['', f"Exchanged to other units: {sum(done.values())}" + (f" ({', '.join(f'{u} {n}' for u, n in done.most_common())})" if done else '')
                 + f". Brought in from other units: {sum(got.values())}" + (f" ({', '.join(f'{u} {n}' for u, n in got.most_common())})" if got else '') + '.', '']
     lr = [i for i in talks if card(i).get('leadership_review')]
-    sec += single('Non-scientific?', 'The card found no identifiable scientific content, or claims that contradict established physics '
-                  'without evidence. In person: keep it, or make it a poster. Virtual: it stays, at the end of a session.',
+    sec += single('Non-scientific?', 'The card found no scientific content at all (an essay, or claims outside physics with no physics argument); expect one or two a year. Bold claims and unconventional foundations are not listed. '
+                  'In person: keep it (the usual outcome), or make it a poster. Virtual: it stays, at the end of a session.',
                   lr, lambda i: cards[i]['leadership_review']['reason'])
     mf = [i for i in talks if card(i).get('malformed')]
     sec += single('Too little text to place', 'The card could not tell what the talk is about (for example an invited talk listed '

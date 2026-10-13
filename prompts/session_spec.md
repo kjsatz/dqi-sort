@@ -12,8 +12,7 @@ general scratchpad).
 Each card is a standard summary of one talk: ID, type (oral or INVITED), title, speaker and institution, then platform,
 problem, approach, key claim and keywords, and sometimes a series (multi-part talks, including pairs whose
 submitter asked to follow another talk), a scheduling request from the submitter, a note that the talk could go to
-another APS unit, a "non-scientific?" note (the card found no identifiable scientific content, or claims that
-contradict established physics without evidence), or a bridge mark ("near SCMAT 7/10": most of its nearest neighbours by content are in other
+another APS unit, a "non-scientific?" note (rare: the card found no scientific content at all), or a bridge mark ("near SCMAT 7/10": most of its nearest neighbours by content are in other
 areas). Cards are sorted by the DQI category that fits
 them best, so neighbouring cards are often related, but categories do not matter; content does.
 

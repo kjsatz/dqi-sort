@@ -30,7 +30,7 @@ OPS: a JSON list of objects, each with a one-line "reason" (it goes into the pac
     {"op": "edit", "session": SESSION, "title": ... and/or "scope": ..., "reason": ...}
     {"op": "order", "session": SESSION, "talks": [the same IDs in a new order], "reason": ...}
     {"op": "hold", "talk": ID, "action": "poster" | "other_unit" | "decide", "unit": UNIT (for other_unit), "reason": ...}
-        leave a pool talk out of every session for the lead, with a proposal: a poster (no identifiable scientific
+        leave a pool talk out of every session for the lead, with a proposal: a poster (no scientific
         content), another APS unit, or no proposal (no good home in DQI; the lead decides)
 Moving any part of a series moves the whole series, in order.
 
