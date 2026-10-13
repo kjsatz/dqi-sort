@@ -76,6 +76,7 @@ def test_decide_before_any_sort(tmp_path):
     shutil.rmtree(d / 'sorting')                 # stage 3 or 4: no sorting folder yet
     D.decide(str(d), 'duplicate', ['2'], unit='1')
     assert status(d)['2'] == 'duplicate' and (d / 'sorting' / 'status_log.csv').exists()
+    assert not (d / 'sorting' / 'assignments.csv').exists()     # no sort yet, so none is started
 
 
 def test_keep_marks_the_talk(tmp_path):
@@ -83,4 +84,3 @@ def test_keep_marks_the_talk(tmp_path):
     D.decide(str(d), 'keep', ['2'])
     t = {r['talk_id']: r for r in csv.DictReader(open(d / 'talks.csv'))}
     assert 'lead_kept' in t['2']['flags'] and Ar.read_held(str(d)) == []
-    assert not (d / 'sorting' / 'assignments.csv').exists()     # no sort yet, so none is started
