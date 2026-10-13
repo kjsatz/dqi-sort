@@ -8,7 +8,7 @@ def card(**kw):
     c = {'talk_id': '1000001', 'platform': 'made-up qubit', 'problem': 'imaginary loss', 'approach': 'experiment',
          'key_claim': 'We did a made-up thing.', 'keywords': ['alpha', 'beta', 'gamma'], 'best_category': '17.01.01',
          'runner_up_category': None, 'session_pitch': 'Imaginary devices', 'affiliation': 'Nowhere Institute',
-         'multi_part': None, 'constraints': None, 'leadership_review': None, 'other_unit': None, 'malformed': None}
+         'multi_part': None, 'constraints': None, 'leadership_review': None, 'promotional': None, 'other_unit': None, 'malformed': None}
     c.update(kw)
     return c
 

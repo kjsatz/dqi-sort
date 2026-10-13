@@ -12,7 +12,8 @@ general scratchpad).
 Each card is a standard summary of one talk: ID, type (oral or INVITED), title, speaker and institution, then platform,
 problem, approach, key claim and keywords, and sometimes a series (multi-part talks, including pairs whose
 submitter asked to follow another talk), a scheduling request from the submitter, a note that the talk could go to
-another APS unit, or a bridge mark ("near SCMAT 7/10": most of its nearest neighbours by content are in other
+another APS unit, a "non-scientific?" note (the card found no identifiable scientific content, or claims that
+contradict established physics without evidence), or a bridge mark ("near SCMAT 7/10": most of its nearest neighbours by content are in other
 areas). Cards are sorted by the DQI category that fits
 them best, so neighbouring cards are often related, but categories do not matter; content does.
 
@@ -42,11 +43,15 @@ Titles are what people see in the program: short, specific, in title case, with 
 
 ## Released talks
 
+(In-person areas only. The virtual track releases nothing: see its rules above.)
+
 Release a talk when it fits poorly in every session you can build here: it belongs to another area's topic, or
 it would only be filler. Released talks go to the pool of lonely abstracts, and the global pass places them across
 all of DQI, often in a session drawn from several areas. When choosing what to release, prefer bridge talks
 (marked "near ...") and talks marked "other unit": they are the most likely to find a good home with similar talks
-from other areas. Never release a talk that fits a session here well, bridge mark or not. Most areas should release
+from other areas. Release a talk marked "non-scientific?" only if it has no scientific home here; the global pass
+holds such talks for the lead (a poster, perhaps). A promotional tone is no reason to release a talk. Never
+release a talk that fits a session here well, bridge mark or not. Most areas should release
 under 5% of their units.
 
 Each released talk needs a one-line reason and a suggested home (a session topic, and the area if it is

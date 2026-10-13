@@ -1,6 +1,7 @@
 You are doing the global pass for the sessions of the APS Global Physics Summit, Division of Quantum Information
 (DQI). Agents drafted sessions area by area. Your job is to make the whole in-person program fit its time slots, and
-to place the talks the drafts released, with all of DQI in view.
+to place the talks the drafts released, with all of DQI in view. The virtual track is not part of this pass: it is
+final after its draft, and no talk ever moves between the virtual and in-person tracks.
 
 ## Input
 
@@ -25,7 +26,11 @@ general scratchpad).
   (11 allowed), a 108-minute session 9 (8 allowed). The check chooses each session's length to need the fewest
   moves, given how many slots of each length there are, and lists the sessions that must grow or shrink.
 - The sort fits when no session must grow or shrink, there are no more sessions than slots, and the pool is empty.
-  A talk may stay out of every session only if it has no reasonable home in DQI: `hold` it with a reason, for the lead.
+  A talk may stay out of every session only if it has no reasonable home in DQI: `hold` it for the lead with one of
+  three proposals: `poster` (no identifiable scientific content, or claims that contradict established physics
+  without evidence: the card's "non-scientific?" note), `other_unit` with the unit (its field is clearly another
+  APS unit's), or `decide` (scientific and DQI, but no good home this year). The reason says why, in one line the
+  lead can act on. A promotional tone is no reason to hold a talk.
 - Series move as a block (moving one part moves all, in order). At most 2 invited talks per session. At most
   {MAX_INST} talks from one institution per session (soft).
 
@@ -62,7 +67,7 @@ Each op needs a one-line `reason`; the reasons go into the packing report the le
 {"op": "dissolve", "session": "SESSION", "reason": "..."}
 {"op": "edit", "session": "SESSION", "title": "...", "scope": "...", "reason": "..."}
 {"op": "order", "session": "SESSION", "talks": ["the same IDs in a new order"], "reason": "..."}
-{"op": "hold", "talk": "ID", "reason": "..."}
+{"op": "hold", "talk": "ID", "action": "poster | other_unit | decide", "unit": "DCMP (other_unit only)", "reason": "..."}
 ```
 
 The command prints the new check and rewrites overview.md, check.md and candidates.md; reread what you need.

@@ -7,7 +7,8 @@
     python -m dqi_sort.pack finish DATA_DIR [--replace] [--no-attendance]
 
 start     collects the stage 5 drafts (work/sessions/*/proposal.json) into work/pack/state.json: the in-person draft
-          sessions, the pool of released talks, and the virtual sessions (carried through unchanged). It writes the
+          sessions and the pool of released talks. The virtual sessions are carried through unchanged: the virtual
+          track is final after its draft, and no talk ever moves between the virtual and in-person tracks. It writes the
           files the global agent works from (work/pack/): overview.md (every session and its talks; full cards for the
           pool), check.md (the length check), candidates.md (short lists from the card embeddings), prompt.md.
 ops       applies a list of moves (JSON; see OPS below) atomically, records them in work/pack/log.jsonl with their
@@ -18,7 +19,9 @@ critique  writes one folder per review area (work/pack/critique/AREA/) for an in
           then weighs them in a second round of ops.
 finish    requires the sort to fit, picks each session's length, assigns review areas (by content: the area that
           most of a session's talks' card categories belong to), and writes sorting/sessions.csv, sorting/assignments.csv, sorting/moves.csv,
-          views/sessions.md, views/sessions/AREA.md and views/packing_report.md (the pull request description).
+          views/sessions.md, views/sessions/AREA.md and views/packing_report.md (the pull request description). Talks
+          held for the lead go to sorting/held.csv and views/flags.md (dqi_sort.areas), the one list of talks the
+          lead must decide.
 
 OPS: a JSON list of objects, each with a one-line "reason" (it goes into the packing report):
     {"op": "move", "talk": ID, "to": SESSION or "pool", "position": N (optional, 1-based), "reason": ...}
@@ -26,7 +29,9 @@ OPS: a JSON list of objects, each with a one-line "reason" (it goes into the pac
     {"op": "dissolve", "session": SESSION, "reason": ...}                                 its talks go to the pool
     {"op": "edit", "session": SESSION, "title": ... and/or "scope": ..., "reason": ...}
     {"op": "order", "session": SESSION, "talks": [the same IDs in a new order], "reason": ...}
-    {"op": "hold", "talk": ID, "reason": ...}    leave a pool talk out of every session, for the lead to decide
+    {"op": "hold", "talk": ID, "action": "poster" | "other_unit" | "decide", "unit": UNIT (for other_unit), "reason": ...}
+        leave a pool talk out of every session for the lead, with a proposal: a poster (no identifiable scientific
+        content), another APS unit, or no proposal (no good home in DQI; the lead decides)
 Moving any part of a series moves the whole series, in order.
 
 The length check: a 144-minute session holds 12 units (11 allowed), a 108-minute session 9 (8 allowed); an oral talk
@@ -36,10 +41,11 @@ are no more sessions than slots, and the pool is empty (talks may stay in the po
 """
 import argparse, collections, datetime, glob, json, os, sys
 import numpy as np
-from dqi_sort import sessions as S
+from dqi_sort import areas as A, sessions as S
 from dqi_sort.embed import load as load_embeddings
 
 LENGTHS = {144: (11, 12), 108: (8, 9)}     # minutes: (fewest units allowed, most)
+HOLD_ACTIONS = ('poster', 'other_unit', 'decide')
 NEAR = 5
 
 
@@ -115,9 +121,7 @@ def start(data_dir, restart=False):
             (virtual if data['limits']['virtual'] else sessions).append(dict(rec, minutes=s.get('minutes')) if data['limits']['virtual'] else rec)
         for r in p.get('released') or []:
             rec = {'id': r['id'], 'from': area, 'reason': r['reason'].strip(), 'suggested_home': r['suggested_home'].strip()}
-            if data['limits']['virtual']:            # a virtual talk never goes into an in-person session
-                rec.update(hold=True, reason='virtual talk released by the virtual draft: ' + rec['reason'])
-            pool.append(rec)
+            pool.append(rec)                         # the check refuses releases from the virtual draft
     srt.state = {'sessions': sessions, 'pool': pool, 'virtual': virtual, 'next_new': 1, 'round': 1}
     srt.save()
     with open(os.path.join(wdir(data_dir), 'log.jsonl'), 'w', encoding='utf-8'):
@@ -198,8 +202,13 @@ def apply_ops(srt, ops):
             p = next((p for p in srt.state['pool'] if p['id'] == o.get('talk')), None)
             if not p:
                 err.append(f"op {k}: {o.get('talk')!r} is not in the pool"); continue
-            p['hold'], p['reason'] = True, reason
-            log.append({'op': 'hold', 'talk': p['id'], 'reason': reason})
+            act, unit = o.get('action'), str(o.get('unit') or '').strip()
+            if act not in HOLD_ACTIONS:
+                err.append(f"op {k}: hold needs an action: one of {', '.join(HOLD_ACTIONS)}"); continue
+            if act == 'other_unit' and not unit:
+                err.append(f'op {k}: hold with action other_unit needs the unit'); continue
+            p.update(hold=True, reason=reason, action=act, unit=unit if act == 'other_unit' else '')
+            log.append({'op': 'hold', 'talk': p['id'], 'action': act, 'unit': p['unit'], 'reason': reason})
         else:
             err.append(f'op {k}: unknown op {kind!r}')
     for s in srt.state['sessions']:
@@ -263,6 +272,10 @@ def problems(srt):
         e, w = S.session_problems(dict(s, minutes=None), s['id'], info, lim, {})
         err += [x for x in e if 'units' not in x]
         warn += w
+        err += [f"{s['id']}: {i} is a virtual talk in an in-person session" for i in s['talks'] if srt.talks[i]['track'] != 'in_person']
+    for s in srt.state.get('virtual', []):          # the tracks are a hard partition
+        err += [f"{s['id']}: {i} is an in-person talk in a virtual session" for i in s['talks'] if srt.talks[i]['track'] != 'virtual']
+    err += [f"pool: {p['id']} is a virtual talk; it belongs in a virtual session" for p in srt.state['pool'] if srt.talks[p['id']]['track'] != 'in_person']
     return err, warn
 
 
@@ -547,7 +560,7 @@ def finish(data_dir, replace=False, attendance=True):
         for k, i in enumerate(r['talks'], 1):
             assign[i] = {'talk_id': i, 'session_id': r['session_id'], 'order': k, 'locked': 'false', 'note': ''}
     for p in srt.state['pool']:
-        assign[p['id']] = {'talk_id': p['id'], 'session_id': '', 'order': '', 'locked': 'false', 'note': f"held for the lead: {p['reason']}"}
+        assign[p['id']] = {'talk_id': p['id'], 'session_id': '', 'order': '', 'locked': 'false', 'note': 'held for the lead (views/flags.md)'}
     for i in srt.talks:
         assign.setdefault(i, {'talk_id': i, 'session_id': '', 'order': '', 'locked': 'false', 'note': 'in no session'})
     est = S.estimates(data_dir, [r for r in rows if r['area'] != 'VIRTUAL'], srt.cfg) if attendance else {}
@@ -569,6 +582,13 @@ def finish(data_dir, replace=False, attendance=True):
                'by': 'claude', 'reason': e['reason']} for e in log if e['op'] == 'move']
     S.write_csv(os.path.join(sort_dir, 'moves.csv'), ['when', 'commit', 'talk_id', 'from', 'to', 'by', 'reason'], moves)
     write_views(srt, rows, est, c, log, first)
+    held = A.read_held(data_dir)
+    keep = [r for r in held if r['stage'] != '6']
+    listed = {r['talk_id'] for r in keep}
+    keep += [{'talk_id': p['id'], 'stage': '6', 'action': p.get('action') or 'decide', 'unit': p.get('unit', ''), 'reason': p['reason']}
+             for p in srt.state['pool'] if p['id'] not in listed]
+    A.write_held(data_dir, keep)
+    A.flags(data_dir)
     print(f"{len(rows)} sessions written; {len(srt.state['pool'])} talks held for the lead; views/packing_report.md")
 
 
@@ -657,7 +677,8 @@ def write_views(srt, rows, est, c, log, released):
     low = sorted(inp, key=lambda r: r['coherence'])[:10]
     rep += ['## Least coherent sessions (embedding check; worth a look)', ''] + [f"- {r['session_id']} {r['coherence']:.3f} {r['title']}" for r in low]
     if srt.state['pool']:
-        rep += ['', '## Held for the lead', ''] + [f"- {p['id']} {srt.talks[p['id']]['title']}: {p['reason']}" for p in srt.state['pool']]
+        rep += ['', '## Held for the lead', '', f"{len(srt.state['pool'])} talks are in no session. Each is listed with its card and the "
+                'proposal (poster, another unit, or the lead decides) in views/flags.md, the one list of talks the lead must decide.']
     with open(os.path.join(data_dir, 'views', 'packing_report.md'), 'w', encoding='utf-8') as f:
         f.write('\n'.join(rep) + '\n')
 
