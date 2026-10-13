@@ -2,6 +2,7 @@
 
     python -m dqi_sort.areas propose DATA_DIR [--dry-run]
     python -m dqi_sort.areas flags DATA_DIR
+    python -m dqi_sort.areas endgame DATA_DIR      the talks to offer other units first if we end with too many
 
 Areas are defined in config.yaml (`areas`: code -> name, the DQI categories it takes, and optionally the
 physical `modality` of a platform area: superconducting, spin, defect or amo). Each talk starts
@@ -14,7 +15,7 @@ Writes the area column of talks.csv (locked talks are left alone), and two gener
     views/areas.md   each area's size (talks, minutes, about how many sessions), the categories behind it,
                      and every talk the neighbour check moved
     views/flags.md   the one list of talks the lead must decide, each listed once: talks held for the lead
-                     (sorting/held.csv, with card and proposal), non-scientific content, malformed text, uncertain
+                     (sorting/held.csv, with card and proposal), non-scientific content, too little text to place, uncertain
                      series, duplicate submissions; then, for information, promotional abstracts and "could fit"
                      other-unit notes. `flags` rewrites it alone (pack finish runs it too).
     work/areas/held_candidates.md   in-person talks that may leave the oral program: the card says another unit is
@@ -155,15 +156,17 @@ def held_candidates(data_dir, talks, cards, iso, area):
             continue
         c = cards.get(i) or {}
         o = c.get('other_unit') or {}
-        if c.get('leadership_review') or o.get('strength') == 'belongs there' or (o.get('strength') == 'could fit' and iso.get(i, 1) < cut):
+        if c.get('leadership_review') or o.get('strength') == 'belongs there':
             out.append(i)
     d = os.path.join(data_dir, 'work', 'areas')
     os.makedirs(d, exist_ok=True)
     with open(os.path.join(d, 'held_candidates.md'), 'w', encoding='utf-8') as f:
-        f.write(f'# Talks that may leave the oral program ({len(out)})\n\nKeep only the clear cases (a handful). Write them to '
-                'sorting/held.csv (talk_id, stage 4, action, unit, reason): action other_unit, with the unit, for a talk with no '
-                'real home in a quantum-information meeting; action poster for a talk with no identifiable scientific content '
-                'or with claims that contradict established physics without evidence. A promotional tone is no reason to list '
+        f.write(f'# Talks that may leave the oral program ({len(out)})\n\nWe keep talks in DQI unless they really do not belong: past '
+                'human sorts sent away 0 to 3 talks a year, so expect about that many. Write them to sorting/held.csv (talk_id, '
+                'stage 4, action, unit, reason): action other_unit, with the unit, only for a talk with no quantum-information '
+                'content at all (classical machine learning, nuclear structure, classical fluids) that is squarely another unit\'s '
+                'field; a talk on quantum physics that sits near another field stays. Action poster only for a talk with no scientific content at all (an essay, '
+                'or claims outside physics with no physics argument). Bold claims, unconventional foundations and a promotional tone are no reason to list '
                 'a talk. Virtual talks are never listed: the virtual track keeps every talk.\n\n')
         for i in out:
             t, c = talks[i], cards[i]
@@ -200,6 +203,21 @@ def write_views(data_dir, talks, cards, areas, area, moves, abstracts=None):
 
     flags(data_dir, talks, cards, area, abstracts)
     return n, mins
+
+
+ENDGAME_SHOWN = 10
+
+
+def endgame(data_dir, talks, cards):
+    """In-person talks whose card says another unit fits, best to offer first: "belongs there" before "could fit",
+    then fewest close neighbours in DQI (card embeddings)."""
+    ids = [i for i in talks if (cards.get(i) or {}).get('other_unit') and talks[i]['track'] == 'in_person']
+    iso = {}
+    path = os.path.join(data_dir, 'embeddings', 'cards.npz')
+    if os.path.exists(path):
+        eids, X, _ = load_embeddings(path)
+        iso = isolation(eids, X, {i for i, t in talks.items() if t['track'] == 'in_person'})
+    return sorted(ids, key=lambda i: (cards[i]['other_unit']['strength'] != 'belongs there', iso.get(i, 1)))
 
 
 def flags(data_dir, talks=None, cards=None, area=None, abstracts=None):
@@ -244,7 +262,7 @@ def flags(data_dir, talks=None, cards=None, area=None, abstracts=None):
         if c.get('other_unit'):
             out.append(f"other unit {c['other_unit']['unit']} ({c['other_unit']['strength']}): {c['other_unit']['reason']}")
         if c.get('malformed'):
-            out.append('malformed text: ' + c['malformed']['issue'])
+            out.append('too little text: ' + c['malformed']['issue'])
         out += [f for f in talks[i]['flags'].split(';') if f.startswith('same_')]
         return out
 
@@ -254,9 +272,8 @@ def flags(data_dir, talks=None, cards=None, area=None, abstracts=None):
     held.sort(key=lambda r: (list(ACTION_TEXT).index(r['action']) if r['action'] in ACTION_TEXT else 9, id_key(r['talk_id'])))
     sec = [f'## Held for the lead ({len(held)})', '',
            'Talks proposed to leave the oral program, at stage 4 (before drafting) or by the global pass (talks it could not '
-           'place). Decide each: a talk that leaves gets status poster or other_unit in talks.csv (with the unit in its notes); '
-           'for a talk that stays, delete its row in sorting/held.csv and it goes to the pool of lonely abstracts. Virtual '
-           'talks are never held.', '']
+           'place). Decide each with `python -m dqi_sort.decide`: `offer UNIT` (set aside while another unit decides), '
+           '`poster`, or `keep` (it stays; in no session it is a lonely abstract). Virtual talks are never held.', '']
     for r in held:
         i, t, c = r['talk_id'], talks[r['talk_id']], card(r['talk_id'])
         prop = ACTION_TEXT.get(r['action'], r['action']) + (f" ({r['unit']})" if r['unit'] else '')
@@ -270,14 +287,31 @@ def flags(data_dir, talks=None, cards=None, area=None, abstracts=None):
                     f"- Keywords: {'; '.join(c['keywords'])}"]
         sec += [f'- Also flagged: {x}' for x in other_flags(i)] + ['']
         shown.add(i)
+    lpath = os.path.join(data_dir, 'sorting', 'status_log.csv')
+    slog = read_csv(lpath) if os.path.exists(lpath) else []
+    if slog:
+        everyone = {r['talk_id']: r for r in read_csv(os.path.join(data_dir, 'talks.csv'))}
+        last = {}
+        for r in slog:
+            last[r['talk_id']] = r
+        pend = [r for i, r in last.items() if everyone.get(i, {}).get('status') == 'exchange_pending']
+        sec += [f'## Offered to another unit, waiting ({len(pend)})', '', 'Set aside while the unit decides: `decide exchanged` '
+                'when it takes the talk, `decide returned` when it does not. The full record is in sorting/status_log.csv.', '',
+                '| Talk | Title | Unit | Offered | Note |', '|---|---|---|---|---|']
+        sec += [f"| {r['talk_id']} | {everyone[r['talk_id']]['title'][:70]} | {r['unit']} | {r['when'].replace('T', ' ')} | {r['note']} |"
+                for r in sorted(pend, key=lambda r: r['when'])]
+        done = collections.Counter(r['unit'] for i, r in last.items() if everyone.get(i, {}).get('status') == 'other_unit')
+        got = collections.Counter(f.split(':', 1)[1] for t in talks.values() for f in t['flags'].split(';') if f.startswith('from_unit:'))
+        sec += ['', f"Exchanged to other units: {sum(done.values())}" + (f" ({', '.join(f'{u} {n}' for u, n in done.most_common())})" if done else '')
+                + f". Brought in from other units: {sum(got.values())}" + (f" ({', '.join(f'{u} {n}' for u, n in got.most_common())})" if got else '') + '.', '']
     lr = [i for i in talks if card(i).get('leadership_review')]
-    sec += single('Non-scientific?', 'The card found no identifiable scientific content, or claims that contradict established physics '
-                  'without evidence. In person: keep it, or make it a poster. Virtual: it stays, at the end of a session.',
+    sec += single('Non-scientific?', 'The card found no scientific content at all (an essay, or claims outside physics with no physics argument); expect one or two a year. Bold claims and unconventional foundations are not listed. '
+                  'In person: keep it (the usual outcome), or make it a poster. Virtual: it stays, at the end of a session.',
                   lr, lambda i: cards[i]['leadership_review']['reason'])
     mf = [i for i in talks if card(i).get('malformed')]
-    sec += single('Malformed text', 'Still damaged after intake and Claude\'s repair: fixing these would need a missing value. '
-                  'Fix by hand if you know it (`dqi_sort.fixes apply`), or leave it.', mf,
-                  lambda i: cards[i]['malformed']['issue'] + (f" Suggested: {cards[i]['malformed']['suggested_fix']}" if cards[i]['malformed'].get('suggested_fix') else ''))
+    sec += single('Too little text to place', 'The card could not tell what the talk is about (for example an invited talk listed '
+                  'by speaker name only); it is placed from its category. A real title with no abstract is enough and is not listed.', mf,
+                  lambda i: cards[i]['malformed']['issue'])
     su = collections.defaultdict(list)
     for i, t in talks.items():
         if 'series_uncertain' in t['flags']:
@@ -299,13 +333,13 @@ def flags(data_dir, talks=None, cards=None, area=None, abstracts=None):
                  lambda i: ' '.join(f for f in talks[i]['flags'].split(';') if f.startswith('same_')))
     by_speaker = collections.defaultdict(list)
     for i, t in talks.items():
-        if t['speaker'].strip():
+        if t['speaker'].strip() and t['type'] == 'invited':
             by_speaker[t['speaker'].strip().lower()].append(i)
-    ss = sorted((sorted(ids, key=id_key) for ids in by_speaker.values() if len(ids) > 1 and any(talks[i]['type'] == 'invited' for i in ids)
-                 and len({talks[i]['series'] for i in ids if talks[i]['series']}) <= 1 and not all(talks[i]['series'] for i in ids)),
-                key=lambda ids: id_key(ids[0]))
-    sec += group('Invited speaker with another talk', 'Often one talk entered twice (an invited placeholder and the real '
-                 'submission); otherwise two talks the scheduler must keep apart.', ss, lambda i: f"same speaker: {talks[i]['speaker']}")
+    one_series = lambda ids: all(talks[i]['series'] for i in ids) and len({talks[i]['series'] for i in ids}) == 1
+    ss = sorted((sorted(ids, key=id_key) for ids in by_speaker.values() if len(ids) > 1 and not one_series(ids)), key=lambda ids: id_key(ids[0]))
+    sec += group('Invited talk entered twice?', 'The same speaker has two invited entries (often a placeholder and the real entry): '
+                 '`decide duplicate KEEP OTHER`, keeping the one with more information. An invited speaker may also give a '
+                 'contributed talk; such pairs are not listed.', ss, lambda i: f"same speaker: {talks[i]['speaker']}")
     bt = [i for i in talks if (card(i).get('other_unit') or {}).get('strength') == 'belongs there']
     sec += single('Card says another unit, kept in DQI', 'Claude judged these fit DQI after all; they stay unless you say otherwise.',
                   bt, lambda i: f"{cards[i]['other_unit']['unit']}: {cards[i]['other_unit']['reason']}")
@@ -313,15 +347,13 @@ def flags(data_dir, talks=None, cards=None, area=None, abstracts=None):
     pr = [i for i in talks if card(i).get('promotional')]
     sec += single('Promotional (no action expected)', 'The abstract reads partly as promotion of a product, company or platform. '
                   'Common at this meeting and usually fine; listed so you can keep an eye on them.', pr, lambda i: cards[i]['promotional']['reason'])
-    cf = [i for i in talks if (card(i).get('other_unit') or {}).get('strength') == 'could fit']
+    cf = [i for i in talks if card(i).get('other_unit') and talks[i]['track'] == 'in_person']
     by_unit = collections.Counter(cards[i]['other_unit']['unit'] for i in cf)
-    sec += ['', f'## Could also fit another unit ({len(cf)}; no action needed)', '',
-            ', '.join(f'{u} {c}' for u, c in by_unit.most_common()) + '. These stay in DQI unless a talk is left over with nowhere good to go.']
-    rep = [(i, x) for i in sorted(talks, key=id_key) for x in (abstracts.get(i) or {}).get('text_fix', []) if x.get('by') == 'claude']
-    sec += ['', f'## Repaired automatically ({len({i for i, _ in rep})} talks, {len(rep)} edits; spot-check)', '',
-            'Claude\'s mechanical repairs (prompts/repair_spec.md); the original text is in `raw` in abstracts.jsonl.', '',
-            '| Talk | Field | Repair |', '|---|---|---|']
-    sec += [f"| {i} | {x['field']} | {x['fix']} |" for i, x in rep]
+    sec += ['', f'## Could also fit another unit ({len(cf)}; for the endgame)', '',
+            ', '.join(f'{u} {c}' for u, c in by_unit.most_common()) + '. These stay in DQI. If we end with more talks than room, '
+            'the ones to offer are these, best first (the card says another unit fits, and the talk has the fewest close '
+            'neighbours in DQI); `python -m dqi_sort.areas endgame` lists them all.', '']
+    sec += [f"- {i} {talks[i]['title'][:80]} ({cards[i]['other_unit']['unit']})" for i in endgame(data_dir, talks, cards)[:ENDGAME_SHOWN]]
     os.makedirs(os.path.join(data_dir, 'views'), exist_ok=True)
     with open(os.path.join(data_dir, 'views', 'flags.md'), 'w', encoding='utf-8') as f:
         f.write('# For the lead\n\nGenerated by `python -m dqi_sort.areas flags` (also run by `areas propose` and `pack finish`); '
@@ -370,12 +402,19 @@ def propose(data_dir, dry_run=False):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument('cmd', choices=['propose', 'flags'])
+    ap.add_argument('cmd', choices=['propose', 'flags', 'endgame'])
     ap.add_argument('data_dir')
     ap.add_argument('--dry-run', action='store_true')
     a = ap.parse_args()
     if a.cmd == 'flags':
         flags(a.data_dir)
+    elif a.cmd == 'endgame':
+        talks = {r['talk_id']: r for r in read_csv(os.path.join(a.data_dir, 'talks.csv')) if r['status'] == 'active'}
+        with open(os.path.join(a.data_dir, 'cards.jsonl'), encoding='utf-8') as f:
+            cards = {r['talk_id']: r for r in map(json.loads, filter(str.strip, f))}
+        for k, i in enumerate(endgame(a.data_dir, talks, cards), 1):
+            o = cards[i]['other_unit']
+            print(f"{k:3d}. {i} {o['unit']:6s} {o['strength']:13s} {talks[i]['title'][:80]}")
     else:
         propose(a.data_dir, a.dry_run)
 

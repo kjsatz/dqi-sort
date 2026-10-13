@@ -17,7 +17,7 @@ Principles:
 | --- | --- | --- |
 | 0. Prepare | Builds `config.yaml`; turns the APS schedule into the venue files (see [Venue intake](#venue-intake)) | Provide the session format, the room list and distances, the room-time grid, the symposium schedule, invited-talk notes, the chair volunteer list and past attendance (see [Before abstracts arrive](#before-abstracts-arrive)) |
 | 1. Intake | Parses the APS workbook (one in-person table and one virtual table), repairs text-encoding damage where it can (keeping the original), flags duplicates | — |
-| 2. Presentation cards | Writes a standard card for each talk, one abstract at a time (Claude Haiku; see [Presentation cards](#presentation-cards)); repairs text the cards flag as damaged and rebuilds those cards | Spot-check a sample |
+| 2. Presentation cards | Writes a standard card for each talk, one abstract at a time (Claude Haiku; see [Presentation cards](#presentation-cards)) | Spot-check a sample |
 | 3. Linking | Looks across all talks at once: groups multi-part talks into series (including talks that ask to follow or share a session with another talk), and normalizes affiliations to institutions | Confirm uncertain links |
 | 4. Routing and flags | Splits the talks into 5–10 work areas for drafting; writes `views/flags.md`, the one list of talks the lead must decide (see [Talks for the lead](#talks-for-the-lead)), starting with a short list of in-person talks proposed to leave the oral program: to another APS unit, or to a poster for non-scientific content | **Checkpoint:** decide the proposed talks (a handful) and each other flagged talk |
 | 5. Draft sessions | One agent per work area, in parallel, groups that area's talks into coherent sessions without fixing their length; talks with no good home in the area go to the pool (see [Drafting and the global pass](#drafting-and-the-global-pass)). The virtual track is drafted here too, and its draft is final: it places every virtual talk | — |
@@ -46,29 +46,29 @@ Each talk gets a card, written by Claude Haiku from its title, abstract, submitt
 | `affiliation` | The affiliation as submitted (normalized to an institution in stage 3) |
 | `multi_part` | If the talk says it is one part of a series: its part number, the number of parts, and words that identify the other parts |
 | `constraints` | Scheduling requests from the submitter notes |
-| `leadership_review` | Empty, or **Needs leadership review: may not meet the standard for an oral talk**, with a one-line reason. Only for an abstract with no identifiable scientific content, or with claims that contradict established physics without evidence ("non-scientific" below) |
+| `leadership_review` | Empty, or **Needs leadership review: may not meet the standard for an oral talk**, with a one-line reason. Only for a talk with no scientific content at all: an essay or opinion piece with no method or result, or claims about things outside physics (consciousness, ethics, the universe at large) with no physics argument ("non-scientific" below): one or two a year. Bold claims, unconventional foundations, proposals without data and applications with little physics are normal talks |
 | `promotional` | Empty, or a one-line reason when the abstract reads mainly as promotion of a product, company or platform. Common at this meeting and usually fine: listed so the lead can keep an eye on it, with no action expected |
 | `other_unit` | Empty, or another APS unit the talk could go to, with a strength (`could fit` or `belongs there`) and a one-line reason |
-| `malformed` | Empty, or a note that the text looks garbled or broken (for example unreadable characters from an encoding problem, or a cut-off abstract), with what seems wrong and a suggested fix if one is clear |
+| `malformed` | Empty, or a one-line note when the text is too damaged or too thin to tell what the talk is about (no abstract, an unfilled template, text garbled beyond reading) |
 
-Malformed text is caught three times. Intake repairs what simple rules can (encoding damage, such as Japanese or accented text turned into nonsense characters; hidden markup; labels and author lists pasted into titles) and records what it changed. The card's `malformed` field catches what is left, mostly damage from copying out of PDF or Word: lost superscripts, words run together, cut-off titles, author blocks pasted into abstracts. Claude then repairs those talks mechanically: it deletes pasted-in text, rejoins words, completes a cut-off word and restores an exponent only where the text leaves no doubt, never inventing a missing value. Each repair keeps the original text and is listed for the lead to spot-check, and the repaired talks' cards are rebuilt. Talks that cannot be repaired that way go to the lead.
+We do not fix typos or small damage in the text: a talk only needs enough text to be placed in the right session. Intake undoes encoding damage automatically and silently (Japanese or accented text turned into nonsense characters, hidden markup), because it costs nothing and helps the cards; nobody reviews these fixes. Beyond that, the card flags a talk only when the text is too damaged or too thin to tell what the talk is about; such a talk (an invited talk listed by speaker name only, for example) is placed from its category and listed for the lead. A real title with no abstract is enough.
 
 Two kinds of association need all talks in view, so they are done in stage 3, not on the card:
 
 - **Multi-part series.** Claude reads every talk with a `multi_part` entry together and assigns series IDs (`series`, `series_part` in `talks.csv`). Parts are often submitted to different categories, so matching uses titles, speakers and the card's hints, not the category. Uncertain links go to the lead. A talk whose submitter asks to follow another talk, or to be in the same session as it, is treated as a two-part series in the order asked, so the pair stays together through drafting and the global pass. These requests come from the card's `constraints` and name the other talk by speaker or title. A request for the same session without an order keeps the pair together, in either order. A request to be apart from a specific talk is recorded in `linking/apart.csv`, and no session may hold both. A series never mixes in-person and virtual talks.
 - **Institutions.** Claude reads the full list of submitted affiliations once and maps each to one institution name, so "MIT" and "Massachusetts Institute of Technology" match.
 
-The list of other APS units (divisions and topical groups, such as DAMOP, DCMP, GPMFC and GIMS) is kept in `config.yaml`. Moving a talk to another unit is a last resort. We use it when a talk clearly belongs elsewhere, or when a talk is left over and has nowhere good to go in DQI. The clear cases are decided early, at the stage 4 checkpoint, so they do not linger in the sort; it should be a handful of talks. The same goes for a talk with no scientific content, which may become a poster. Neither applies to virtual talks.
+The list of other APS units (divisions and topical groups, such as DAMOP, DCMP, GPMFC and GIMS) is kept in `config.yaml`. We keep talks in DQI and use them to fill our sessions. Moving a talk to another unit is for a talk that really does not belong: one with no quantum-information content at all, squarely in another unit's field (classical machine learning, nuclear structure, classical fluids). Quantum physics that sits near another field stays. Past human sorts sent away 0 to 3 talks a year (2023, 2025, 2026). These are identified early, at the stage 4 checkpoint, so the lead can ask the other unit to take them before sorting starts; a talk we are trying to exchange is set aside (`exchange_pending`) meanwhile. If we later run out of room, the lead may offer more. Every step with another unit (offered, exchanged, returned, received) is recorded with its date, time, unit and a note in `sorting/status_log.csv` and committed to git at once: our own record, whatever the other unit's sheets say.
 
 ## Talks for the lead
 
 Every talk the lead must decide is in one generated file, `views/flags.md`, and each talk is listed once. It is rewritten at stage 4 and again when the global pass finishes. Its sections, in order:
 
-1. **Held for the lead.** In-person talks proposed to leave the oral program, from two sources: the stage 4 list (before drafting) and the global pass (talks it could not place). They are recorded in `sorting/held.csv`. Each is shown with its abstract number, title, speaker, affiliation, card (platform, problem, approach, key claim, keywords), any other flags, and the proposal with a one-line reason. There are three proposals: **poster** (non-scientific content), **another unit** (named), or **no proposal** (a DQI talk with no good home this year; the lead decides). A talk that leaves gets status `poster` or `other_unit` in `talks.csv`. For a talk that stays, the lead deletes its row in `held.csv`, and it joins the pool of lonely abstracts.
-2. **Non-scientific?** Talks flagged by `leadership_review` that are not held. In person, the lead keeps each one or makes it a poster. Virtual talks stay where they are (see [Virtual conference](#virtual-conference)).
-3. **Malformed text, uncertain series, possible duplicate submissions, invited speakers with another talk.** A group (a series or a duplicate pair) names a talk listed above rather than repeating it.
+1. **Held for the lead.** In-person talks proposed to leave the oral program, from two sources: the stage 4 list (before drafting) and the global pass (talks it could not place). They are recorded in `sorting/held.csv`. Each is shown with its abstract number, title, speaker, affiliation, card (platform, problem, approach, key claim, keywords), any other flags, and the proposal with a one-line reason. There are three proposals: **poster** (non-scientific content), **another unit** (named), or **no proposal** (a DQI talk with no good home this year; the lead decides). The lead decides each with `python -m dqi_sort.decide`: `offer UNIT` sets the talk aside while we try to exchange it to that unit (then `exchanged` when the unit takes it, or `returned` when it does not, which puts it in the pool of lonely abstracts); `poster`; or `keep`, which leaves it in DQI (in the pool if it is in no session). Talks waiting on another unit are listed in the file with the unit and the date offered.
+2. **Non-scientific?** Talks flagged by `leadership_review` that are not held: no scientific content at all: an essay or opinion piece with no method or result, or claims about things outside physics (consciousness, ethics, the universe at large) with no physics argument. One or two a year. In person, the lead keeps each one or makes it a poster; we rarely downgrade. Virtual talks stay where they are (see [Virtual conference](#virtual-conference)).
+3. **Too little text to place, uncertain series, possible duplicate submissions, invited speakers with another talk.** A group (a series or a duplicate pair) names a talk listed above rather than repeating it.
 4. **Card says another unit, kept in DQI.** Claude judged these fit DQI after all.
-5. **For information, no action expected:** promotional abstracts, the "could fit another unit" counts, and the automatic text repairs to spot-check.
+5. **For information, no action expected:** promotional abstracts and the "could fit another unit" counts.
 
 The packing report counts the held talks and points here; it does not list them again.
 
@@ -104,7 +104,7 @@ Sessions are not all the same size: a 144-minute session holds 12 contributed ta
 
 Any talk not currently in a session is a lonely abstract. Talks become lonely when a draft releases them (the global pass then places them), when a reviewer kicks them out, or when they arrive late. After the global pass the pool should be small. It is shown to everyone on the shared sheet (below), which is regenerated every time a change is merged, so it is always current.
 
-Near the end of review, one clean-up step empties the pool: Claude finds the best available home for each remaining lonely abstract (a session with room, or a small swap) and opens a pull request listing each placement and why. Moving a talk to another unit is a last resort here too. The pool must be empty at delivery.
+Near the end of review, one clean-up step empties the pool: Claude finds the best available home for each remaining lonely abstract (a session with room, or a small swap) and opens a pull request listing each placement and why. The aim is to fill our sessions exactly. If a few talks are left over when every session is full, they should be talks another unit would want: the card's other-unit note marks them, and `python -m dqi_sort.areas endgame` ranks them ("belongs there" first, then the fewest close neighbours in DQI). So the global pass and the clean-up step both leave those out first, and the lead offers them. Moving a talk to another unit is a last resort here too. The pool must be empty at delivery.
 
 ## Sort review
 
@@ -154,7 +154,7 @@ Simple and readable:
 
 ### New talks
 
-The lead adds a new talk (a late submission, or one transferred from another unit) with one command (`add-talk`). It goes into the lonely pool or straight into a named session. A card is built for it, the ledger records it, and it appears on the next generated sheets. To put it into an area sheet that is already out, the lead can paste the row in; intake recognizes it as a new talk.
+The lead adds a new talk (a late submission, or one transferred from another unit) with one command (`add-talk`). A talk brought in from another unit is also recorded with `python -m dqi_sort.decide received UNIT TALK`, which dates it and marks where it came from. It goes into the lonely pool or straight into a named session. A card is built for it, the ledger records it, and it appears on the next generated sheets. To put it into an area sheet that is already out, the lead can paste the row in; intake recognizes it as a new talk.
 
 ### Intake
 
@@ -201,6 +201,7 @@ The data repo holds one set of files per year:
 | `linking/series.csv` | talk in a multi-part series | series_id, talk_id, part, sure (yes / no), note |
 | `linking/apart.csv` | pair of talks that asked to be apart | talk_a, talk_b, note |
 | `sorting/held.csv` | in-person talk held for the lead | talk_id, stage (4: the list before drafting; 6: the global pass), action (poster / other_unit / decide), unit, reason |
+| `sorting/status_log.csv` | change of a talk's status | when (date and time), talk_id, from_status, to_status, unit (for exchanges), by, note |
 | `embeddings/cards.npz` | talk | Card embeddings (EmbeddingGemma; NumPy, float16); see `docs/embeddings.md` |
 | `sorting/sessions.csv` | session | session_id, title, kind (contributed / mini-symposium / symposium), minutes (144 or 108), size (small / medium / large: the room size class people decided), area, locked, scope (one sentence: what belongs here), notes |
 | `sorting/assignments.csv` | talk | talk_id, session_id (blank for lonely abstracts), order, locked, note |
@@ -222,7 +223,7 @@ Rules:
 
 1. Session IDs are short and stable (`RDOUT1`, `TA`). Titles can change freely.
 2. Files are sorted by their stable ID, so moving a talk changes one line.
-3. Talks are never deleted. Their status becomes `withdrawn`, `poster` or `other_unit`.
+3. Talks are never deleted. A talk's status is `active` (in the sort), `exchange_pending` (offered to another unit and set aside while it decides), `other_unit` (exchanged away), `poster`, `duplicate` (another entry of the same talk, such as an invited placeholder next to the real submission; the entry with more information is kept) or `withdrawn`. Every change of status goes through `python -m dqi_sort.decide` and is recorded with its date, time and unit in `sorting/status_log.csv`. A talk brought in from another unit is `active` and marked `from_unit:UNIT` in its flags.
 4. `locked=true` means automation will not move it. Reviewers lock what they have decided.
 5. A check runs on every commit:
    - every active talk is in exactly one session or in the lonely pool (the pool must be empty at delivery)
