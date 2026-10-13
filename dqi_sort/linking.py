@@ -212,7 +212,7 @@ def apply(data_dir):
     for sid, rs in groups.items():
         if len(rs) < 2:
             errs.append(f'series {sid} has only one talk')
-        if len({talks[r['talk_id']]['track'] for r in rs if r['talk_id'] in talks}) > 1:
+        if len({talks[r['talk_id']].get('track', 'in_person') for r in rs if r['talk_id'] in talks}) > 1:
             errs.append(f'series {sid} mixes in-person and virtual talks; they can never share a session')
         parts = sorted(int(r['part']) for r in rs)
         if parts != list(range(1, len(rs) + 1)):
