@@ -58,7 +58,7 @@ Write `{DIR}/proposal.json`:
 
 ```
 {"sessions": [{"title": "Fluxonium Qubits",
-               "scope": "One sentence: what belongs here, and what goes to the nearest similar session.",
+               "scope": "One sentence: what belongs here (do not name other sessions; titles change).",
                "talks": ["id", "...in presentation order..."],
                "weakest_fits": ["up to 3 ids that fit least well, if any"]}],
  "released": [{"id": "...", "reason": "...", "suggested_home": "..."}],

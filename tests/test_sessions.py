@@ -63,3 +63,11 @@ def test_virtual_windows():
     p = {'sessions': [session(['1', '3'], 120), session(['2'], 120)], 'released': [], 'assumed_windows': {'3': '05:30-07:30 MDT'}}
     err, _ = S.check_proposal(p, data)
     assert err == []
+
+
+def test_apart_requests():
+    data = area(n_oral=12)
+    ids = sorted(data['talks'])
+    data['talks'][ids[0]]['apart'] = [ids[1]]; data['talks'][ids[1]]['apart'] = [ids[0]]
+    err, _ = S.check_proposal({'sessions': [session(ids, None)], 'released': []}, data)
+    assert any('asked not to share a session' in e for e in err)

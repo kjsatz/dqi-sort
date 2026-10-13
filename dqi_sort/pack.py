@@ -114,7 +114,10 @@ def start(data_dir, restart=False):
                    'talks': list(s['talks'])}
             (virtual if data['limits']['virtual'] else sessions).append(dict(rec, minutes=s.get('minutes')) if data['limits']['virtual'] else rec)
         for r in p.get('released') or []:
-            pool.append({'id': r['id'], 'from': area, 'reason': r['reason'].strip(), 'suggested_home': r['suggested_home'].strip()})
+            rec = {'id': r['id'], 'from': area, 'reason': r['reason'].strip(), 'suggested_home': r['suggested_home'].strip()}
+            if data['limits']['virtual']:            # a virtual talk never goes into an in-person session
+                rec.update(hold=True, reason='virtual talk released by the virtual draft: ' + rec['reason'])
+            pool.append(rec)
     srt.state = {'sessions': sessions, 'pool': pool, 'virtual': virtual, 'next_new': 1, 'round': 1}
     srt.save()
     with open(os.path.join(wdir(data_dir), 'log.jsonl'), 'w', encoding='utf-8'):
@@ -249,10 +252,11 @@ def problems(srt):
     """Rule problems (errors) and soft warnings in the current sort."""
     err, warn = [], []
     inst_max = srt.cfg.get('max_same_institution', 4)
+    apart = S.apart_pairs(srt.data_dir) if getattr(srt, 'data_dir', None) else {}
     for s in srt.state['sessions']:
         info = {i: {'type': srt.talks[i]['type'], 'units': S.units(srt.talks[i]), 'series': srt.talks[i]['series'],
                     'part': int(srt.talks[i]['series_part'] or 0), 'institution': srt.talks[i]['institution'] or srt.talks[i]['affiliation'],
-                    'windows': []} for i in s['talks']}
+                    'windows': [], 'apart': sorted(apart.get(i, ()))} for i in s['talks']}
         lim = {'virtual': False, 'minutes': [144, 108], 'max_same_institution': inst_max}
         e, w = S.session_problems(dict(s, minutes=None), s['id'], info, lim, {})
         err += [x for x in e if 'units' not in x]
@@ -398,6 +402,14 @@ def candidates_text(srt, c, space):
                            if space.vec(j) is not None and S.units(srt.talks[j]) == u and not srt.talks[j]['series']), reverse=True)[:3]
             out.append(f"- {i} {tag(frm)} -> {tag(to)}: swap back " + ', '.join(f'{j} {v:.3f} {srt.talks[j]["title"][:40]}' for v, j in back))
         out.append('')
+    area_of = {s['id']: s['area'] for s in sess}
+    S2 = M @ M.T
+    pairs = sorted(((S2[a, b], sids[a], sids[b]) for a in range(len(sids)) for b in range(a + 1, len(sids))
+                    if area_of[sids[a]] != area_of[sids[b]]), reverse=True)[:12]
+    out += ['## Most similar sessions in different areas (possible duplicates: merge, re-split along a clearer line, '
+            'or at least note them so they are not scheduled at the same time)', '']
+    out += [f'- {a} {title[a][:55]} | {b} {title[b][:55]} ({v:.3f})' for v, a, b in pairs]
+    out.append('')
     coh = sorted((coherence(space, s['talks'])[0], s['id']) for s in sess)
     out += ['## Least coherent sessions (mean similarity of each talk to the rest of its session)', '']
     out += [f'- {k} {v:.3f} {title[k][:80]}' for v, k in coh[:12]]
