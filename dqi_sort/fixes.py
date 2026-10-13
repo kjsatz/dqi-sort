@@ -1,11 +1,9 @@
-"""Apply text fixes to abstracts (for talks whose card says the text is malformed).
+"""Apply the lead's text corrections to abstracts (for example a corrected abstract a speaker sent in).
 
-    python -m dqi_sort.fixes apply DATA_DIR FIXES.csv [--by claude]
+    python -m dqi_sort.fixes apply DATA_DIR FIXES.csv [--by lead]
 
-Used two ways: Claude's automatic repair step (--by claude) after the cards flag malformed text, and the
-lead's own corrections (the default, --by lead). Claude's fixes are strictly mechanical (remove pasted-in
-author blocks and labels, rejoin run-together words, complete a cut-off word, restore an exponent only where
-the text leaves no doubt); a missing value is never invented, and such talks stay flagged for the lead.
+Fixing typos and small damage is not part of the process: a talk only needs enough text to be placed. Use this
+when a talk's text is too damaged to tell what it is about and the right text is known.
 
 FIXES.csv: talk_id, field (title, body or submitter_notes), old, new, note. `old` must occur exactly once in
 that field of abstracts.jsonl; it is replaced by `new` (which may be empty, to delete pasted-in text).

@@ -134,8 +134,8 @@ def problems(card, cfg):
         elif ou['strength'] not in ('could fit', 'belongs there'):
             p.append("other_unit.strength must be 'could fit' or 'belongs there'")
     mf = card['malformed']
-    if mf is not None and not (isinstance(mf, dict) and {'issue', 'suggested_fix'} <= set(mf)):
-        p.append('malformed must be null or {issue, suggested_fix}')
+    if mf is not None and not (isinstance(mf, dict) and 'issue' in mf):
+        p.append('malformed must be null or {issue}')
     if card['constraints'] is not None and not isinstance(card['constraints'], str):
         p.append('constraints must be null or a string')
     return p
