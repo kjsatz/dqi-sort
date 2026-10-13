@@ -110,8 +110,9 @@ Near the end of review, one clean-up step empties the pool: Claude finds the bes
 
 Reviewers get two kinds of Google Sheet, both generated from the CSVs in git.
 
-**Shared sheet (read-only, everyone).** The whole sort as it stands:
+**Shared sheet (everyone; locked except two columns).** The whole sort as it stands, and who is reviewing what:
 
+- **Area assignments:** one row per area, with a link to its current area sheet (the latest round), its sessions and talks, and two columns people fill in: **Responsible** (who reviews the area; they may delegate) and **Status** (a note for the lead, for example when they are done). The sync keeps what people type there and saves it to `sorting/area_status.csv`, so git has a dated record of each.
 - **Session summary:** every session with its title, area, length and fill.
 - **Sessions:** every talk, grouped by session in order.
 - **Lonely abstracts:** every talk not in a session, with its summary.
@@ -208,6 +209,7 @@ The data repo holds one set of files per year:
 | `sorting/assignments.csv` | talk | talk_id, session_id (blank for lonely abstracts), order, locked, note |
 | `sorting/moves.csv` | move | when, commit, talk_id, from (session, area, lonely, new, or another unit), to, by, reason |
 | `sorting/sheets.csv` | review sheet made | kind (shared / area), area, round, commit, content (hash of the area's sessions when sent), sheet_id, url, made |
+| `sorting/area_status.csv` | review area | area, responsible, status (as typed in the shared sheet; saved at each sync) |
 | `sorting/notes.csv` | human note | round, area, reviewer, talk_id or session_id, note, resolution |
 | `venue/rooms.csv` | room | room_id, name, capacity, size (small / medium / large), zone, invited_block_144, invited_block_108 |
 | `venue/room_distances.csv` | pair of rooms | room_a, room_b, walk_minutes (rough) |
