@@ -38,9 +38,13 @@ general scratchpad).
    units into nearby sessions that must grow, moving three talks (or an invited talk) to turn a session from one
    length into the other where that helps; merge two thin sessions or split a fat one if the topic has a real seam;
    `dissolve` a session only if its talks all have better homes.
-3. **Keep the drafts' good structure.** Do not move a talk without a reason a reviewer would accept. Fewer, better
-   moves beat many small ones. Edit a title or scope when a session's content changes.
-4. **In round 2 and later**, weigh each critic suggestion: apply those that make a session clearly better and keep
+3. **Look at near-duplicate sessions.** candidates.md lists the most similar sessions drafted in different areas.
+   Where two cover the same topic, merge them or re-split them along a clearer line if the fit allows; otherwise
+   say so in your summary so they are scheduled apart.
+4. **Keep the drafts' good structure.** Do not move a talk without a reason a reviewer would accept. Fewer, better
+   moves beat many small ones. Edit a title or scope when a session's content changes. Scopes say what belongs in the session; they do not name
+   other sessions (titles change, and such pointers go stale), so remove any you find.
+5. **In round 2 and later**, weigh each critic suggestion: apply those that make a session clearly better and keep
    the sort fitting. A move into a full session is still possible as a swap: candidates.md lists, for each suggested
    move, the target session's talks that fit the source session best. Skip suggestions only when no reasonable swap
    or compensating move exists. Note in your

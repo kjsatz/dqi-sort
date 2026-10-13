@@ -14,7 +14,7 @@ Tools for sorting the APS Global Physics Summit DQI (Division of Quantum Informa
 ## Layout
 
 - `PROCESS.md`: the process, data format and rules.
-- `dqi_sort/`: the pipeline package. So far: `intake.py` (stage 1: APS export to `talks.csv` and `abstracts.jsonl`; re-runnable, keeps later-stage columns), `textfix.py` (minimal text repair: encoding damage and hidden HTML comments only; other HTML is left as submitted), `embed.py` (EmbeddingGemma via Ollama on each talk's card, saved as `embeddings/cards.npz`), `cards.py` (stage 2: batch files for Haiku subagents, check, merge; `docs/cards.md`), `attendance.py` (attendance model fitted on past RFID peaks; `docs/attendance.md`), `attendance_report.py` (refits and writes the model report with figures into the data repo's `history/`), `linking.py` (stage 3: series candidates and affiliation list for Claude to review; apply the decisions to `talks.csv`), `areas.py` (stage 4: review areas from `config.yaml` by card category plus an embedding-neighbour check; writes `views/areas.md` and the lead's `views/flags.md`), `sessions.py` (stage 5: per-area draft files for one Opus agent each, and the draft check), `pack.py` (stage 6, the global pass: state, moves with reasons, length check, embedding candidate lists, critique round, finish writes `sorting/` and the packing report; `docs/sessions.md`).
+- `dqi_sort/`: the pipeline package. So far: `intake.py` (stage 1: APS export to `talks.csv` and `abstracts.jsonl`; re-runnable, keeps later-stage columns), `textfix.py` (minimal text repair: encoding damage and hidden HTML comments only; other HTML is left as submitted), `embed.py` (EmbeddingGemma via Ollama on each talk's card, saved as `embeddings/cards.npz`), `cards.py` (stage 2: batch files for Haiku subagents, check, merge; `docs/cards.md`), `attendance.py` (attendance model fitted on past RFID peaks; `docs/attendance.md`), `attendance_report.py` (refits and writes the model report with figures into the data repo's `history/`), `linking.py` (stage 3: series candidates, pair requests and affiliation list for one Claude agent, `prompts/linking_spec.md`; apply the decisions to `talks.csv`), `areas.py` (stage 4: review areas from `config.yaml` by card category plus an embedding-neighbour check; writes `views/areas.md` and the lead's `views/flags.md`), `sessions.py` (stage 5: per-area draft files for one Opus agent each, and the draft check), `pack.py` (stage 6, the global pass: state, moves with reasons, length check, embedding candidate lists, critique round, finish writes `sorting/` and the packing report; `docs/sessions.md`).
 - `scripts/check_no_data.py`: refuses data files (run by `.githooks/pre-commit` and by `.github/workflows/checks.yml`).
 - `tests/`: pytest, with made-up fixtures in `tests/fixtures/`. Set up with `python3 -m venv .venv && .venv/bin/pip install -r requirements.txt`; run `.venv/bin/python -m pytest tests`.
 - `prompts/card_spec.md`: the Haiku presentation-card prompt (`{CATEGORIES}` and `{UNITS}` are filled from config).
@@ -22,6 +22,7 @@ Tools for sorting the APS Global Physics Summit DQI (Division of Quantum Informa
 - `config.example.yaml`: config template, including the list of other APS units.
 - `docs/`: how to run the embeddings, cards and attendance model, and how to set up Google Sheets access (`google_sheets.md`).
 - `dqi_sort/gsheets.py`: Google sign-in (OAuth as the lead) and Drive folder setup. `dqi_sort/sheets.py`: `sync` (sync-sheets) writes the shared sheet and new area sheets from the sort in git; reading returned sheets back is still to do.
+- `workbook.py`, `mockgrid.py`, `score.py`: past-year dry runs (read old sorting workbooks, make a 2027-format grid, score against the human sort with a blind judge; `docs/dry_runs.md`).
 - `prototype/`: scripts and prompts from the first test on the 2026 superconducting sheet. Reference only; hard-coded paths.
 
 ## Status (Oct 12, 2026)
@@ -33,12 +34,10 @@ Settled choices (keep it simple; pick one good approach rather than comparing op
 - Embeddings: EmbeddingGemma via Ollama, on the card only. No other models or recipes. Used for routing, bridge talks, the global pass's candidate lists, session coherence and review areas.
 - Haiku cards: run as Haiku subagents in Claude Code on Kevin's subscription, not the Anthropic API. Session drafts and the global pass: Opus subagents, likewise.
 
-Second dry-run sort (Oct 12) with the new design: pair requests linked (25 pairs), not-DQI list (8), drafts (196 sessions, 57 released), global pass (fits 197 slots; 1 cross-area session; 11 held), one critique round (79 suggestions, 20 applied: most were blocked by full sessions, so the candidates now list swap partners). Data-repo pull request kjsatz/dqi-2026-dryrun#1 holds the packing report.
+Second dry-run sort (Oct 12) with the new design, then (Oct 13) dry runs on 2023, 2024 and 2025 and a 2026 rerun: each year's sort fits its grid, and a blind Claude judge rates Claude's sessions about 1 point higher (1-5) than the human sorts, with a third as many out-of-place talks (2025, 2026; 2023 in `views/scores.md` of its repo). Improvements tested there and adopted: swap partners for the critics, review areas by content, the drafts' length mix, keep-apart requests, near-duplicate sessions across areas, the duplicate-invited flag. Summary: `../dqi-2027/reports/dry_runs_2023-2026.md` (private).
 
 Next, on the dry run before abstracts arrive on about Nov 9:
 
-- Scoring: blind Claude judge of sampled sessions from the v1 sort, the v2 sort and the 2026 human sort (embedding coherence barely separates them); check flagged talks against those that left DQI.
-- Review areas from session content (X01, a neutral-atom session, landed in SCDEV because its talks were drafted there).
 - Validators (the checks listed in `PROCESS.md`) as one command.
 - Stage 7: read returned area sheets back into git. Stages 8-11: scheduling solver, talk order, chair handoff, reverse writer for the final APS sheet.
 

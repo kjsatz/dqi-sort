@@ -16,8 +16,8 @@ status    prints the length check.
 critique  writes one folder per review area (work/pack/critique/AREA/) for an independent critic: the area's sessions
           with full cards, every session title in DQI, and prompt.md. Critics write suggestions.json; the global agent
           then weighs them in a second round of ops.
-finish    requires the sort to fit, picks each session's length, assigns review areas (the area most of a session's
-          talks were drafted in), and writes sorting/sessions.csv, sorting/assignments.csv, sorting/moves.csv,
+finish    requires the sort to fit, picks each session's length, assigns review areas (by content: the area that
+          most of a session's talks' card categories belong to), and writes sorting/sessions.csv, sorting/assignments.csv, sorting/moves.csv,
           views/sessions.md, views/sessions/AREA.md and views/packing_report.md (the pull request description).
 
 OPS: a JSON list of objects, each with a one-line "reason" (it goes into the packing report):
@@ -114,7 +114,10 @@ def start(data_dir, restart=False):
                    'talks': list(s['talks'])}
             (virtual if data['limits']['virtual'] else sessions).append(dict(rec, minutes=s.get('minutes')) if data['limits']['virtual'] else rec)
         for r in p.get('released') or []:
-            pool.append({'id': r['id'], 'from': area, 'reason': r['reason'].strip(), 'suggested_home': r['suggested_home'].strip()})
+            rec = {'id': r['id'], 'from': area, 'reason': r['reason'].strip(), 'suggested_home': r['suggested_home'].strip()}
+            if data['limits']['virtual']:            # a virtual talk never goes into an in-person session
+                rec.update(hold=True, reason='virtual talk released by the virtual draft: ' + rec['reason'])
+            pool.append(rec)
     srt.state = {'sessions': sessions, 'pool': pool, 'virtual': virtual, 'next_new': 1, 'round': 1}
     srt.save()
     with open(os.path.join(wdir(data_dir), 'log.jsonl'), 'w', encoding='utf-8'):
@@ -138,6 +141,8 @@ def apply_ops(srt, ops):
                 err.append(f'op {k}: {i!r} is not an active in-person talk in the sort'); continue
             if to != 'pool' and not srt.session(to):
                 err.append(f'op {k}: no session {to!r}'); continue
+            if to != 'pool' and srt.talks[i]['track'] == 'virtual':
+                err.append(f'op {k}: {i} is a virtual talk; it cannot go into an in-person session'); continue
             blk = srt.block(i)
             frm = srt.where(i)
             srt.remove(set(blk))
@@ -151,7 +156,7 @@ def apply_ops(srt, ops):
             log += [{'op': 'move', 'talk': j, 'from': frm, 'to': to, 'reason': reason} for j in blk]
         elif kind == 'new':
             ids = o.get('talks') or []
-            bad = [i for i in ids if i not in srt.talks or srt.where(i) is None]
+            bad = [i for i in ids if i not in srt.talks or srt.where(i) is None or srt.talks[i]['track'] == 'virtual']
             if not ids or bad or not str(o.get('title', '')).strip():
                 err.append(f'op {k}: new session needs a title and talks in the sort (bad: {bad})'); continue
             sid = f"X{srt.state['next_new']:02d}"
@@ -249,10 +254,11 @@ def problems(srt):
     """Rule problems (errors) and soft warnings in the current sort."""
     err, warn = [], []
     inst_max = srt.cfg.get('max_same_institution', 4)
+    apart = S.apart_pairs(srt.data_dir) if getattr(srt, 'data_dir', None) else {}
     for s in srt.state['sessions']:
         info = {i: {'type': srt.talks[i]['type'], 'units': S.units(srt.talks[i]), 'series': srt.talks[i]['series'],
                     'part': int(srt.talks[i]['series_part'] or 0), 'institution': srt.talks[i]['institution'] or srt.talks[i]['affiliation'],
-                    'windows': []} for i in s['talks']}
+                    'windows': [], 'apart': sorted(apart.get(i, ()))} for i in s['talks']}
         lim = {'virtual': False, 'minutes': [144, 108], 'max_same_institution': inst_max}
         e, w = S.session_problems(dict(s, minutes=None), s['id'], info, lim, {})
         err += [x for x in e if 'units' not in x]
@@ -398,6 +404,14 @@ def candidates_text(srt, c, space):
                            if space.vec(j) is not None and S.units(srt.talks[j]) == u and not srt.talks[j]['series']), reverse=True)[:3]
             out.append(f"- {i} {tag(frm)} -> {tag(to)}: swap back " + ', '.join(f'{j} {v:.3f} {srt.talks[j]["title"][:40]}' for v, j in back))
         out.append('')
+    area_of = {s['id']: s['area'] for s in sess}
+    S2 = M @ M.T
+    pairs = sorted(((S2[a, b], sids[a], sids[b]) for a in range(len(sids)) for b in range(a + 1, len(sids))
+                    if area_of[sids[a]] != area_of[sids[b]]), reverse=True)[:12]
+    out += ['## Most similar sessions in different areas (possible duplicates: merge, re-split along a clearer line, '
+            'or at least note them so they are not scheduled at the same time)', '']
+    out += [f'- {a} {title[a][:55]} | {b} {title[b][:55]} ({v:.3f})' for v, a, b in pairs]
+    out.append('')
     coh = sorted((coherence(space, s['talks'])[0], s['id']) for s in sess)
     out += ['## Least coherent sessions (mean similarity of each talk to the rest of its session)', '']
     out += [f'- {k} {v:.3f} {title[k][:80]}' for v, k in coh[:12]]
@@ -450,10 +464,27 @@ def write_files(srt):
 
 # ---------- critique ----------
 def review_areas(srt):
-    """{session id: review area}: the area most of a session's talks were drafted in."""
+    """{session id: review area}, by content: the area (config.yaml areas) that most of the session's talks' card
+    categories belong to; ties and talks without a card fall back to the area they were drafted in."""
+    import re
+    from dqi_sort.areas import MODALITY_WORDS
+    areas = srt.cfg.get('areas') or {}
+    by_cat = {c: a for a, v in areas.items() for c in v.get('categories') or []}
+    by_mod = {v['modality']: a for a, v in areas.items() if v.get('modality')}
+
+    def vote(i):
+        card = srt.cards.get(i) or {}
+        a = by_cat.get(card.get('best_category'), srt.talks[i]['area'])
+        mods = [m for m, rx in MODALITY_WORDS.items() if re.search(rx, card.get('platform', ''), re.I)]
+        if areas.get(a, {}).get('modality') and len(mods) == 1 and mods[0] != areas[a]['modality'] and mods[0] in by_mod:
+            a = by_mod[mods[0]]                          # category says one platform area, the platform says another
+        return a
     out = {}
     for s in srt.state['sessions']:
-        votes = collections.Counter(srt.talks[i]['area'] for i in s['talks'])
+        votes = collections.Counter()
+        for i in s['talks']:
+            votes[vote(i)] += 1
+            votes[srt.talks[i]['area']] += 0.5           # breaks ties toward where the talk was drafted
         out[s['id']] = votes.most_common(1)[0][0]
     return out
 

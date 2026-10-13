@@ -18,7 +18,7 @@ def fake(sessions, pool=(), n144=2, n108=2, talks=None):
 
 
 def talk(minutes=12, series='', part='', typ='oral', inst='U'):
-    return {'minutes': str(minutes), 'series': series, 'series_part': part, 'type': typ, 'institution': inst, 'affiliation': inst}
+    return {'minutes': str(minutes), 'series': series, 'series_part': part, 'type': typ, 'institution': inst, 'affiliation': inst, 'track': 'in_person'}
 
 
 def test_choose_lengths_respects_slot_counts():

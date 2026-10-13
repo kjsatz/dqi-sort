@@ -55,6 +55,16 @@ def windows(s):
     return set(WINDOW_RE.findall(s or ''))
 
 
+def apart_pairs(data_dir):
+    """{talk_id: set of talk IDs it must not share a session with}, from linking/apart.csv (talk_a, talk_b, note)."""
+    path = os.path.join(data_dir, 'linking', 'apart.csv')
+    out = collections.defaultdict(set)
+    if os.path.exists(path):
+        for r in read_csv(path):
+            out[r['talk_a']].add(r['talk_b']); out[r['talk_b']].add(r['talk_a'])
+    return out
+
+
 # ---------- the grid ----------
 def grid(data_dir):
     slots = read_csv(os.path.join(data_dir, 'schedule', 'slots.csv'))
@@ -94,7 +104,10 @@ RULES_IN_PERSON = """- **Sizes.** An oral talk is 1 unit (12 minutes); an invite
   8 to 12 units. Do not choose its length: the global pass that follows makes each session 144 minutes
   (12 units, or 11) or 108 minutes (9 units, or 8), and trades a few talks between neighbouring sessions to fit
   the whole meeting's slots. Give each topic its natural size within that range. Across the area, sessions
-  should average about {AVG} units (the meeting's average), so about {N} sessions for this area."""
+  should average about {AVG} units (the meeting's average), so about {N} sessions for this area.
+- **Aim for the meeting's mix of lengths.** About {NL} of this area's sessions should be long (11 or 12 units) and
+  about {NS} short (8 or 9 units), in proportion to the slots. Avoid 10-unit sessions where you reasonably can: a
+  10-unit session fits neither length, and the global pass then has to move a talk in or out of it."""
 
 RULES_VIRTUAL = """- **Lengths.** Every virtual session is 120 minutes: 10 units. An oral talk is 1 unit (12 minutes), an
   invited talk 3.
@@ -161,9 +174,13 @@ def prepare(data_dir):
         else:
             target = round(sum(units(t) for t in ts) / avg)
             limits = {'virtual': False, 'target_sessions': target, 'avg_units': avg}
-            rules = RULES_IN_PERSON.replace('{AVG}', f'{avg:.1f}').replace('{N}', str(target))
+            n_long = round(target * n144 / max(1, n144 + n108))
+            limits['long'], limits['short'] = n_long, target - n_long
+            rules = (RULES_IN_PERSON.replace('{AVG}', f'{avg:.1f}').replace('{N}', str(target))
+                     .replace('{NL}', str(n_long)).replace('{NS}', str(target - n_long)))
         limits.update(area=area, max_same_institution=max_inst)
-        info = {t['talk_id']: {'type': t['type'], 'units': units(t), 'series': t['series'],
+        apart = apart_pairs(data_dir)
+        info = {t['talk_id']: {'type': t['type'], 'units': units(t), 'series': t['series'], 'apart': sorted(apart.get(t['talk_id'], ())),
                                'part': int(t['series_part'] or 0), 'institution': t['institution'] or t['affiliation'],
                                'windows': sorted(windows(t['time_windows']))} for t in ts}
         with open(os.path.join(d, 'talks.json'), 'w', encoding='utf-8') as f:
@@ -219,6 +236,10 @@ def session_problems(s, n, info, limits, assumed):
         ks = sorted(pos[i] for i in ids)
         if ks != list(range(ks[0], ks[0] + len(ks))) or [info[talks[k]]['part'] for k in ks] != sorted(info[i]['part'] for i in ids):
             err.append(f'{n}: series {sid} must be consecutive and in part order')
+    for i in talks:
+        clash = [j for j in info[i].get('apart') or [] if j in pos]
+        if clash and i < min(clash):
+            err.append(f'{n}: {i} asked not to share a session with {clash}')
     inst = collections.Counter(info[i]['institution'] for i in talks if info[i]['institution'])
     for name, c in inst.items():
         if c > limits['max_same_institution']:

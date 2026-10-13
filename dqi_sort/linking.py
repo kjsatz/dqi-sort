@@ -11,6 +11,8 @@ prepare writes DATA_DIR/work/linking/:
                            talk, with the talks the request seems to name; a clear request becomes a two-part
                            series in the order asked (PROCESS.md, Presentation cards)
     affiliations.txt       every distinct submitted affiliation, with its number of talks
+    affiliations_new.txt   (with --seed OTHER/institutions.csv) the affiliations no earlier year mapped; the known
+                           ones are written to institutions.csv
 
 Claude reviews these and writes the decisions into the data repo:
     linking/series.csv     series_id, talk_id, part, sure (yes / no), note (pairs from requests: note "pair request")
@@ -70,7 +72,7 @@ def title_part(title):
 
 
 # ---------- prepare ----------
-def prepare(data_dir):
+def prepare(data_dir, seed=()):
     talks = {r['talk_id']: r for r in read_csv(os.path.join(data_dir, 'talks.csv'))}
     cards = read_jsonl(os.path.join(data_dir, 'cards.jsonl'))
     active = [i for i in talks if talks[i]['status'] == 'active']
@@ -139,6 +141,23 @@ def prepare(data_dir):
     with open(os.path.join(out, 'affiliations.txt'), 'w', encoding='utf-8') as f:
         for a, n in sorted(aff.items(), key=lambda kv: kv[0].lower()):
             f.write(f'{n}\t{a}\n')
+    if seed:                     # institutions.csv files of other years: reuse their mappings, list only the new ones
+        ipath = os.path.join(data_dir, 'institutions.csv')
+        known = {affiliation_key(r['affiliation']): r for r in read_csv(ipath)} if os.path.exists(ipath) else {}
+        for path in seed:
+            for r in read_csv(path):
+                known.setdefault(affiliation_key(r['affiliation']), r)
+        rows = {}
+        for a in aff:
+            r = known.get(affiliation_key(a))
+            if r:
+                rows[a] = {'affiliation': a, 'institution': r['institution']}
+        write_csv(ipath, ['affiliation', 'institution'], sorted(rows.values(), key=lambda r: r['affiliation'].lower()))
+        new = {a: n for a, n in aff.items() if a not in rows}
+        with open(os.path.join(out, 'affiliations_new.txt'), 'w', encoding='utf-8') as f:
+            for a, n in sorted(new.items(), key=lambda kv: kv[0].lower()):
+                f.write(f'{n}\t{a}\n')
+        print(f'{len(rows)} affiliations mapped from earlier years; {len(new)} new ones in affiliations_new.txt')
     print(f'{len(cand)} series candidates in {sum(len(g) > 1 for g in groups)} proposed groups '
           f'(+{sum(len(g) == 1 for g in groups)} singletons); {len(aff)} distinct affiliations -> {out}')
 
@@ -193,6 +212,8 @@ def apply(data_dir):
     for sid, rs in groups.items():
         if len(rs) < 2:
             errs.append(f'series {sid} has only one talk')
+        if len({talks[r['talk_id']].get('track', 'in_person') for r in rs if r['talk_id'] in talks}) > 1:
+            errs.append(f'series {sid} mixes in-person and virtual talks; they can never share a session')
         parts = sorted(int(r['part']) for r in rs)
         if parts != list(range(1, len(rs) + 1)):
             errs.append(f'series {sid} parts are {parts}, not 1..{len(rs)}')
@@ -228,8 +249,9 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument('cmd', choices=['prepare', 'apply'])
     ap.add_argument('data_dir')
+    ap.add_argument('--seed', action='append', default=[], help='prepare: institutions.csv of another year to reuse')
     a = ap.parse_args()
-    prepare(a.data_dir) if a.cmd == 'prepare' else apply(a.data_dir)
+    prepare(a.data_dir, a.seed) if a.cmd == 'prepare' else apply(a.data_dir)
 
 
 if __name__ == '__main__':
