@@ -6,6 +6,7 @@
     python -m dqi_sort.decide received  DATA_DIR UNIT TALK [TALK ...] [--note TEXT]
     python -m dqi_sort.decide poster    DATA_DIR TALK [TALK ...] [--note TEXT]
     python -m dqi_sort.decide keep      DATA_DIR TALK [TALK ...] [--note TEXT]
+    python -m dqi_sort.decide duplicate DATA_DIR KEEP TALK [TALK ...] [--note TEXT]
 
 offer      we are trying to exchange the talk to another unit: status exchange_pending. It is set aside: out of its
            session and out of the pool, so no step places it while the unit decides.
@@ -17,6 +18,8 @@ received   a talk brought in from another unit (it must already be in talks.csv:
 poster     the talk becomes a poster: status poster.
 keep       the talk stays in DQI's oral program: its row in sorting/held.csv is removed; if it is in no session it
            is a lonely abstract.
+duplicate  the talks are another entry of KEEP (for example an invited placeholder and the real submission): status
+           duplicate, out of their sessions. Keep the entry with more information.
 
 Every change is appended to sorting/status_log.csv (when, talk_id, from_status, to_status, unit, by, note) and to
 the move ledger (sorting/moves.csv); sorting/assignments.csv, sorting/held.csv and views/flags.md are updated.
@@ -30,7 +33,8 @@ MOVE_COLS = ['when', 'commit', 'talk_id', 'from', 'to', 'by', 'reason']
 # action: (statuses allowed before, status after)
 RULES = {'offer': ({'active'}, 'exchange_pending'), 'exchanged': ({'exchange_pending'}, 'other_unit'),
          'returned': ({'exchange_pending'}, 'active'), 'received': ({'active'}, 'active'),
-         'poster': ({'active', 'exchange_pending'}, 'poster'), 'keep': ({'active'}, 'active')}
+         'poster': ({'active', 'exchange_pending'}, 'poster'), 'keep': ({'active'}, 'active'),
+         'duplicate': ({'active', 'exchange_pending'}, 'duplicate')}
 
 
 def write_csv(path, cols, rows):
@@ -54,6 +58,10 @@ def last_unit(log, i):
 
 def decide(data_dir, action, ids, unit='', note='', by='lead'):
     before, after = RULES[action]
+    keep_id = ''
+    if action == 'duplicate':                     # unit carries the kept talk's ID here
+        keep_id, unit = unit, ''
+        note = note or f'duplicate of {keep_id}'
     if action in ('offer', 'received') and not unit:
         sys.exit(f'{action} needs the unit')
     tpath = os.path.join(data_dir, 'talks.csv')
@@ -81,12 +89,12 @@ def decide(data_dir, action, ids, unit='', note='', by='lead'):
         u = unit or last_unit(log, i)
         a = assign.setdefault(i, {'talk_id': i, 'session_id': '', 'order': '', 'locked': 'false', 'note': ''})
         where = a['session_id'] or 'lonely'
-        if action in ('offer', 'exchanged', 'poster'):
-            to = {'offer': f'{u} (offered)', 'exchanged': u, 'poster': 'poster'}[action]
+        if action in ('offer', 'exchanged', 'poster', 'duplicate'):
+            to = {'offer': f'{u} (offered)', 'exchanged': u, 'poster': 'poster', 'duplicate': f'duplicate of {keep_id}'}[action]
             if a['session_id']:
                 short.append(a['session_id'])
             a.update(session_id='', order='', note={'offer': f'offered to {u} ({now[:10]})', 'exchanged': f'exchanged to {u} ({now[:10]})',
-                                                    'poster': f'poster ({now[:10]})'}[action])
+                                                    'poster': f'poster ({now[:10]})', 'duplicate': f'duplicate of {keep_id}'}[action])
             moves.append((where if action != 'exchanged' else f'{u} (offered)', to))
         elif action == 'returned':
             a.update(session_id='', order='', note=f'returned by {u} ({now[:10]}): lonely')
@@ -136,7 +144,7 @@ def main():
     ap.add_argument('--note', default='')
     ap.add_argument('--by', default='lead')
     a = ap.parse_args()
-    unit, ids = (a.args[0], a.args[1:]) if a.action in ('offer', 'received') else ('', a.args)
+    unit, ids = (a.args[0], a.args[1:]) if a.action in ('offer', 'received', 'duplicate') else ('', a.args)
     if not ids:
         sys.exit('no talk IDs given')
     decide(a.data_dir, a.action, ids, unit, a.note, a.by)

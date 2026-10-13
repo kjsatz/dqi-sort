@@ -50,3 +50,11 @@ def test_refusals(tmp_path):
         D.decide(str(d), 'exchanged', ['1'])                    # never offered
     with pytest.raises(SystemExit):
         D.decide(str(d), 'received', ['99'], unit='DAMOP')      # not in talks.csv yet
+
+
+def test_duplicate(tmp_path):
+    d = tmp_path; setup(d)
+    D.decide(str(d), 'duplicate', ['2'], unit='1')
+    assert status(d)['2'] == 'duplicate' and Ar.read_held(str(d)) == []
+    log = list(csv.DictReader(open(d / 'sorting' / 'status_log.csv')))
+    assert log[-1]['note'] == 'duplicate of 1'

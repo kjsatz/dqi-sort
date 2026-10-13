@@ -223,7 +223,7 @@ Rules:
 
 1. Session IDs are short and stable (`RDOUT1`, `TA`). Titles can change freely.
 2. Files are sorted by their stable ID, so moving a talk changes one line.
-3. Talks are never deleted. A talk's status is `active` (in the sort), `exchange_pending` (offered to another unit and set aside while it decides), `other_unit` (exchanged away), `poster` or `withdrawn`. Every change of status goes through `python -m dqi_sort.decide` and is recorded with its date, time and unit in `sorting/status_log.csv`. A talk brought in from another unit is `active` and marked `from_unit:UNIT` in its flags.
+3. Talks are never deleted. A talk's status is `active` (in the sort), `exchange_pending` (offered to another unit and set aside while it decides), `other_unit` (exchanged away), `poster`, `duplicate` (another entry of the same talk, such as an invited placeholder next to the real submission; the entry with more information is kept) or `withdrawn`. Every change of status goes through `python -m dqi_sort.decide` and is recorded with its date, time and unit in `sorting/status_log.csv`. A talk brought in from another unit is `active` and marked `from_unit:UNIT` in its flags.
 4. `locked=true` means automation will not move it. Reviewers lock what they have decided.
 5. A check runs on every commit:
    - every active talk is in exactly one session or in the lonely pool (the pool must be empty at delivery)
