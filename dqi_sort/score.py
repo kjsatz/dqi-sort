@@ -139,9 +139,9 @@ def judge_prepare(data_dir, n=30, seed=1, compare=()):
     rnd = random.Random(seed)
     pick = lambda g: rnd.sample(sorted(k for k, v in g.items() if len(v) >= 6), min(n, sum(len(v) >= 6 for v in g.values())))
     items = [('claude', k, mine[k]) for k in pick(mine)] + [('human', k, human[k]) for k in pick(human)]
-    for spec in compare:                         # NAME=GITREV: another of Claude's sorts, as committed
+    for spec in compare:                         # NAME=GITREV, or NAME=state:PATH (a global-pass state file)
         name, rev = spec.split('=', 1)
-        other, _ = claude_sort(data_dir, talks, rev=rev)
+        other, _ = (claude_sort(data_dir, talks, state=rev[6:]) if rev.startswith('state:') else claude_sort(data_dir, talks, rev=rev))
         items += [(name, k, other[k]) for k in pick(other)]
     rnd.shuffle(items)
     d = os.path.join(data_dir, 'work', 'judge')
@@ -195,7 +195,7 @@ def main():
     ap.add_argument('data_dir')
     ap.add_argument('--state'); ap.add_argument('--name')
     ap.add_argument('--n', type=int, default=30); ap.add_argument('--seed', type=int, default=1)
-    ap.add_argument('--compare', action='append', default=[], help='judge-prepare: NAME=GITREV, another sort to sample')
+    ap.add_argument('--compare', action='append', default=[], help='judge-prepare: NAME=GITREV or NAME=state:PATH, another sort to sample')
     a = ap.parse_args()
     if a.cmd == 'metrics':
         metrics(a.data_dir, a.state, a.name)

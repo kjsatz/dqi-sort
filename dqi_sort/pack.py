@@ -141,6 +141,8 @@ def apply_ops(srt, ops):
                 err.append(f'op {k}: {i!r} is not an active in-person talk in the sort'); continue
             if to != 'pool' and not srt.session(to):
                 err.append(f'op {k}: no session {to!r}'); continue
+            if to != 'pool' and srt.talks[i]['track'] == 'virtual':
+                err.append(f'op {k}: {i} is a virtual talk; it cannot go into an in-person session'); continue
             blk = srt.block(i)
             frm = srt.where(i)
             srt.remove(set(blk))
@@ -154,7 +156,7 @@ def apply_ops(srt, ops):
             log += [{'op': 'move', 'talk': j, 'from': frm, 'to': to, 'reason': reason} for j in blk]
         elif kind == 'new':
             ids = o.get('talks') or []
-            bad = [i for i in ids if i not in srt.talks or srt.where(i) is None]
+            bad = [i for i in ids if i not in srt.talks or srt.where(i) is None or srt.talks[i]['track'] == 'virtual']
             if not ids or bad or not str(o.get('title', '')).strip():
                 err.append(f'op {k}: new session needs a title and talks in the sort (bad: {bad})'); continue
             sid = f"X{srt.state['next_new']:02d}"
