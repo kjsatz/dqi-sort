@@ -7,10 +7,13 @@ prepare writes DATA_DIR/work/linking/:
     series_candidates.md   every talk that may be one part of a series (its card says so, its title says
                            "Part ...", or it shares its abstract with another talk), with title, speaker,
                            category, the card's hints and constraints, grouped into proposed series
+    pair_requests.md       every talk whose submitter asks to follow, precede or share a session with another
+                           talk, with the talks the request seems to name; a clear request becomes a two-part
+                           series in the order asked (PROCESS.md, Presentation cards)
     affiliations.txt       every distinct submitted affiliation, with its number of talks
 
 Claude reviews these and writes the decisions into the data repo:
-    linking/series.csv     series_id, talk_id, part, sure (yes / no), note
+    linking/series.csv     series_id, talk_id, part, sure (yes / no), note (pairs from requests: note "pair request")
     institutions.csv       affiliation, institution
     linking/institution_overrides.csv   (optional) talk_id, institution, note: for talks whose affiliation
                            string does not settle the institution (e.g. "NIST" with no site)
@@ -21,6 +24,8 @@ that is not sure get the flag series_uncertain, for the lead.
 import argparse, collections, csv, json, os, re, sys
 
 PART = re.compile(r'\b(?:part|pt\.?)\s*[-:#]?\s*(\d+|i{1,3}|iv|one|two|three|four)\b', re.I)
+PAIR_WORDS = re.compile(r'follow|precede|before|after|same session|together|adjacent|consecutive|next to|back.to.back|'
+                        r'right after|immediately|in sequence|same as', re.I)
 ROMAN = {'i': 1, 'ii': 2, 'iii': 3, 'iv': 4, 'one': 1, 'two': 2, 'three': 3, 'four': 4}
 
 
@@ -129,12 +134,46 @@ def prepare(data_dir):
                 if same[i]:
                     f.write(f"  - same abstract as: {' '.join(same[i])}\n")
             f.write('\n')
+    write_pair_requests(out, talks, cards, active)
     aff = collections.Counter(talks[i]['affiliation'] for i in active)
     with open(os.path.join(out, 'affiliations.txt'), 'w', encoding='utf-8') as f:
         for a, n in sorted(aff.items(), key=lambda kv: kv[0].lower()):
             f.write(f'{n}\t{a}\n')
     print(f'{len(cand)} series candidates in {sum(len(g) > 1 for g in groups)} proposed groups '
           f'(+{sum(len(g) == 1 for g in groups)} singletons); {len(aff)} distinct affiliations -> {out}')
+
+
+def named_talks(text, i, talks, active):
+    """Active talks other than i whose speaker surname or title stem appears in text."""
+    low = text.lower()
+    flat = re.sub(r'[^a-z0-9]+', ' ', low)
+    out = []
+    for j in active:
+        if j == i:
+            continue
+        last = talks[j]['speaker'].split()[-1].lower() if talks[j]['speaker'] else ''
+        s = stem(talks[j]['title'])
+        if (len(last) > 3 and re.search(r'\b' + re.escape(last) + r'\b', low)) or (len(s) > 20 and s in flat):
+            out.append(j)
+    return out
+
+
+def write_pair_requests(out, talks, cards, active):
+    reqs = [i for i in active if PAIR_WORDS.search((cards.get(i) or {}).get('constraints') or '')]
+    with open(os.path.join(out, 'pair_requests.md'), 'w', encoding='utf-8') as f:
+        f.write(f'# Pair requests: {len(reqs)} talks whose submitter asks for a place next to or with another talk\n\n'
+                'A clear request naming one talk becomes a two-part series in the order asked (note "pair request"). '
+                'Requests about days or times only, or naming a talk not at the meeting, are left alone.\n\n')
+        for i in sorted(reqs, key=id_key):
+            t = talks[i]
+            f.write(f"## {i} | {t['speaker']} | {t['title']}\n- request: {cards[i]['constraints']}\n")
+            if t['series']:
+                f.write(f"- already in series {t['series']} (part {t['series_part']})\n")
+            for j in named_talks(cards[i]['constraints'], i, talks, active):
+                u = talks[j]
+                f.write(f"- names? {j} | {u['speaker']} | {u['title']}" + (f" | series {u['series']}" if u['series'] else '') + '\n')
+            f.write('\n')
+    return reqs
 
 
 # ---------- apply ----------

@@ -12,8 +12,12 @@ All parts of a series go to the area of part 1. Virtual talks go to VIRTUAL.
 Writes the area column of talks.csv (locked talks are left alone), and two generated views:
     views/areas.md   each area's size (talks, minutes, about how many sessions), the categories behind it,
                      and every talk the neighbour check moved
-    views/flags.md   what the lead must decide: leadership review, "belongs in another unit", malformed
-                     text, uncertain series, duplicate submissions; plus the "could fit" other-unit notes
+    views/flags.md   what the lead must decide: the not-DQI list, leadership review, malformed text, uncertain
+                     series, duplicate submissions; plus the "could fit" other-unit notes
+    work/areas/not_dqi_candidates.md   talks that may not belong in DQI at all: the card says another unit is
+                     where it belongs, or it says another unit could fit and the talk has few close neighbours in
+                     DQI (bottom ISOLATED_PCT of the card embeddings). Claude reads these and writes the clear
+                     cases, with reasons, to sorting/not_dqi.csv (talk_id, unit, reason); flags.md lists them first.
 """
 import argparse, collections, csv, json, os, re, sys
 import numpy as np
@@ -33,6 +37,8 @@ MODALITY_WORDS = {
     'amo': r'\bions?\b|trapped.ion|atom|rydberg|tweezer|optical|laser|molecul|\bbec\b|photonic|single.photon source|telecom',
 }
 TYPICAL_SESSION_MIN = 126    # average of 144 and 108
+ISOLATED_PCT = 5             # "few close neighbours": bottom 5% by mean similarity to the 5 nearest talks
+BRIDGE_SHARE = 0.7           # a bridge talk has at least this share of its K nearest neighbours in other areas
 
 
 def id_key(i):
@@ -88,6 +94,56 @@ def assign(talks, cards, areas, ids, X):
     return area, moves
 
 
+def isolation(ids, X, keep):
+    """{talk_id: mean cosine similarity to its 5 nearest talks among keep}."""
+    idx = [k for k, i in enumerate(ids) if i in keep]
+    Y = X[idx].astype(float)
+    S = Y @ Y.T
+    np.fill_diagonal(S, -np.inf)
+    top = -np.sort(-S, axis=1)[:, :5]
+    return {ids[k]: float(v) for k, v in zip(idx, top.mean(axis=1))}
+
+
+def neighbour_areas(ids, X, area):
+    """{talk_id: Counter of the areas of its K nearest neighbours that are not its own area}, for talks in area."""
+    idx = [k for k, i in enumerate(ids) if i in area]
+    Y = X[idx].astype(float)
+    S = Y @ Y.T
+    np.fill_diagonal(S, -np.inf)
+    nn = np.argsort(-S, axis=1)[:, :K]
+    out = {}
+    for r, k in enumerate(idx):
+        i = ids[k]
+        out[i] = collections.Counter(a for a in (area[ids[idx[j]]] for j in nn[r]) if a != area[i])
+    return out
+
+
+def bridge(counts):
+    """Bridge talks from neighbour_areas: {talk_id: 'near SCMAT 6/10, QEC 2/10'}."""
+    return {i: 'near ' + ', '.join(f'{a} {n}/{K}' for a, n in c.most_common())
+            for i, c in counts.items() if sum(c.values()) >= BRIDGE_SHARE * K}
+
+
+def not_dqi_candidates(data_dir, talks, cards, iso, area):
+    cut = np.percentile(list(iso.values()), ISOLATED_PCT)
+    out = []
+    for i in sorted(talks, key=id_key):
+        o = (cards.get(i) or {}).get('other_unit') or {}
+        if o.get('strength') == 'belongs there' or (o.get('strength') == 'could fit' and iso.get(i, 1) < cut):
+            out.append(i)
+    d = os.path.join(data_dir, 'work', 'areas')
+    os.makedirs(d, exist_ok=True)
+    with open(os.path.join(d, 'not_dqi_candidates.md'), 'w', encoding='utf-8') as f:
+        f.write(f'# Not-DQI candidates ({len(out)})\n\nKeep only the clear cases (a handful): talks with no real home in a '
+                'quantum-information meeting. Write them to sorting/not_dqi.csv (talk_id, unit, reason).\n\n')
+        for i in out:
+            t, c = talks[i], cards[i]
+            f.write(f"## {i} | {area.get(i, '')} | {t['title']}\n- {c['platform']} | {c['problem']} | {c['approach']}\n"
+                    f"- claim: {c['key_claim']}\n- other unit: {c['other_unit']['unit']} ({c['other_unit']['strength']}): "
+                    f"{c['other_unit']['reason']}\n- similarity to 5 nearest DQI talks: {iso.get(i, 0):.3f} (cut {cut:.3f})\n\n")
+    return out
+
+
 def write_views(data_dir, talks, cards, areas, area, moves, abstracts=None):
     abstracts = abstracts or {}
     os.makedirs(os.path.join(data_dir, 'views'), exist_ok=True)
@@ -114,11 +170,20 @@ def write_views(data_dir, talks, cards, areas, area, moves, abstracts=None):
         return f"| {i} | {t['type']} | {area[i]} | {t['title'][:80]} | {extra} |"
     head = '| Talk | Type | Area | Title | Note |\n|---|---|---|---|---|'
     sec = []
+    nd_path = os.path.join(data_dir, 'sorting', 'not_dqi.csv')
+    nd = [r for r in read_csv(nd_path) if r['talk_id'] in talks] if os.path.exists(nd_path) else []
+    sec += [f'## Not DQI? ({len(nd)})', '', 'Proposed for removal now, so they do not linger in the sort: the talk has no real home in '
+            'DQI. Decide each; a removed talk gets status other_unit (with the unit in its notes). Candidates Claude '
+            'considered are in work/areas/not_dqi_candidates.md.', '', head]
+    sec += [row(r['talk_id'], f"{r['unit']}: {r['reason']}") for r in nd]
+    nd_ids = {r['talk_id'] for r in nd}
+    sec.append('')
     lr = [i for i in talks if (cards.get(i) or {}).get('leadership_review')]
     sec += [f'## Leadership review ({len(lr)})', '', 'The card says the talk may not meet the standard for an oral talk.', '', head]
     sec += [row(i, cards[i]['leadership_review']['reason']) for i in sorted(lr, key=id_key)]
-    bt = [i for i in talks if ((cards.get(i) or {}).get('other_unit') or {}).get('strength') == 'belongs there']
-    sec += ['', f'## Belongs in another unit ({len(bt)})', '', head]
+    bt = [i for i in talks if ((cards.get(i) or {}).get('other_unit') or {}).get('strength') == 'belongs there' and i not in nd_ids]
+    sec += ['', f'## Card says another unit (not on the not-DQI list) ({len(bt)})', '', 'Claude judged these fit DQI after all; '
+            'they stay unless you say otherwise.', '', head]
     sec += [row(i, f"{cards[i]['other_unit']['unit']}: {cards[i]['other_unit']['reason']}") for i in sorted(bt, key=id_key)]
     mf = [i for i in talks if (cards.get(i) or {}).get('malformed')]
     sec += ['', f'## Malformed text ({len(mf)})', '', 'Still damaged after intake and Claude\'s repair: fixing these would need a missing value. '
@@ -146,7 +211,7 @@ def write_views(data_dir, talks, cards, areas, area, moves, abstracts=None):
             'Claude\'s mechanical repairs (prompts/repair_spec.md); the original text is in `raw` in abstracts.jsonl.', '',
             '| Talk | Field | Repair |', '|---|---|---|']
     sec += [f"| {i} | {x['field']} | {x['fix']} |" for i, x in rep]
-    total = len(lr) + len(bt) + len(mf) + len(su) + len(dup)
+    total = len(nd) + len(lr) + len(bt) + len(mf) + len(su) + len(dup)
     with open(os.path.join(data_dir, 'views', 'flags.md'), 'w', encoding='utf-8') as f:
         f.write('# Flags for the lead (stage 4 checkpoint)\n\nGenerated by `python -m dqi_sort.areas propose`; do not edit. '
                 f'{total} items to decide.\n\n' + '\n'.join(sec) + '\n')
@@ -169,11 +234,14 @@ def propose(data_dir, dry_run=False):
     area, moves = assign(talks, cards, areas, ids, X)
     with open(os.path.join(data_dir, 'abstracts.jsonl'), encoding='utf-8') as f:
         abstracts = {r['talk_id']: r for r in map(json.loads, filter(str.strip, f))}
+    inperson = {i for i, t in talks.items() if t['track'] == 'in_person'}
+    nd = not_dqi_candidates(data_dir, talks, cards, isolation(ids, X, inperson), area)
     n, mins = write_views(data_dir, talks, cards, areas, area, moves, abstracts)
     for a in areas:
         print(f'  {a:8s} {n[a]:4d} talks {mins[a]:6d} min  ~{mins[a] / TYPICAL_SESSION_MIN:.0f} sessions')
     print(f"{sum(1 for m in moves if m[3] != 'series')} talks moved by the neighbour check, "
-          f"{sum(1 for m in moves if m[3] == 'series')} to keep series together; views/areas.md, views/flags.md written")
+          f"{sum(1 for m in moves if m[3] == 'series')} to keep series together; views/areas.md, views/flags.md written; "
+          f"{len(nd)} not-DQI candidates in work/areas/not_dqi_candidates.md")
     if dry_run:
         return
     locked = 0
