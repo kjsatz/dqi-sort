@@ -7,6 +7,7 @@
     python -m dqi_sort.decide poster    DATA_DIR TALK [TALK ...] [--note TEXT]
     python -m dqi_sort.decide keep      DATA_DIR TALK [TALK ...] [--note TEXT]
     python -m dqi_sort.decide duplicate DATA_DIR KEEP TALK [TALK ...] [--note TEXT]
+    python -m dqi_sort.decide reinstate DATA_DIR TALK [TALK ...] [--note TEXT]
 
 offer      we are trying to exchange the talk to another unit: status exchange_pending. It is set aside: out of its
            session and out of the pool, so no step places it while the unit decides.
@@ -18,11 +19,16 @@ received   a talk brought in from another unit (it must already be in talks.csv:
 poster     the talk becomes a poster: status poster.
 keep       the talk stays in DQI's oral program: its row in sorting/held.csv is removed; if it is in no session it
            is a lonely abstract.
-duplicate  the talks are another entry of KEEP (for example an invited placeholder and the real submission): status
-           duplicate, out of their sessions. Keep the entry with more information.
+duplicate  the talks are another entry of the same talk as KEEP (an invited talk entered twice, for example a
+           placeholder and the real entry): status duplicate, out of their sessions. Keep the entry with more
+           information. An invited talk and a contributed talk by the same speaker are two talks, not duplicates.
+reinstate  undo duplicate, poster or withdrawn: status active, back in the session the talk left (at its end), or in
+           the pool if that session is gone.
 
 Every change is appended to sorting/status_log.csv (when, talk_id, from_status, to_status, unit, by, note) and to
-the move ledger (sorting/moves.csv); sorting/assignments.csv, sorting/held.csv and views/flags.md are updated.
+the move ledger (sorting/moves.csv); sorting/assignments.csv, sorting/held.csv and views/flags.md are updated, and
+the change is committed to the data repo at once (unless --no-commit), so the log of exchanges with other units is
+a dated record in git.
 Virtual talks are never offered, exchanged or made posters (the virtual track keeps every talk).
 """
 import argparse, csv, datetime, json, os, sys
@@ -34,7 +40,7 @@ MOVE_COLS = ['when', 'commit', 'talk_id', 'from', 'to', 'by', 'reason']
 RULES = {'offer': ({'active'}, 'exchange_pending'), 'exchanged': ({'exchange_pending'}, 'other_unit'),
          'returned': ({'exchange_pending'}, 'active'), 'received': ({'active'}, 'active'),
          'poster': ({'active', 'exchange_pending'}, 'poster'), 'keep': ({'active'}, 'active'),
-         'duplicate': ({'active', 'exchange_pending'}, 'duplicate')}
+         'duplicate': ({'active', 'exchange_pending'}, 'duplicate'), 'reinstate': ({'duplicate', 'poster', 'withdrawn'}, 'active')}
 
 
 def write_csv(path, cols, rows):
@@ -56,7 +62,17 @@ def last_unit(log, i):
     return next((r['unit'] for r in reversed(log) if r['talk_id'] == i and r['unit']), '')
 
 
-def decide(data_dir, action, ids, unit='', note='', by='lead'):
+def commit(data_dir, message):
+    import subprocess
+    if subprocess.run(['git', '-C', data_dir, 'rev-parse'], capture_output=True).returncode:
+        return
+    paths = [p for p in ('talks.csv', 'sorting', 'views/flags.md') if os.path.exists(os.path.join(data_dir, p))]
+    subprocess.run(['git', '-C', data_dir, 'add', '--', *paths], check=True)
+    r = subprocess.run(['git', '-C', data_dir, 'commit', '-q', '-m', message, '--', *paths], capture_output=True, text=True)
+    print('committed to the data repo' if r.returncode == 0 else 'nothing to commit')
+
+
+def decide(data_dir, action, ids, unit='', note='', by='lead', do_commit=True):
     before, after = RULES[action]
     keep_id = ''
     if action == 'duplicate':                     # unit carries the kept talk's ID here
@@ -99,6 +115,14 @@ def decide(data_dir, action, ids, unit='', note='', by='lead'):
         elif action == 'returned':
             a.update(session_id='', order='', note=f'returned by {u} ({now[:10]}): lonely')
             moves.append((f'{u} (offered)', 'lonely'))
+        elif action == 'reinstate':
+            mpath = os.path.join(sdir, 'moves.csv')
+            left = [m['from'] for m in (S.read_csv(mpath) if os.path.exists(mpath) else []) if m['talk_id'] == i]
+            sessions = {r['session_id'] for r in S.read_csv(os.path.join(sdir, 'sessions.csv'))} if os.path.exists(os.path.join(sdir, 'sessions.csv')) else set()
+            back = left[-1] if left and left[-1] in sessions else ''
+            order = 1 + max([int(r['order']) for r in assign.values() if r['session_id'] == back and r['order']] or [0]) if back else ''
+            a.update(session_id=back, order=order, note=f'reinstated ({now[:10]})')
+            moves.append((t['status'], back or 'lonely'))
         elif action == 'received':
             flags = set(filter(None, t['flags'].split(';'))) | {f'from_unit:{u}'}
             t['flags'] = ';'.join(sorted(flags))
@@ -130,6 +154,9 @@ def decide(data_dir, action, ids, unit='', note='', by='lead'):
             json.dump(st, f, ensure_ascii=False, indent=1)
     A.flags(data_dir)
     print(f"{len(ids)} talks: {action} -> status {after}; recorded in sorting/status_log.csv; views/flags.md rewritten")
+    if do_commit:
+        what = {'offer': f'offered to {unit}', 'received': f'received from {unit}', 'duplicate': f'duplicate of {keep_id}'}.get(action, action)
+        commit(data_dir, f"decide: {', '.join(ids)} {what}" + (f' ({note})' if note else '') + f'\n\n{now} by {by}')
     if short:
         print('sessions that lost a talk (top up at review, or from the pool):', ', '.join(sorted(set(short))))
     if action == 'received':
@@ -143,11 +170,12 @@ def main():
     ap.add_argument('args', nargs='+', help='UNIT then talk IDs for offer and received; talk IDs otherwise')
     ap.add_argument('--note', default='')
     ap.add_argument('--by', default='lead')
+    ap.add_argument('--no-commit', action='store_true', help='leave the change uncommitted')
     a = ap.parse_args()
     unit, ids = (a.args[0], a.args[1:]) if a.action in ('offer', 'received', 'duplicate') else ('', a.args)
     if not ids:
         sys.exit('no talk IDs given')
-    decide(a.data_dir, a.action, ids, unit, a.note, a.by)
+    decide(a.data_dir, a.action, ids, unit, a.note, a.by, not a.no_commit)
 
 
 if __name__ == '__main__':

@@ -58,3 +58,13 @@ def test_duplicate(tmp_path):
     assert status(d)['2'] == 'duplicate' and Ar.read_held(str(d)) == []
     log = list(csv.DictReader(open(d / 'sorting' / 'status_log.csv')))
     assert log[-1]['note'] == 'duplicate of 1'
+
+
+def test_reinstate_returns_to_its_session(tmp_path):
+    d = tmp_path; setup(d)
+    with open(d / 'sorting' / 'sessions.csv', 'w') as f:
+        f.write('session_id,title\nA01,a\n')
+    D.decide(str(d), 'duplicate', ['1'], unit='2')
+    D.decide(str(d), 'reinstate', ['1'])
+    assign = {r['talk_id']: r for r in csv.DictReader(open(d / 'sorting' / 'assignments.csv'))}
+    assert status(d)['1'] == 'active' and assign['1']['session_id'] == 'A01'

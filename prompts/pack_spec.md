@@ -28,9 +28,11 @@ general scratchpad).
 - The sort fits when no session must grow or shrink, there are no more sessions than slots, and the pool is empty.
   A talk may stay out of every session only if it has no reasonable home in DQI: `hold` it for the lead with one of
   three proposals: `poster` (no scientific content at all: the card's "non-scientific?" note, which
-  is rare), `other_unit` with the unit (its field is clearly another
-  APS unit's), or `decide` (scientific and DQI, but no good home this year). The reason says why, in one line the
-  lead can act on. A promotional tone is no reason to hold a talk.
+  is rare), `other_unit` with the unit (only for a talk with no quantum-information content at all, squarely in
+  another unit's field: we keep talks in DQI and fill our sessions with them), or `decide` (a DQI talk with truly no
+  room anywhere, after trying swaps). Never hold a DQI talk because its natural sessions are full: place it with a
+  swap or in the nearest session with room. The reason says why, in one line the lead can act on. A promotional tone is
+  no reason to hold a talk.
 - Series move as a block (moving one part moves all, in order). At most 2 invited talks per session. At most
   {MAX_INST} talks from one institution per session (soft).
 

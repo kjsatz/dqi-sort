@@ -155,14 +155,16 @@ def held_candidates(data_dir, talks, cards, iso, area):
             continue
         c = cards.get(i) or {}
         o = c.get('other_unit') or {}
-        if c.get('leadership_review') or o.get('strength') == 'belongs there' or (o.get('strength') == 'could fit' and iso.get(i, 1) < cut):
+        if c.get('leadership_review') or o.get('strength') == 'belongs there':
             out.append(i)
     d = os.path.join(data_dir, 'work', 'areas')
     os.makedirs(d, exist_ok=True)
     with open(os.path.join(d, 'held_candidates.md'), 'w', encoding='utf-8') as f:
-        f.write(f'# Talks that may leave the oral program ({len(out)})\n\nKeep only the clear cases (a handful). Write them to '
-                'sorting/held.csv (talk_id, stage 4, action, unit, reason): action other_unit, with the unit, for a talk with no '
-                'real home in a quantum-information meeting; action poster only for a talk with no scientific content at all (an essay, '
+        f.write(f'# Talks that may leave the oral program ({len(out)})\n\nWe keep talks in DQI unless they really do not belong: past '
+                'human sorts sent away 0 to 3 talks a year, so expect about that many. Write them to sorting/held.csv (talk_id, '
+                'stage 4, action, unit, reason): action other_unit, with the unit, only for a talk with no quantum-information '
+                'content at all (classical machine learning, nuclear structure, classical fluids) that is squarely another unit\'s '
+                'field; a talk on quantum physics that sits near another field stays. Action poster only for a talk with no scientific content at all (an essay, '
                 'or claims outside physics with no physics argument). Bold claims, unconventional foundations and a promotional tone are no reason to list '
                 'a talk. Virtual talks are never listed: the virtual track keeps every talk.\n\n')
         for i in out:
@@ -315,13 +317,13 @@ def flags(data_dir, talks=None, cards=None, area=None, abstracts=None):
                  lambda i: ' '.join(f for f in talks[i]['flags'].split(';') if f.startswith('same_')))
     by_speaker = collections.defaultdict(list)
     for i, t in talks.items():
-        if t['speaker'].strip():
+        if t['speaker'].strip() and t['type'] == 'invited':
             by_speaker[t['speaker'].strip().lower()].append(i)
-    ss = sorted((sorted(ids, key=id_key) for ids in by_speaker.values() if len(ids) > 1 and any(talks[i]['type'] == 'invited' for i in ids)
-                 and len({talks[i]['series'] for i in ids if talks[i]['series']}) <= 1 and not all(talks[i]['series'] for i in ids)),
-                key=lambda ids: id_key(ids[0]))
-    sec += group('Invited speaker with another talk', 'Often one talk entered twice (an invited placeholder and the real '
-                 'submission); otherwise two talks the scheduler must keep apart.', ss, lambda i: f"same speaker: {talks[i]['speaker']}")
+    one_series = lambda ids: all(talks[i]['series'] for i in ids) and len({talks[i]['series'] for i in ids}) == 1
+    ss = sorted((sorted(ids, key=id_key) for ids in by_speaker.values() if len(ids) > 1 and not one_series(ids)), key=lambda ids: id_key(ids[0]))
+    sec += group('Invited talk entered twice?', 'The same speaker has two invited entries (often a placeholder and the real entry): '
+                 '`decide duplicate KEEP OTHER`, keeping the one with more information. An invited speaker may also give a '
+                 'contributed talk; such pairs are not listed.', ss, lambda i: f"same speaker: {talks[i]['speaker']}")
     bt = [i for i in talks if (card(i).get('other_unit') or {}).get('strength') == 'belongs there']
     sec += single('Card says another unit, kept in DQI', 'Claude judged these fit DQI after all; they stay unless you say otherwise.',
                   bt, lambda i: f"{cards[i]['other_unit']['unit']}: {cards[i]['other_unit']['reason']}")
