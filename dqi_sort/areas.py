@@ -254,9 +254,8 @@ def flags(data_dir, talks=None, cards=None, area=None, abstracts=None):
     held.sort(key=lambda r: (list(ACTION_TEXT).index(r['action']) if r['action'] in ACTION_TEXT else 9, id_key(r['talk_id'])))
     sec = [f'## Held for the lead ({len(held)})', '',
            'Talks proposed to leave the oral program, at stage 4 (before drafting) or by the global pass (talks it could not '
-           'place). Decide each: a talk that leaves gets status poster or other_unit in talks.csv (with the unit in its notes); '
-           'for a talk that stays, delete its row in sorting/held.csv and it goes to the pool of lonely abstracts. Virtual '
-           'talks are never held.', '']
+           'place). Decide each with `python -m dqi_sort.decide`: `offer UNIT` (set aside while another unit decides), '
+           '`poster`, or `keep` (it stays; in no session it is a lonely abstract). Virtual talks are never held.', '']
     for r in held:
         i, t, c = r['talk_id'], talks[r['talk_id']], card(r['talk_id'])
         prop = ACTION_TEXT.get(r['action'], r['action']) + (f" ({r['unit']})" if r['unit'] else '')
@@ -270,6 +269,23 @@ def flags(data_dir, talks=None, cards=None, area=None, abstracts=None):
                     f"- Keywords: {'; '.join(c['keywords'])}"]
         sec += [f'- Also flagged: {x}' for x in other_flags(i)] + ['']
         shown.add(i)
+    lpath = os.path.join(data_dir, 'sorting', 'status_log.csv')
+    slog = read_csv(lpath) if os.path.exists(lpath) else []
+    if slog:
+        everyone = {r['talk_id']: r for r in read_csv(os.path.join(data_dir, 'talks.csv'))}
+        last = {}
+        for r in slog:
+            last[r['talk_id']] = r
+        pend = [r for i, r in last.items() if everyone.get(i, {}).get('status') == 'exchange_pending']
+        sec += [f'## Offered to another unit, waiting ({len(pend)})', '', 'Set aside while the unit decides: `decide exchanged` '
+                'when it takes the talk, `decide returned` when it does not. The full record is in sorting/status_log.csv.', '',
+                '| Talk | Title | Unit | Offered | Note |', '|---|---|---|---|---|']
+        sec += [f"| {r['talk_id']} | {everyone[r['talk_id']]['title'][:70]} | {r['unit']} | {r['when'].replace('T', ' ')} | {r['note']} |"
+                for r in sorted(pend, key=lambda r: r['when'])]
+        done = collections.Counter(r['unit'] for i, r in last.items() if everyone.get(i, {}).get('status') == 'other_unit')
+        got = collections.Counter(f.split(':', 1)[1] for t in talks.values() for f in t['flags'].split(';') if f.startswith('from_unit:'))
+        sec += ['', f"Exchanged to other units: {sum(done.values())}" + (f" ({', '.join(f'{u} {n}' for u, n in done.most_common())})" if done else '')
+                + f". Brought in from other units: {sum(got.values())}" + (f" ({', '.join(f'{u} {n}' for u, n in got.most_common())})" if got else '') + '.', '']
     lr = [i for i in talks if card(i).get('leadership_review')]
     sec += single('Non-scientific?', 'The card found no identifiable scientific content, or claims that contradict established physics '
                   'without evidence. In person: keep it, or make it a poster. Virtual: it stays, at the end of a session.',

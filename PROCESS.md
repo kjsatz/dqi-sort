@@ -58,13 +58,13 @@ Two kinds of association need all talks in view, so they are done in stage 3, no
 - **Multi-part series.** Claude reads every talk with a `multi_part` entry together and assigns series IDs (`series`, `series_part` in `talks.csv`). Parts are often submitted to different categories, so matching uses titles, speakers and the card's hints, not the category. Uncertain links go to the lead. A talk whose submitter asks to follow another talk, or to be in the same session as it, is treated as a two-part series in the order asked, so the pair stays together through drafting and the global pass. These requests come from the card's `constraints` and name the other talk by speaker or title. A request for the same session without an order keeps the pair together, in either order. A request to be apart from a specific talk is recorded in `linking/apart.csv`, and no session may hold both. A series never mixes in-person and virtual talks.
 - **Institutions.** Claude reads the full list of submitted affiliations once and maps each to one institution name, so "MIT" and "Massachusetts Institute of Technology" match.
 
-The list of other APS units (divisions and topical groups, such as DAMOP, DCMP, GPMFC and GIMS) is kept in `config.yaml`. Moving a talk to another unit is a last resort. We use it when a talk clearly belongs elsewhere, or when a talk is left over and has nowhere good to go in DQI. The clear cases are decided early, at the stage 4 checkpoint, so they do not linger in the sort; it should be a handful of talks. The same goes for a talk with no scientific content, which may become a poster. Neither applies to virtual talks.
+The list of other APS units (divisions and topical groups, such as DAMOP, DCMP, GPMFC and GIMS) is kept in `config.yaml`. Moving a talk to another unit is a last resort. We use it when a talk clearly belongs elsewhere, or when a talk is left over and has nowhere good to go in DQI. The clear cases are decided early, at the stage 4 checkpoint, so they do not linger in the sort; it should be a handful of talks. Exchanges with other units take time, so a talk we are trying to exchange is set aside (`exchange_pending`) rather than left in the sort, and every step is dated in `sorting/status_log.csv`. The same goes for a talk with no scientific content, which may become a poster. Neither applies to virtual talks.
 
 ## Talks for the lead
 
 Every talk the lead must decide is in one generated file, `views/flags.md`, and each talk is listed once. It is rewritten at stage 4 and again when the global pass finishes. Its sections, in order:
 
-1. **Held for the lead.** In-person talks proposed to leave the oral program, from two sources: the stage 4 list (before drafting) and the global pass (talks it could not place). They are recorded in `sorting/held.csv`. Each is shown with its abstract number, title, speaker, affiliation, card (platform, problem, approach, key claim, keywords), any other flags, and the proposal with a one-line reason. There are three proposals: **poster** (non-scientific content), **another unit** (named), or **no proposal** (a DQI talk with no good home this year; the lead decides). A talk that leaves gets status `poster` or `other_unit` in `talks.csv`. For a talk that stays, the lead deletes its row in `held.csv`, and it joins the pool of lonely abstracts.
+1. **Held for the lead.** In-person talks proposed to leave the oral program, from two sources: the stage 4 list (before drafting) and the global pass (talks it could not place). They are recorded in `sorting/held.csv`. Each is shown with its abstract number, title, speaker, affiliation, card (platform, problem, approach, key claim, keywords), any other flags, and the proposal with a one-line reason. There are three proposals: **poster** (non-scientific content), **another unit** (named), or **no proposal** (a DQI talk with no good home this year; the lead decides). The lead decides each with `python -m dqi_sort.decide`: `offer UNIT` sets the talk aside while we try to exchange it to that unit (then `exchanged` when the unit takes it, or `returned` when it does not, which puts it in the pool of lonely abstracts); `poster`; or `keep`, which leaves it in DQI (in the pool if it is in no session). Talks waiting on another unit are listed in the file with the unit and the date offered.
 2. **Non-scientific?** Talks flagged by `leadership_review` that are not held. In person, the lead keeps each one or makes it a poster. Virtual talks stay where they are (see [Virtual conference](#virtual-conference)).
 3. **Too little text to place, uncertain series, possible duplicate submissions, invited speakers with another talk.** A group (a series or a duplicate pair) names a talk listed above rather than repeating it.
 4. **Card says another unit, kept in DQI.** Claude judged these fit DQI after all.
@@ -154,7 +154,7 @@ Simple and readable:
 
 ### New talks
 
-The lead adds a new talk (a late submission, or one transferred from another unit) with one command (`add-talk`). It goes into the lonely pool or straight into a named session. A card is built for it, the ledger records it, and it appears on the next generated sheets. To put it into an area sheet that is already out, the lead can paste the row in; intake recognizes it as a new talk.
+The lead adds a new talk (a late submission, or one transferred from another unit) with one command (`add-talk`). A talk brought in from another unit is also recorded with `python -m dqi_sort.decide received UNIT TALK`, which dates it and marks where it came from. It goes into the lonely pool or straight into a named session. A card is built for it, the ledger records it, and it appears on the next generated sheets. To put it into an area sheet that is already out, the lead can paste the row in; intake recognizes it as a new talk.
 
 ### Intake
 
@@ -201,6 +201,7 @@ The data repo holds one set of files per year:
 | `linking/series.csv` | talk in a multi-part series | series_id, talk_id, part, sure (yes / no), note |
 | `linking/apart.csv` | pair of talks that asked to be apart | talk_a, talk_b, note |
 | `sorting/held.csv` | in-person talk held for the lead | talk_id, stage (4: the list before drafting; 6: the global pass), action (poster / other_unit / decide), unit, reason |
+| `sorting/status_log.csv` | change of a talk's status | when (date and time), talk_id, from_status, to_status, unit (for exchanges), by, note |
 | `embeddings/cards.npz` | talk | Card embeddings (EmbeddingGemma; NumPy, float16); see `docs/embeddings.md` |
 | `sorting/sessions.csv` | session | session_id, title, kind (contributed / mini-symposium / symposium), minutes (144 or 108), size (small / medium / large: the room size class people decided), area, locked, scope (one sentence: what belongs here), notes |
 | `sorting/assignments.csv` | talk | talk_id, session_id (blank for lonely abstracts), order, locked, note |
@@ -222,7 +223,7 @@ Rules:
 
 1. Session IDs are short and stable (`RDOUT1`, `TA`). Titles can change freely.
 2. Files are sorted by their stable ID, so moving a talk changes one line.
-3. Talks are never deleted. Their status becomes `withdrawn`, `poster` or `other_unit`.
+3. Talks are never deleted. A talk's status is `active` (in the sort), `exchange_pending` (offered to another unit and set aside while it decides), `other_unit` (exchanged away), `poster` or `withdrawn`. Every change of status goes through `python -m dqi_sort.decide` and is recorded with its date, time and unit in `sorting/status_log.csv`. A talk brought in from another unit is `active` and marked `from_unit:UNIT` in its flags.
 4. `locked=true` means automation will not move it. Reviewers lock what they have decided.
 5. A check runs on every commit:
    - every active talk is in exactly one session or in the lonely pool (the pool must be empty at delivery)
