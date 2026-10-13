@@ -99,7 +99,8 @@ def decide(data_dir, action, ids, unit='', note='', by='lead', do_commit=True):
     now = datetime.datetime.now().isoformat(timespec='minutes')
     os.makedirs(sdir, exist_ok=True)              # decisions start before there is a sort (stages 3 and 4)
     apath = os.path.join(sdir, 'assignments.csv')
-    assign = {r['talk_id']: r for r in S.read_csv(apath)} if os.path.exists(apath) else {}
+    had_sort = os.path.exists(apath)              # before stage 6 there is no sort to update
+    assign = {r['talk_id']: r for r in S.read_csv(apath)} if had_sort else {}
     held = A.read_held(data_dir)
     new_log, moves, short = [], [], []
     for i in ids:
@@ -144,7 +145,7 @@ def decide(data_dir, action, ids, unit='', note='', by='lead', do_commit=True):
            'reason': f'{action}' + (f': {note}' if note else '')} for i, m in zip(ids, moves) if m]
     if mv:
         append_csv(os.path.join(sdir, 'moves.csv'), MOVE_COLS, mv)
-    if assign:
+    if had_sort:
         write_csv(apath, ['talk_id', 'session_id', 'order', 'locked', 'note'], sorted(assign.values(), key=lambda r: S.id_key(r['talk_id'])))
     A.write_held(data_dir, [r for r in held if r['talk_id'] not in ids])
     spath = os.path.join(data_dir, 'work', 'pack', 'state.json')

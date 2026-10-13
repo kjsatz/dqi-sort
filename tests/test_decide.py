@@ -83,3 +83,4 @@ def test_keep_marks_the_talk(tmp_path):
     D.decide(str(d), 'keep', ['2'])
     t = {r['talk_id']: r for r in csv.DictReader(open(d / 'talks.csv'))}
     assert 'lead_kept' in t['2']['flags'] and Ar.read_held(str(d)) == []
+    assert not (d / 'sorting' / 'assignments.csv').exists()     # no sort yet, so none is started
