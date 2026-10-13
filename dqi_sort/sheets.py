@@ -209,8 +209,9 @@ def area_book(area, name, rnd, stamp_text, sess, talks, cards, est, options):
     for s in mine:
         for k, i in enumerate(s['talks'], 1):
             t = talks[i]
-            srows.append([s['session_id'], k, i, t['title'], t['speaker'], t['institution'] or t['affiliation'],
-                          int(t['minutes']), summary(cards, i), False, ''])
+            r = HEADER_ROW + 1 + len(srows)
+            srows.append([s['session_id'], f"=IFERROR(VLOOKUP(A{r},'Session summary'!$A:$B,2,FALSE),\"\")", k, i, t['title'],
+                          t['speaker'], t['institution'] or t['affiliation'], int(t['minutes']), summary(cards, i), False, ''])
             groups.append(s['session_id'])
             if t['type'] == 'invited':
                 bold.append(len(srows) - 1)
@@ -218,16 +219,16 @@ def area_book(area, name, rnd, stamp_text, sess, talks, cards, est, options):
     rows = []
     for n, s in enumerate(mine):
         r = HEADER_ROW + 1 + n
-        filled = f"=SUMIFS(Sessions!$G${first}:$G${last},Sessions!$A${first}:$A${last},A{r},Sessions!$I${first}:$I${last},FALSE)"
+        filled = f"=SUMIFS(Sessions!$H${first}:$H${last},Sessions!$A${first}:$A${last},A{r},Sessions!$J${first}:$J${last},FALSE)"
         rows.append([s['session_id'], s['title'], s['kind'], int(s['minutes']), filled, *estimate_cells(est, s), s['size'], s['notes']])
     b.tab('Session summary',
           ['Session', 'Title', 'Type', 'Length (min)', 'Filled (min)', 'Est. peak attendance', 'Suggested room', 'Room size override', 'Notes'],
           rows, lambda sid, n: tab_requests(sid, n, [80, 340, 110, 90, 90, 100, 150, 120, 320], wrap_cols=[1, 8], notes_cols=[7, 8])
           + [short_rule(sid, n, 3, 4), list_req(sid, 7, n, SIZES)])
     b.tab('Sessions',
-          ['Session', 'Order', 'Talk ID', 'Title', 'Speaker', 'Institution', 'Minutes', 'Summary', 'Move to lonely abstracts', 'Notes'],
-          srows, lambda sid, n: tab_requests(sid, n, [80, 50, 75, 330, 150, 180, 65, 380, 100, 260], wrap_cols=[3, 5, 7, 9], notes_cols=[9])
-          + band_requests(sid, groups, 10, bold, skip_cols=[9]) + [checkbox_req(sid, 8, n)])
+          ['Session', 'Session title', 'Order', 'Talk ID', 'Title', 'Speaker', 'Institution', 'Minutes', 'Summary', 'Move to lonely abstracts', 'Notes'],
+          srows, lambda sid, n: tab_requests(sid, n, [80, 200, 50, 75, 330, 150, 180, 65, 380, 100, 260], wrap_cols=[1, 4, 6, 8, 10], notes_cols=[10])
+          + band_requests(sid, groups, 11, bold, skip_cols=[10]) + [checkbox_req(sid, 9, n)])
     if options:
         orows, og = [], []
         for o in options:
@@ -276,7 +277,7 @@ def shared_book(year_name, stamp_text, sess, talks, cards, est, lonely, moves, a
     for s in sess:
         for k, i in enumerate(s['talks'], 1):
             t = talks[i]
-            srows.append([s['session_id'], s['title'] if k == 1 else '', k, i, t['title'], t['speaker'], t['institution'] or t['affiliation'],
+            srows.append([s['session_id'], s['title'], k, i, t['title'], t['speaker'], t['institution'] or t['affiliation'],
                           int(t['minutes']), summary(cards, i)])
             groups.append(s['session_id'])
             if t['type'] == 'invited':

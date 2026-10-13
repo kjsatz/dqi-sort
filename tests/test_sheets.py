@@ -19,8 +19,9 @@ def test_area_book_rows_and_fill_formula():
     names = [t[0] for t in b.tabs]
     assert names == ['Session summary', 'Sessions']
     summary_rows, session_rows = b.tabs[0][2], b.tabs[1][2]
-    assert summary_rows[0][4].startswith('=SUMIFS(Sessions!$G$3:$G$4')
-    assert [r[2] for r in session_rows] == ['1', '2'] and session_rows[0][8] is False
+    assert summary_rows[0][4].startswith('=SUMIFS(Sessions!$H$3:$H$4')               # minutes in H, checkbox in J
+    assert [r[3] for r in session_rows] == ['1', '2'] and session_rows[0][9] is False
+    assert session_rows[1][1].startswith("=IFERROR(VLOOKUP(A4,'Session summary'")     # the session title, following edits
 
 
 def test_assignments_tab_first_and_only_two_columns_open():
