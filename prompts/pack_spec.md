@@ -28,8 +28,9 @@ general scratchpad).
 - The sort fits when no session must grow or shrink, there are no more sessions than slots, and the pool is empty.
   A talk may stay out of every session only if it has no reasonable home in DQI: `hold` it for the lead with one of
   three proposals: `poster` (no scientific content at all: the card's "non-scientific?" note, which
-  is rare), `other_unit` with the unit (only for a talk with no quantum-information content at all, squarely in
-  another unit's field: we keep talks in DQI and fill our sessions with them), or `decide` (a DQI talk with truly no
+  is rare), `other_unit` with the unit (only when the sort has more talks than room: the lead decided which
+  talks to offer other units at stage 4, and we fill our sessions with the rest. When room runs short, hold the talks
+  another unit would take, "belongs there" first), or `decide` (a DQI talk with truly no
   room anywhere, after trying swaps). Never hold a DQI talk because its natural sessions are full: place it with a
   swap or in the nearest session with room. The reason says why, in one line the lead can act on. A promotional tone is
   no reason to hold a talk. If the sort has more talks than room, the talks left out should be ones another unit

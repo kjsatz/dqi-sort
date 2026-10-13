@@ -6,8 +6,9 @@
 
 prepare writes DATA_DIR/work/cards/: prompt.md (prompts/card_spec.md with this year's categories and
 other APS units filled in) and batch_NNN.json, one per batch of talks that have no card yet (or the
-talks listed in --ids, one talk ID per line). Talks with no abstract are skipped and listed: some
-invited talks arrive with only the speaker's name, and a card made from that would be a placeholder. Each talk carries talk_id, type, title, body,
+talks listed in --ids, one talk ID per line). A talk with no abstract (invited talks often arrive with only the
+speaker's name as title) gets its submission category as its text, so its card is made from the title and the
+category; the card flags it as too little text if the title says nothing about the topic. Each talk carries talk_id, type, title, body,
 submitter_notes and affiliation; speaker names are never included.
 
 A Haiku subagent then reads prompt.md and one batch file and writes batch_NNN.out.json next to it.
@@ -69,11 +70,17 @@ def prepare(data_dir, ids_file, batch_size):
     else:
         done = read_jsonl(os.path.join(data_dir, 'cards.jsonl'))
         ids = [i for i in talks if i not in done and talks[i]['status'] == 'active']
+    cats = cfg.get('dqi_categories') or {}
     no_text = [i for i in ids if not abstracts[i]['body'].strip()]
     if no_text:
-        print(f'skipping {len(no_text)} talks with no abstract (a card needs content; add the text first): '
-              + ' '.join(sorted(no_text, key=id_key)[:12]) + (' ...' if len(no_text) > 12 else ''))
-    ids = sorted((i for i in ids if i not in no_text), key=id_key)
+        print(f'{len(no_text)} talks have no abstract; their cards are made from the title and the submission category')
+    ids = sorted(ids, key=id_key)
+
+    def body(i):
+        if abstracts[i]['body'].strip():
+            return abstracts[i]['body']
+        sc = talks[i]['submitted_category']
+        return (f'No abstract supplied. Submitted to category {sc}' + (f': {cats[sc]}' if sc in cats else '') + '.')
     out = work_dir(data_dir)
     os.makedirs(out, exist_ok=True)
     pending = glob.glob(os.path.join(out, 'batch_*.out.json'))
@@ -86,7 +93,7 @@ def prepare(data_dir, ids_file, batch_size):
     n = 0
     for k in range(0, len(ids), batch_size):
         batch = [{'talk_id': i, 'type': talks[i]['type'], 'title': abstracts[i]['title'],
-                  'body': abstracts[i]['body'], 'submitter_notes': abstracts[i]['submitter_notes'],
+                  'body': body(i), 'submitter_notes': abstracts[i]['submitter_notes'],
                   'affiliation': talks[i]['affiliation']} for i in ids[k:k + batch_size]]
         with open(os.path.join(out, f'batch_{n:03d}.json'), 'w', encoding='utf-8') as f:
             json.dump(batch, f, ensure_ascii=False, indent=1)

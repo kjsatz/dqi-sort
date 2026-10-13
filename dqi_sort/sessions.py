@@ -89,10 +89,13 @@ def card_text(t, card, series_parts, near=None):
         extra.append(f"series {t['series']}, part {t['series_part']} of {series_parts[t['series']]}")
     if card and card.get('constraints'):
         extra.append(f"submitter request: {card['constraints']}")
-    if card and card.get('other_unit'):
+    kept = 'lead_kept' in (t.get('flags') or '')    # the lead kept it in DQI: its flags are settled
+    if kept:
+        extra.append('kept in DQI by the lead')
+    if card and card.get('other_unit') and not kept:
         o = card['other_unit']
         extra.append(f"other unit: {o.get('unit', '')} ({o.get('strength', '')})")
-    if card and card.get('leadership_review'):
+    if card and card.get('leadership_review') and not kept:
         extra.append(f"non-scientific? {card['leadership_review'].get('reason', '')}")
     if near:
         extra.append(near)

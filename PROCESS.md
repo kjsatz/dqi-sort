@@ -4,7 +4,7 @@ This is how we propose to sort the Division of Quantum Information (DQI) abstrac
 
 Principles:
 
-- **People decide at checkpoints.** Claude produces drafts, options and flags. A named person approves before work moves on.
+- **People decide at checkpoints.** Claude produces drafts, options and flags. A named person approves before work moves on. Each checkpoint is logged in `checkpoints.md` in the data repo: what was asked, the lead's answer in the lead's own words, and what was done.
 - **Two tracks, a hard partition.** The in-person meeting and the smaller virtual meeting are sorted separately (see [Virtual conference](#virtual-conference)). A talk never moves between them: no step proposes it, and the checks refuse it. Everything below is the in-person track unless it says otherwise.
 - **One DQI-wide sort with soft boundaries.** Talks are grouped by content, not by submission category. Review is split into 5–10 areas drawn along natural lines, but talks flow freely between areas.
 - **All state is plain-text CSV in git.** Every change is a commit, so anyone can see what moved and why.
@@ -90,7 +90,7 @@ Rather than reading every card, the global agent works from short lists computed
 
 ## Avoiding single-group sessions
 
-A session should not feel like one group's meeting. Drafts and the global pass treat this as a soft rule: try to keep any one institution to at most 4 talks per session (`max_same_institution` in `config.yaml`). Exceptions are listed in the packing report for the lead to accept or fix.
+A session should not feel like one group's meeting. Drafts and the global pass treat this as a soft rule: try to keep any one institution to at most 4 talks per session (`max_same_institution` in `config.yaml`). Split such a session only when a similar session exists to take some of the talks; if the talks really only fit well together, the session stays as it is. Exceptions are listed in the packing report for the lead to see.
 
 Institution is a proxy for research group. A large institution can host several unrelated groups, so reviewers can accept a flagged session. A multi-part series from one group still counts as several talks.
 
@@ -202,6 +202,7 @@ The data repo holds one set of files per year:
 | `linking/apart.csv` | pair of talks that asked to be apart | talk_a, talk_b, note |
 | `sorting/held.csv` | in-person talk held for the lead | talk_id, stage (4: the list before drafting; 6: the global pass), action (poster / other_unit / decide), unit, reason |
 | `sorting/status_log.csv` | change of a talk's status | when (date and time), talk_id, from_status, to_status, unit (for exchanges), by, note |
+| `checkpoints.md` | checkpoint | date and stage, what was asked, the lead's words (quoted exactly), what was done and in which commits |
 | `embeddings/cards.npz` | talk | Card embeddings (EmbeddingGemma; NumPy, float16); see `docs/embeddings.md` |
 | `sorting/sessions.csv` | session | session_id, title, kind (contributed / mini-symposium / symposium), minutes (144 or 108), size (small / medium / large: the room size class people decided), area, locked, scope (one sentence: what belongs here), notes |
 | `sorting/assignments.csv` | talk | talk_id, session_id (blank for lonely abstracts), order, locked, note |
