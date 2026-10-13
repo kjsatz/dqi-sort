@@ -83,7 +83,7 @@ Institution is a proxy for research group. A large institution can host several 
 
 ## Review areas
 
-Review is split into 5–10 areas along natural lines, made at the end of the global pass from the finished sessions: each session goes to the area most of its talks were drafted in, then the areas are evened out by grouping sessions by their embedding centres. Areas should be roughly equal in size, but a small topic that is clearly its own thing can be a small area, and a large block of closely related sessions (superconducting qubits, for example) can be a large one. Areas are for dividing the reviewing work; they are not walls, and talks move between them.
+Review is split into 5–10 areas along natural lines, made at the end of the global pass from the finished sessions: each session goes to the area that most of its talks' card categories belong to (by content, not by where the talks happened to be drafted). Areas should be roughly equal in size, but a small topic that is clearly its own thing can be a small area, and a large block of closely related sessions (superconducting qubits, for example) can be a large one. Areas are for dividing the reviewing work; they are not walls, and talks move between them.
 
 Sessions are not all the same size: a 144-minute session holds 12 contributed talks and a 108-minute session holds 9, with an invited talk counting as 3. So fill is shown in minutes against each session's own length.
 

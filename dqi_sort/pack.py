@@ -16,8 +16,8 @@ status    prints the length check.
 critique  writes one folder per review area (work/pack/critique/AREA/) for an independent critic: the area's sessions
           with full cards, every session title in DQI, and prompt.md. Critics write suggestions.json; the global agent
           then weighs them in a second round of ops.
-finish    requires the sort to fit, picks each session's length, assigns review areas (the area most of a session's
-          talks were drafted in), and writes sorting/sessions.csv, sorting/assignments.csv, sorting/moves.csv,
+finish    requires the sort to fit, picks each session's length, assigns review areas (by content: the area that
+          most of a session's talks' card categories belong to), and writes sorting/sessions.csv, sorting/assignments.csv, sorting/moves.csv,
           views/sessions.md, views/sessions/AREA.md and views/packing_report.md (the pull request description).
 
 OPS: a JSON list of objects, each with a one-line "reason" (it goes into the packing report):
@@ -450,10 +450,27 @@ def write_files(srt):
 
 # ---------- critique ----------
 def review_areas(srt):
-    """{session id: review area}: the area most of a session's talks were drafted in."""
+    """{session id: review area}, by content: the area (config.yaml areas) that most of the session's talks' card
+    categories belong to; ties and talks without a card fall back to the area they were drafted in."""
+    import re
+    from dqi_sort.areas import MODALITY_WORDS
+    areas = srt.cfg.get('areas') or {}
+    by_cat = {c: a for a, v in areas.items() for c in v.get('categories') or []}
+    by_mod = {v['modality']: a for a, v in areas.items() if v.get('modality')}
+
+    def vote(i):
+        card = srt.cards.get(i) or {}
+        a = by_cat.get(card.get('best_category'), srt.talks[i]['area'])
+        mods = [m for m, rx in MODALITY_WORDS.items() if re.search(rx, card.get('platform', ''), re.I)]
+        if areas.get(a, {}).get('modality') and len(mods) == 1 and mods[0] != areas[a]['modality'] and mods[0] in by_mod:
+            a = by_mod[mods[0]]                          # category says one platform area, the platform says another
+        return a
     out = {}
     for s in srt.state['sessions']:
-        votes = collections.Counter(srt.talks[i]['area'] for i in s['talks'])
+        votes = collections.Counter()
+        for i in s['talks']:
+            votes[vote(i)] += 1
+            votes[srt.talks[i]['area']] += 0.5           # breaks ties toward where the talk was drafted
         out[s['id']] = votes.most_common(1)[0][0]
     return out
 
