@@ -4,7 +4,7 @@ You are helping sort abstracts for the APS Global Physics Summit, Division of Qu
 
 ## Input
 
-A JSON array of talks. Each has: talk_id, type (oral = 12 min contributed, invited = 36 min), title, body (abstract; invited talks may have a short or summarized body), submitter_notes (may be empty), affiliation.
+A JSON array of talks. Each has: talk_id, type (oral = 12 min contributed, invited = 36 min), title, body (abstract; invited talks may have a short or summarized body, or none: then the body names only the submission category, and the title may be just the speaker's name. Make the card from the title and that category, claim nothing the text does not say, and set `malformed` when the title says nothing about the topic), submitter_notes (may be empty), affiliation.
 
 ## Output
 
