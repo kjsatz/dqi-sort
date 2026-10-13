@@ -5,7 +5,7 @@ This is how we propose to sort the Division of Quantum Information (DQI) abstrac
 Principles:
 
 - **People decide at checkpoints.** Claude produces drafts, options and flags. A named person approves before work moves on.
-- **Two tracks.** The in-person meeting and the smaller virtual meeting are sorted separately (see [Virtual conference](#virtual-conference)). Everything below is the in-person track unless it says otherwise.
+- **Two tracks, a hard partition.** The in-person meeting and the smaller virtual meeting are sorted separately (see [Virtual conference](#virtual-conference)). A talk never moves between them: no step proposes it, and the checks refuse it. Everything below is the in-person track unless it says otherwise.
 - **One DQI-wide sort with soft boundaries.** Talks are grouped by content, not by submission category. Review is split into 5–10 areas drawn along natural lines, but talks flow freely between areas.
 - **All state is plain-text CSV in git.** Every change is a commit, so anyone can see what moved and why.
 - **The code is public; the data is private.** Abstracts never go in the public repo.
@@ -19,9 +19,9 @@ Principles:
 | 1. Intake | Parses the APS workbook (one in-person table and one virtual table), repairs text-encoding damage where it can (keeping the original), flags duplicates | — |
 | 2. Presentation cards | Writes a standard card for each talk, one abstract at a time (Claude Haiku; see [Presentation cards](#presentation-cards)); repairs text the cards flag as damaged and rebuilds those cards | Spot-check a sample |
 | 3. Linking | Looks across all talks at once: groups multi-part talks into series (including talks that ask to follow or share a session with another talk), and normalizes affiliations to institutions | Confirm uncertain links |
-| 4. Routing and flags | Splits the talks into 5–10 work areas for drafting; lists talks flagged for leadership review or as malformed, and a short not-DQI list: talks that belong to another APS unit or have no close neighbour anywhere in DQI, each with a reason | **Checkpoint:** remove the clear not-DQI talks (a handful); decide each other flagged talk |
-| 5. Draft sessions | One agent per work area, in parallel, groups that area's talks into coherent sessions without fixing their length; talks with no good home in the area go to the pool (see [Drafting and the global pass](#drafting-and-the-global-pass)) | — |
-| 6. Global pass | One agent with all of DQI in view builds sessions across areas from the pool, merges, splits and trades talks between sessions until the sort fits the 144- and 108-minute slots; independent critics review each area and the agent weighs their suggestions; keeps options where a split is genuinely open, and groups the finished sessions into review areas. Opens a pull request with a report of every move and why | **Checkpoint:** lead reviews and merges the pull request |
+| 4. Routing and flags | Splits the talks into 5–10 work areas for drafting; writes `views/flags.md`, the one list of talks the lead must decide (see [Talks for the lead](#talks-for-the-lead)), starting with a short list of in-person talks proposed to leave the oral program: to another APS unit, or to a poster for non-scientific content | **Checkpoint:** decide the proposed talks (a handful) and each other flagged talk |
+| 5. Draft sessions | One agent per work area, in parallel, groups that area's talks into coherent sessions without fixing their length; talks with no good home in the area go to the pool (see [Drafting and the global pass](#drafting-and-the-global-pass)). The virtual track is drafted here too, and its draft is final: it places every virtual talk | — |
+| 6. Global pass | One agent with all of DQI in view builds sessions across areas from the pool, merges, splits and trades talks between sessions until the sort fits the 144- and 108-minute slots; independent critics review each area and the agent weighs their suggestions; keeps options where a split is genuinely open, and groups the finished sessions into review areas. Talks it cannot place are held for the lead with a proposal, in `views/flags.md`. Opens a pull request with a report of every move and why | **Checkpoint:** lead reviews and merges the pull request |
 | 7. Sort review | Generates the shared sheet and one area sheet per area; checks each returned sheet against the version sent, opens a pull request with the changes; finally places any remaining lonely abstracts | **Checkpoint:** reviewers edit their area sheet; lead merges the pull requests (see [Sort review](#sort-review)) |
 | 8. Schedule | Estimates attendance for every session; proposes room trades with symposia; then a solver assigns sessions to room-time slots (see [Scheduling](#scheduling)) | **Checkpoint:** decide the trades; approve or adjust the schedule |
 | 9. Talk order | Sets each room's invited-talk position and re-orders every session around it (see [Talk order](#talk-order)) | Spot-check |
@@ -46,7 +46,8 @@ Each talk gets a card, written by Claude Haiku from its title, abstract, submitt
 | `affiliation` | The affiliation as submitted (normalized to an institution in stage 3) |
 | `multi_part` | If the talk says it is one part of a series: its part number, the number of parts, and words that identify the other parts |
 | `constraints` | Scheduling requests from the submitter notes |
-| `leadership_review` | Empty, or **Needs leadership review: may not meet the standard for an oral talk**, with a one-line reason |
+| `leadership_review` | Empty, or **Needs leadership review: may not meet the standard for an oral talk**, with a one-line reason. Only for an abstract with no identifiable scientific content, or with claims that contradict established physics without evidence ("non-scientific" below) |
+| `promotional` | Empty, or a one-line reason when the abstract reads mainly as promotion of a product, company or platform. Common at this meeting and usually fine: listed so the lead can keep an eye on it, with no action expected |
 | `other_unit` | Empty, or another APS unit the talk could go to, with a strength (`could fit` or `belongs there`) and a one-line reason |
 | `malformed` | Empty, or a note that the text looks garbled or broken (for example unreadable characters from an encoding problem, or a cut-off abstract), with what seems wrong and a suggested fix if one is clear |
 
@@ -57,7 +58,19 @@ Two kinds of association need all talks in view, so they are done in stage 3, no
 - **Multi-part series.** Claude reads every talk with a `multi_part` entry together and assigns series IDs (`series`, `series_part` in `talks.csv`). Parts are often submitted to different categories, so matching uses titles, speakers and the card's hints, not the category. Uncertain links go to the lead. A talk whose submitter asks to follow another talk, or to be in the same session as it, is treated as a two-part series in the order asked, so the pair stays together through drafting and the global pass. These requests come from the card's `constraints` and name the other talk by speaker or title. A request for the same session without an order keeps the pair together, in either order. A request to be apart from a specific talk is recorded in `linking/apart.csv`, and no session may hold both. A series never mixes in-person and virtual talks.
 - **Institutions.** Claude reads the full list of submitted affiliations once and maps each to one institution name, so "MIT" and "Massachusetts Institute of Technology" match.
 
-The list of other APS units (divisions and topical groups, such as DAMOP, DCMP, GPMFC and GIMS) is kept in `config.yaml`. Moving a talk to another unit is a last resort. We use it when a talk clearly belongs elsewhere, or when a talk is left over and has nowhere good to go in DQI. The clear cases are decided early, at the stage 4 checkpoint, from a short not-DQI list, so they do not linger in the sort; it should be a handful of talks.
+The list of other APS units (divisions and topical groups, such as DAMOP, DCMP, GPMFC and GIMS) is kept in `config.yaml`. Moving a talk to another unit is a last resort. We use it when a talk clearly belongs elsewhere, or when a talk is left over and has nowhere good to go in DQI. The clear cases are decided early, at the stage 4 checkpoint, so they do not linger in the sort; it should be a handful of talks. The same goes for a talk with no scientific content, which may become a poster. Neither applies to virtual talks.
+
+## Talks for the lead
+
+Every talk the lead must decide is in one generated file, `views/flags.md`, and each talk is listed once. It is rewritten at stage 4 and again when the global pass finishes. Its sections, in order:
+
+1. **Held for the lead.** In-person talks proposed to leave the oral program, from two sources: the stage 4 list (before drafting) and the global pass (talks it could not place). They are recorded in `sorting/held.csv`. Each is shown with its abstract number, title, speaker, affiliation, card (platform, problem, approach, key claim, keywords), any other flags, and the proposal with a one-line reason. There are three proposals: **poster** (non-scientific content), **another unit** (named), or **no proposal** (a DQI talk with no good home this year; the lead decides). A talk that leaves gets status `poster` or `other_unit` in `talks.csv`. For a talk that stays, the lead deletes its row in `held.csv`, and it joins the pool of lonely abstracts.
+2. **Non-scientific?** Talks flagged by `leadership_review` that are not held. In person, the lead keeps each one or makes it a poster. Virtual talks stay where they are (see [Virtual conference](#virtual-conference)).
+3. **Malformed text, uncertain series, possible duplicate submissions, invited speakers with another talk.** A group (a series or a duplicate pair) names a talk listed above rather than repeating it.
+4. **Card says another unit, kept in DQI.** Claude judged these fit DQI after all.
+5. **For information, no action expected:** promotional abstracts, the "could fit another unit" counts, and the automatic text repairs to spot-check.
+
+The packing report counts the held talks and points here; it does not list them again.
 
 ## Drafting and the global pass
 
@@ -65,7 +78,7 @@ Grouping similar talks is local work that splits well across agents; fitting the
 
 **Drafts (stage 5).** The work areas from stage 4 are only a way to divide the drafting. Each area's agent groups its talks into sessions of about 8 to 13 units (an oral talk is 1 unit, an invited talk 3), choosing coherent topics without worrying yet whether a session will be 144 or 108 minutes. A talk with no good home in the area goes to the pool of lonely abstracts. Bridge talks, whose nearest neighbours are mostly in other areas, are marked on the cards and are released first when something has to go: they are the talks most likely to make a good session together with lonely talks from other areas. Each area aims for the meeting's mix of lengths: about as many sessions of 11–12 units and of 8–9 units as the grid has long and short slots, avoiding 10-unit sessions, which fit neither length (on the 2025 dry run this halved the moves the global pass had to make). A session's scope says what belongs in it and does not name other sessions, whose titles change.
 
-**Global pass (stage 6).** One agent sees every draft session (title, scope, units and talk titles) and the pool. It builds sessions across areas from pool and bridge talks, merges thin sessions, splits fat ones, and moves talks between neighbouring sessions in any area. Nothing is frozen: the two session lengths are a source of flexibility, since adding or removing three talks (or one invited talk) turns one length into the other. The candidate lists also name the most similar sessions drafted in different areas, so near-duplicates can be merged or re-split, or at least scheduled apart. Virtual talks never go into in-person sessions.
+**Global pass (stage 6).** One agent sees every draft session (title, scope, units and talk titles) and the pool. It builds sessions across areas from pool and bridge talks, merges thin sessions, splits fat ones, and moves talks between neighbouring sessions in any area. Nothing is frozen: the two session lengths are a source of flexibility, since adding or removing three talks (or one invited talk) turns one length into the other. The candidate lists also name the most similar sessions drafted in different areas, so near-duplicates can be merged or re-split, or at least scheduled apart. The virtual track is not part of the global pass. A talk with no reasonable home in DQI is held for the lead with a proposal (poster, another unit, or none), never left in the pool unexplained.
 
 A length check runs between rounds of moves. A 144-minute session holds 12 units and a 108-minute session 9; a session may be one unit short. From the unit counts and the number of slots of each length, the check lists which sessions must grow or shrink and by how much (10 units, for example, is a 144-minute session two short or a 108-minute session one over). The agent makes the moves that fit the topics best, and the two repeat until the sort fits.
 
@@ -170,7 +183,7 @@ The global pass changes the whole sort at once, so it arrives as a GitHub pull r
 - any session with more than one empty talk slot (there should be none: the length check picks each session's length to keep it full, within the number of 144- and 108-minute slots available), and how many sessions of each length were built against the slots for each
 - any session with more than the allowed talks from one institution
 - the total against the session budget
-- any talk proposed for another unit, as a last resort
+- how many talks are held for the lead (they are listed, with cards and proposals, in `views/flags.md`)
 
 The lead reads the report, comments on the pull request, and merges it when it's right.
 
@@ -187,7 +200,7 @@ The data repo holds one set of files per year:
 | `institutions.csv` | submitted affiliation | affiliation, institution |
 | `linking/series.csv` | talk in a multi-part series | series_id, talk_id, part, sure (yes / no), note |
 | `linking/apart.csv` | pair of talks that asked to be apart | talk_a, talk_b, note |
-| `sorting/not_dqi.csv` | talk proposed for removal at stage 4 | talk_id, unit, reason |
+| `sorting/held.csv` | in-person talk held for the lead | talk_id, stage (4: the list before drafting; 6: the global pass), action (poster / other_unit / decide), unit, reason |
 | `embeddings/cards.npz` | talk | Card embeddings (EmbeddingGemma; NumPy, float16); see `docs/embeddings.md` |
 | `sorting/sessions.csv` | session | session_id, title, kind (contributed / mini-symposium / symposium), minutes (144 or 108), size (small / medium / large: the room size class people decided), area, locked, scope (one sentence: what belongs here), notes |
 | `sorting/assignments.csv` | talk | talk_id, session_id (blank for lonely abstracts), order, locked, note |
@@ -295,10 +308,13 @@ After the schedule is approved:
 
 ## Virtual conference
 
-The virtual meeting is a separate, much smaller track: about 30–40 talks last year. It is sorted on its own and treated as its own area in review and in the chair handoff.
+The virtual meeting is a separate, much smaller track: about 30–40 talks last year. It is sorted on its own and treated as its own area in review and in the chair handoff. The aim is modest: fit every talk within the timing constraints, with sessions that are plausibly coherent in topic.
 
+- **A closed track.** Every virtual talk gets a virtual session. Virtual talks are not proposed for posters or other units, and nothing moves in or out of DQI unless it is absolutely necessary (the lead's call). No talk moves between the virtual and in-person tracks.
 - **Sessions** are 120 minutes: 10 contributed talks, or an invited talk in place of 3 of them (rare).
 - **Time zone comes first.** Submitters pick one or more of the virtual time windows that work for them (listed in Mountain Time). When a submitter gives none, we infer a window from their affiliation's location. Talks are grouped so that every speaker in a session can make the session's window, then by topic as far as the time zones allow.
+- **Non-scientific talks** (flagged by `leadership_review`) are placed at the end of a session, together where the windows allow. A promotional tone needs nothing.
+- **Drafted once.** The virtual draft (stage 5) is final for sorting; the global pass does not touch it.
 - **Scheduling** places each virtual session in a virtual slot that all its speakers can make.
 - **Chairs:** two confirmed chairs per session, preferably virtual presenters (see [Chairs](#chairs)).
 

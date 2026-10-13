@@ -53,8 +53,24 @@ def test_new_dissolve_hold_and_errors():
     srt = fake(sess, talks=talks)
     log, err = P.apply_ops(srt, [{'op': 'new', 'title': 'N', 'talks': ['1', '2'], 'reason': 'x'},
                                  {'op': 'dissolve', 'session': 'X01', 'reason': 'x'},
-                                 {'op': 'hold', 'talk': '1', 'reason': 'not DQI'},
+                                 {'op': 'hold', 'talk': '1', 'action': 'other_unit', 'unit': 'DCMP', 'reason': 'not DQI'},
                                  {'op': 'move', 'talk': '3', 'to': 'nowhere', 'reason': 'x'},
                                  {'op': 'move', 'talk': '4', 'to': 'pool'}])
     assert len(err) == 2
     assert [p['id'] for p in srt.state['pool']] == ['1', '2'] and srt.state['pool'][0]['hold']
+    assert srt.state['pool'][0]['action'] == 'other_unit' and srt.state['pool'][0]['unit'] == 'DCMP'
+    _, err = P.apply_ops(srt, [{'op': 'hold', 'talk': '2', 'reason': 'x'}])
+    assert err and 'action' in err[0]
+    _, err = P.apply_ops(srt, [{'op': 'hold', 'talk': '2', 'action': 'other_unit', 'reason': 'x'}])
+    assert err and 'unit' in err[0]
+
+
+def test_tracks_are_a_hard_partition():
+    talks = {str(k): talk() for k in range(1, 12)}
+    talks['11']['track'] = 'virtual'
+    srt = fake([{'id': 'A01', 'title': 'a', 'scope': '', 'area': 'A', 'talks': [str(k) for k in range(1, 12)]}], talks=talks)
+    err, _ = P.problems(srt)
+    assert any('virtual talk in an in-person session' in e for e in err)
+    srt.state['virtual'] = [{'id': 'VIRTUAL01', 'talks': ['1']}]
+    err, _ = P.problems(srt)
+    assert any('in-person talk in a virtual session' in e for e in err)

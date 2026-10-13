@@ -22,7 +22,7 @@ import yaml
 PROMPT = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'prompts', 'card_spec.md')
 KEYS = ['talk_id', 'platform', 'problem', 'approach', 'key_claim', 'keywords', 'best_category',
         'runner_up_category', 'session_pitch', 'affiliation', 'multi_part', 'constraints',
-        'leadership_review', 'other_unit', 'malformed']
+        'leadership_review', 'promotional', 'other_unit', 'malformed']
 APPROACHES = {'experiment', 'theory', 'simulation/modeling', 'fabrication/materials characterization', 'methods/tooling'}
 
 
@@ -121,6 +121,9 @@ def problems(card, cfg):
     lr = card['leadership_review']
     if lr is not None and not (isinstance(lr, dict) and {'flag', 'reason'} <= set(lr)):
         p.append('leadership_review must be null or {flag, reason}')
+    pr = card['promotional']
+    if pr is not None and not (isinstance(pr, dict) and 'reason' in pr):
+        p.append('promotional must be null or {reason}')
     ou = card['other_unit']
     units = cfg.get('other_units') or {}
     if ou is not None:
@@ -208,7 +211,7 @@ def merge(data_dir):
         print('all batches merged; their outputs in work/cards/ can now be deleted')
     for name, errs in bad:
         print(f'SKIPPED {name}: {len(errs)} problems, e.g. {errs[0]}')
-    flags = {k: sum(c[k] is not None for c in cards.values()) for k in ('leadership_review', 'other_unit', 'malformed', 'multi_part')}
+    flags = {k: sum(c.get(k) is not None for c in cards.values()) for k in ('leadership_review', 'promotional', 'other_unit', 'malformed', 'multi_part')}
     print('flags across all cards:', flags)
 
 

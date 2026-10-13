@@ -10,7 +10,8 @@ prepare  writes, per work area, work/sessions/AREA/: cards.txt (one compact card
 check    validates one draft: every talk placed once or released with a reason; in-person sessions of
          MIN_UNITS to MAX_UNITS units (length is chosen later, by the global pass: dqi_sort.pack); at most 2 invited
          talks; series together, consecutive and in order; virtual sessions of 120 minutes whose speakers share a
-         time window. Prints ERROR and WARN lines, or OK.
+         time window, with every virtual talk placed (the virtual track releases nothing). Prints ERROR and WARN
+         lines, or OK.
 
 Units: an oral talk is 1 unit (12 minutes), an invited talk 3. A 144-minute session holds 12 units, 108 holds 9.
 """
@@ -91,6 +92,8 @@ def card_text(t, card, series_parts, near=None):
     if card and card.get('other_unit'):
         o = card['other_unit']
         extra.append(f"other unit: {o.get('unit', '')} ({o.get('strength', '')})")
+    if card and card.get('leadership_review'):
+        extra.append(f"non-scientific? {card['leadership_review'].get('reason', '')}")
     if near:
         extra.append(near)
     if t['track'] == 'virtual':
@@ -109,14 +112,18 @@ RULES_IN_PERSON = """- **Sizes.** An oral talk is 1 unit (12 minutes); an invite
   about {NS} short (8 or 9 units), in proportion to the slots. Avoid 10-unit sessions where you reasonably can: a
   10-unit session fits neither length, and the global pass then has to move a talk in or out of it."""
 
-RULES_VIRTUAL = """- **Lengths.** Every virtual session is 120 minutes: 10 units. An oral talk is 1 unit (12 minutes), an
+RULES_VIRTUAL = """- **The virtual track is closed.** Place every virtual talk in a virtual session: release nothing. Talks never move
+  between the virtual and in-person tracks, and nothing moves in or out of DQI from here.
+- **Lengths.** Every virtual session is 120 minutes: 10 units. An oral talk is 1 unit (12 minutes), an
   invited talk 3.
 - **Time windows.** Each speaker lists the virtual time windows (Mountain Time) they can make. Every speaker in
   a session must share at least one window. For a speaker with no window listed, choose the window that suits
   their institution's location and record it in `assumed_windows` ({"id": "10:30-12:30"}), so the check uses it.
   Windows and how many virtual slots each has: {WINDOWS}.
-- Give each session `"minutes": 120`. Use as few sessions as the windows allow (at most {NV}). Topic matters less than time here, but group by
-  topic as far as the windows allow."""
+- Give each session `"minutes": 120`. Use as few sessions as the windows allow (at most {NV}). Fitting every talk
+  into the windows comes first; then make each session as coherent in topic as the windows allow.
+- **Non-scientific talks** (cards marked "non-scientific?") go at the end of a session, together where the windows
+  allow, after the session's scientific talks. A promotional tone is fine and needs nothing."""
 
 
 def brief_text(area, spec, talks, limits):
@@ -147,6 +154,8 @@ def prepare(data_dir):
     for t in talks:
         if not t['area']:
             sys.exit(f"talk {t['talk_id']} has no area; run areas propose first")
+        if (t['track'] == 'virtual') != (t['area'] == 'VIRTUAL'):       # the tracks are a hard partition
+            sys.exit(f"talk {t['talk_id']} is {t['track']} but in area {t['area']}; run areas propose again")
         by_area[t['area']].append(t)
     n144, n108, _, virtual = grid(data_dir)
     avg = (12 * n144 + 9 * n108) / max(1, n144 + n108)
@@ -282,6 +291,8 @@ def check_proposal(p, data):
                  for i in info if info[i]['series'] == sid}
         if len(homes) > 1:
             err.append(f'series {sid} is split; keep all its parts together')
+    if limits['virtual'] and released:
+        err.append(f'virtual talks are never released: place {released} in virtual sessions')
     if limits['virtual'] and len(sessions) > limits['max_sessions']:
         err.append(f"{len(sessions)} sessions; at most {limits['max_sessions']}")
     total = sum(t['units'] for t in info.values())
