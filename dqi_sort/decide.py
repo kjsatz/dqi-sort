@@ -96,6 +96,7 @@ def decide(data_dir, action, ids, unit='', note='', by='lead', do_commit=True):
     if bad:
         sys.exit('nothing changed:\n' + '\n'.join(bad))
     now = datetime.datetime.now().isoformat(timespec='minutes')
+    os.makedirs(sdir, exist_ok=True)              # decisions start before there is a sort (stages 3 and 4)
     apath = os.path.join(sdir, 'assignments.csv')
     assign = {r['talk_id']: r for r in S.read_csv(apath)} if os.path.exists(apath) else {}
     held = A.read_held(data_dir)

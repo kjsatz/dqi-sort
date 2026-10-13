@@ -68,3 +68,11 @@ def test_reinstate_returns_to_its_session(tmp_path):
     D.decide(str(d), 'reinstate', ['1'])
     assign = {r['talk_id']: r for r in csv.DictReader(open(d / 'sorting' / 'assignments.csv'))}
     assert status(d)['1'] == 'active' and assign['1']['session_id'] == 'A01'
+
+
+def test_decide_before_any_sort(tmp_path):
+    d = tmp_path; setup(d)
+    import shutil
+    shutil.rmtree(d / 'sorting')                 # stage 3 or 4: no sorting folder yet
+    D.decide(str(d), 'duplicate', ['2'], unit='1')
+    assert status(d)['2'] == 'duplicate' and (d / 'sorting' / 'status_log.csv').exists()
