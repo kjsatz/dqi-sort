@@ -202,6 +202,8 @@ def apply_ops(srt, ops):
             p = next((p for p in srt.state['pool'] if p['id'] == o.get('talk')), None)
             if not p:
                 err.append(f"op {k}: {o.get('talk')!r} is not in the pool"); continue
+            if 'lead_kept' in (srt.talks[p['id']].get('flags') or ''):
+                err.append(f"op {k}: the lead kept {p['id']} in DQI; place it in a session"); continue
             act, unit = o.get('action'), str(o.get('unit') or '').strip()
             if act not in HOLD_ACTIONS:
                 err.append(f"op {k}: hold needs an action: one of {', '.join(HOLD_ACTIONS)}"); continue

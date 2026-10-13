@@ -74,3 +74,11 @@ def test_tracks_are_a_hard_partition():
     srt.state['virtual'] = [{'id': 'VIRTUAL01', 'talks': ['1']}]
     err, _ = P.problems(srt)
     assert any('in-person talk in a virtual session' in e for e in err)
+
+
+def test_hold_refused_for_a_talk_the_lead_kept():
+    talks = {str(k): talk() for k in range(1, 3)}
+    talks['1']['flags'] = 'lead_kept'
+    srt = fake([], pool=[{'id': '1', 'from': 'A', 'reason': 'x', 'suggested_home': 'y'}], talks=talks)
+    _, err = P.apply_ops(srt, [{'op': 'hold', 'talk': '1', 'action': 'decide', 'reason': 'x'}])
+    assert err and 'kept' in err[0]

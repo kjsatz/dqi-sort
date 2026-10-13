@@ -17,8 +17,9 @@ received   a talk brought in from another unit (it must already be in talks.csv:
            includes it): status active, marked from_unit:UNIT in its flags, in the pool of lonely abstracts. Build
            its card and embedding next (cards prepare --ids, embed).
 poster     the talk becomes a poster: status poster.
-keep       the talk stays in DQI's oral program: its row in sorting/held.csv is removed; if it is in no session it
-           is a lonely abstract.
+keep       the talk stays in DQI's oral program: its row in sorting/held.csv is removed, and it is flagged lead_kept,
+           so drafts and the global pass treat its other-unit or non-scientific note as settled and must place it;
+           if it is in no session it is a lonely abstract.
 duplicate  the talks are another entry of the same talk as KEEP (an invited talk entered twice, for example a
            placeholder and the real entry): status duplicate, out of their sessions. Keep the entry with more
            information. An invited talk and a contributed talk by the same speaker are two talks, not duplicates.
@@ -130,6 +131,8 @@ def decide(data_dir, action, ids, unit='', note='', by='lead', do_commit=True):
             a.update(session_id='', order='', note=f'received from {u} ({now[:10]}): lonely')
             moves.append((u, 'lonely'))
         else:
+            if action == 'keep':                  # drafts and the global pass then treat its flags as settled
+                t['flags'] = ';'.join(sorted(set(filter(None, t['flags'].split(';'))) | {'lead_kept'}))
             moves.append(None)
         new_log.append({'when': now, 'talk_id': i, 'from_status': t['status'] if action != 'received' else f'in {u}',
                         'to_status': after, 'unit': u if action in ('offer', 'exchanged', 'returned', 'received') else '',
