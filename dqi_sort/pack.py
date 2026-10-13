@@ -13,7 +13,8 @@ start     collects the stage 5 drafts (work/sessions/*/proposal.json) into work/
           pool), check.md (the length check), candidates.md (short lists from the card embeddings), prompt.md.
 ops       applies a list of moves (JSON; see OPS below) atomically, records them in work/pack/log.jsonl with their
           reasons, rewrites the working files and prints the length check. Nothing is applied if any op is invalid.
-status    prints the length check.
+status    rewrites the working files and prints the length check. Run it after the critics finish, so candidates.md
+          lists swap partners for their suggested moves, then start the next round.
 critique  writes one folder per review area (work/pack/critique/AREA/) for an independent critic: the area's sessions
           with full cards, every session title in DQI, and prompt.md. Critics write suggestions.json; the global agent
           then weighs them in a second round of ops.
@@ -701,7 +702,9 @@ def main():
             sys.exit('ops needs the OPS.json file')
         ops(a.data_dir, a.ops_file)
     elif a.cmd == 'status':
-        print(status_text(Sort(a.data_dir).load()))
+        srt = Sort(a.data_dir).load()
+        write_files(srt)                         # e.g. after the critics, so candidates.md lists their swap partners
+        print(status_text(srt))
     elif a.cmd == 'critique':
         critique(a.data_dir)
     else:
