@@ -104,7 +104,7 @@ Sessions are not all the same size: a 144-minute session holds 12 contributed ta
 
 Any talk not currently in a session is a lonely abstract. Talks become lonely when a draft releases them (the global pass then places them), when a reviewer kicks them out, or when they arrive late. After the global pass the pool should be small. It is shown to everyone on the shared sheet (below), which is regenerated every time a change is merged, so it is always current.
 
-Near the end of review, one clean-up step empties the pool: Claude finds the best available home for each remaining lonely abstract (a session with room, or a small swap) and opens a pull request listing each placement and why. Moving a talk to another unit is a last resort here too. The pool must be empty at delivery.
+Near the end of review, one clean-up step empties the pool: Claude finds the best available home for each remaining lonely abstract (a session with room, or a small swap) and opens a pull request listing each placement and why. The aim is to fill our sessions exactly. If a few talks are left over when every session is full, they should be talks another unit would want: the card's other-unit note marks them, and `python -m dqi_sort.areas endgame` ranks them ("belongs there" first, then the fewest close neighbours in DQI). So the global pass and the clean-up step both leave those out first, and the lead offers them. Moving a talk to another unit is a last resort here too. The pool must be empty at delivery.
 
 ## Sort review
 
