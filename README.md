@@ -29,7 +29,7 @@ Principles:
 - **Everything in git.** The sort is plain CSV in a private data repo; every move is a commit with a reason. The Google Sheets are views of it.
 - **Two tracks, kept apart.** No step moves a talk between in person and virtual.
 
-In dry runs on the 2023–2026 abstracts, each year's sort fit its grid, and a blind Claude judge rated Claude's sessions about one point higher (on 1–5) than the human sorts, with fewer out-of-place talks. Sessions are smaller in the 2027 format, which helps; expert review still decides. A full rehearsal of all eleven stages on the 2026 abstracts is done.
+In dry runs on the 2023–2026 abstracts, each year's sort fit its grid, and a blind Claude judge, rating each session's coherence on a scale of 1 to 5, gave Claude's sessions about 4.2 to 4.5 and the human sorts' about 3.2 to 3.5, and found half as many out-of-place talks or fewer. Sessions are smaller in the 2027 format, which helps; expert review still decides. A full rehearsal of all eleven stages on the 2026 abstracts is done.
 
 ## Running it
 
