@@ -10,7 +10,6 @@ Tools for sorting the APS Global Physics Summit DQI (Division of Quantum Informa
 - People decide at the checkpoints in `PROCESS.md`. Claude drafts, proposes and flags; it does not make the checkpoint decisions.
 - Data in the private repo is plain CSV / JSONL, sorted by stable ID, so diffs are readable. Never delete talk rows; change their status.
 - `main` is protected: never push to it. Work on a branch and open a pull request; the `checks` workflow (no data files, tests) must pass. Enable the local hook once per clone with `git config core.hooksPath .githooks`.
-- `review/process-base` and `review/process` exist only for the PROCESS.md review pull request (the base lacks PROCESS.md so every line can take a comment). Never merge it. Agreed changes to PROCESS.md go to `main` in their own pull request.
 
 ## Layout
 
@@ -36,7 +35,7 @@ Settled choices (keep it simple; pick one good approach rather than comparing op
 - Embeddings: EmbeddingGemma via Ollama, on the card only. No other models or recipes. Used for routing, bridge talks, the global pass's candidate lists, session coherence and review areas.
 - Haiku cards: run as Haiku subagents in Claude Code on Kevin's subscription, not the Anthropic API. Session drafts and the global pass: Opus subagents, likewise.
 
-Second dry-run sort (Oct 12) with the new design, then (Oct 13) dry runs on 2023, 2024 and 2025 and a 2026 rerun: each year's sort fits its grid, and a blind Claude judge rates Claude's sessions about 1 point higher (1-5) than the human sorts, with a third as many out-of-place talks (2025, 2026; 2023 in `views/scores.md` of its repo). Improvements tested there and adopted: swap partners for the critics, review areas by content, the drafts' length mix, keep-apart requests, near-duplicate sessions across areas, the duplicate-invited flag. Summary: `../dqi-2027/reports/dry_runs_2023-2026.md` (private).
+Second dry-run sort (Oct 12) with the new design, then (Oct 13) dry runs on 2023, 2024 and 2025 and a 2026 rerun: each year's sort fits its grid, and a blind Claude judge rates Claude's sessions about 1 point higher than the human sorts on its 1-to-5 coherence scale (about 4.2-4.5 against 3.2-3.5), with a third as many out-of-place talks (2025, 2026; 2023 in `views/scores.md` of its repo). Improvements tested there and adopted: swap partners for the critics, review areas by content, the drafts' length mix, keep-apart requests, near-duplicate sessions across areas, the duplicate-invited flag. Summary: `../dqi-2027/reports/dry_runs_2023-2026.md` (private).
 
 Dry run 2 (Oct 13) rehearsed stages 1-11 on the 2026 abstracts with every checkpoint; the lead's decisions are in `checkpoints.md` of `../dqi-2026-dryrun`. Built on the way: the lead's decisions on talks (`decide.py`), the review read-back (`review.py`), room sizes and the scheduling solver with the session grid sheet (`schedule.py`), talk order (`order.py`), chair recruiting in one spreadsheet with a tab per area (`chairs.py`), the validator, the APS delivery sheet and the late-change tools.
 
