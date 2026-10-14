@@ -247,7 +247,7 @@ def area_book(area, name, rnd, stamp_text, sess, talks, cards, est, options):
 
 
 ASSIGN_TAB = 'Area assignments'
-ASSIGN_COLS = ['Area', 'Name', 'Area sheet', 'Round', 'Sessions', 'Talks', 'Responsible', 'Status', 'Sheet made']
+ASSIGN_COLS = ['Area', 'Name', 'Area sheet', 'Round', 'Sessions', 'Talks', 'Responsible', 'Status', 'Sheet made', 'Chairs needed', 'Chairs confirmed']
 EDITABLE = (6, 7)                                     # Responsible, Status: the only cells others may edit
 
 
@@ -265,10 +265,10 @@ def read_assignments(sheets, spreadsheet_id):
     return out
 
 
-def shared_book(year_name, stamp_text, sess, talks, cards, est, lonely, moves, area_rows=()):
+def shared_book(year_name, stamp_text, sess, talks, cards, est, lonely, moves, area_rows=(), other_volunteers=()):
     b = Book(f'{year_name}: the whole sort. {stamp_text}')
     b.tab(ASSIGN_TAB, ASSIGN_COLS, [list(r) for r in area_rows],
-          lambda sid, n: tab_requests(sid, n, [70, 300, 170, 60, 70, 60, 180, 360, 130], wrap_cols=[1, 7], notes_cols=EDITABLE)
+          lambda sid, n: tab_requests(sid, n, [70, 300, 170, 60, 70, 60, 180, 360, 130, 90, 90], wrap_cols=[1, 7], notes_cols=EDITABLE)
           + protect_req(sid, n, EDITABLE))
     rows = [[s['session_id'], s['area'], s['title'], s['kind'], int(s['minutes']), s['used'], *estimate_cells(est, s), s['size']]
             for s in sess]
@@ -296,6 +296,9 @@ def shared_book(year_name, stamp_text, sess, talks, cards, est, lonely, moves, a
     mrows = [[m['when'], m['talk_id'], talks.get(m['talk_id'], {}).get('title', ''), m['from'], m['to'], m['by'], m['reason']] for m in moves]
     b.tab('Moves', ['When', 'Talk ID', 'Title', 'From', 'To', 'By', 'Reason'],
           mrows, lambda sid, n: tab_requests(sid, n, [90, 75, 330, 90, 90, 70, 420], wrap_cols=[2, 6]) + protect_req(sid))
+    b.tab('Other volunteers', ['Volunteer', 'Email', 'Affiliation', 'Can chair', 'Chaired before', 'Note'],
+          [[v['name'], v['email'], v['affiliation'], v['chair_mode'].replace('_', '-'), v['chaired_before'], v['match_note']] for v in other_volunteers],
+          lambda sid, n: tab_requests(sid, n, [180, 220, 220, 90, 90, 360], wrap_cols=[2, 5]) + protect_req(sid))
     return b
 
 
@@ -356,6 +359,8 @@ def sync(data_dir, areas=None, all_areas=False, attendance=True):
     year_name = (cfg.get('sheets') or {}).get('folder_name', 'DQI sort')
     now = datetime.datetime.now().isoformat(timespec='minutes')
 
+    from dqi_sort import chairs as C
+    chair_entries = C.collect(data_dir, sheets) if log else {}        # the Chairs tabs as typed, before any new round
     options = read_options(data_dir, sess)
     for area in todo:                            # area sheets first: the shared sheet links to them
         rnd = 1 + sum(1 for r in log if r['kind'] == 'area' and r['area'] == area)
@@ -367,6 +372,11 @@ def sync(data_dir, areas=None, all_areas=False, attendance=True):
                     'sheet_id': aid, 'url': gsheets.url(aid), 'made': now})
         print(f'{area} round {rnd}:', gsheets.url(aid))
 
+    if todo:
+        S.write_csv(log_path, LOG_COLS, log)     # so the chairs see the new rounds
+    chair_counts = C.publish(data_dir, sheets, chair_entries)             # each area's Chairs tab, carried into new rounds
+    if todo:
+        C.retire(data_dir, sheets, todo)                                   # older rounds' Chairs tabs point to the new one
     fresh = shared is None
     sid = gsheets.create_sheet(drive, f'{year_name}: shared sort', folder) if fresh else shared['sheet_id']
     latest = {}
@@ -382,9 +392,10 @@ def sync(data_dir, areas=None, all_areas=False, attendance=True):
             stat = ''
         link = f'=HYPERLINK("{r["url"]}", "{area} round {r["round"]}")' if r else ''
         rows.append([area, names.get(area, ''), link, r['round'] if r else '', len(mine), sum(len(x['talks']) for x in mine),
-                     resp, stat, r['made'].replace('T', ' ') if r else ''])
+                     resp, stat, r['made'].replace('T', ' ') if r else '', *chair_counts.get(area, ('', ''))])
         saved.append({'area': area, 'responsible': resp, 'status': stat})
-    shared_book(year_name, stamp_text, sess, talks, cards, est, lonely, moves, rows).write(sheets, sid, fresh)
+    others = sorted((v for v in C.context(data_dir)[5] if not v['area']), key=lambda v: v['name']) if cfg.get('chair_volunteers') else []
+    shared_book(year_name, stamp_text, sess, talks, cards, est, lonely, moves, rows, others).write(sheets, sid, fresh)
     drive.files().update(fileId=sid, body={'description': stamp_text}).execute(num_retries=5)
     print('shared sheet:', gsheets.url(sid))
     if fresh:
