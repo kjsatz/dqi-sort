@@ -26,13 +26,13 @@ from dqi_sort import sessions as S
 DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri']
 NOTE_COL = 'Abstract note (Claude)'
 CHECK_COL = 'Claude check: availability as read, clashes'
-COLS = ['Volunteer', 'Email', 'Affiliation', 'Abstract ID', 'Their talks', NOTE_COL, 'Emailed?', 'Confirmed?', 'Availability', 'Notes',
-        'Session', CHECK_COL]
+COLS = ['Volunteer', 'Email', 'Affiliation', 'Abstract ID', 'Scheduled sessions', NOTE_COL, 'Emailed?', 'Confirmed?', 'Availability', 'Notes',
+        'Chairing session(s)', CHECK_COL]
 NC = len(COLS)
 EDIT = [3, 6, 7, 8, 9, 10]                 # Abstract ID, Emailed?, Confirmed?, Availability, Notes, Session
 BOXES = [6, 7]                             # Emailed?, Confirmed? as checkboxes
 READ = {'name': ['Volunteer'], 'email': ['Email'], 'abstract_id': ['Abstract ID'], 'emailed': ['Emailed?'],   # fields by header:
-        'confirmed': ['Confirmed?'], 'availability': ['Availability'], 'notes': ['Notes'], 'session': ['Session']}  # renames keep working
+        'confirmed': ['Confirmed?'], 'availability': ['Availability'], 'notes': ['Notes'], 'session': ['Chairing session(s)', 'Session']}  # renames keep working
 NEW_ROWS = 25                              # blank rows for people from the expert's own network
 NEEDING = 'Sessions still needing a chair'
 ENTRY = ['area', 'name', 'email', 'abstract_id', 'emailed', 'confirmed', 'availability', 'notes', 'session', 'check']
@@ -140,6 +140,11 @@ def own_talks(e, by_key, talks):
     return [i for i in dict.fromkeys(ids) if i in talks and talks[i]['status'] == 'active']
 
 
+def codes(e):
+    """The session codes a chair is down for (a few people chair more than one): "QEC03; QEC07"."""
+    return [x for x in re.split(r'[;,\s]+', (e.get('session') or '').upper()) if x]
+
+
 def need(area, sessions_in_area):
     return (2 if area == 'VIRTUAL' else 1) * len(sessions_in_area)
 
@@ -245,9 +250,9 @@ def place(entries, vols, sess, sched, assign, talks, presents, data_dir):
     for area in sorted({e['area'] for e in entries.values()}):
         mine = [x for x in sess if sess[x]['area'] == area and x in sched]
         per = 2 if area == 'VIRTUAL' else 1
-        filled = collections.Counter(e['session'] for e in entries.values() if e['area'] == area and e.get('session') and yes(e.get('confirmed')))
+        filled = collections.Counter(x for e in entries.values() if e['area'] == area and yes(e.get('confirmed')) for x in codes(e))
         slots = [x for x in mine for _ in range(per - filled[x])]
-        chairs = [k for k, e in entries.items() if e['area'] == area and yes(e.get('confirmed')) and not e.get('session')]
+        chairs = [k for k, e in entries.items() if e['area'] == area and yes(e.get('confirmed')) and not codes(e)]
         if not chairs:
             continue
         if not slots:
@@ -284,26 +289,26 @@ def checks(entries, vols, sess, sched, presents):
     virtual_people = {v['email'] for v in vols if 'virtual' in v['presenting_mode']} | {norm(v['name']) for v in vols if 'virtual' in v['presenting_mode']}
     at = collections.defaultdict(list)
     for k, e in entries.items():
-        if e.get('session') in sched and yes(e.get('confirmed')):
-            at[e['email'] or norm(e['name'])].append((sched[e['session']]['day'], sched[e['session']]['start']))
+        if yes(e.get('confirmed')):
+            at[e['email'] or norm(e['name'])] += [(sched[x]['day'], sched[x]['start']) for x in codes(e) if x in sched]
     for k, e in entries.items():
-        x, c = e.get('session'), [reading(e.get('availability'))] if e.get('availability') else []
-        if x:
+        c = [reading(e.get('availability'))] if e.get('availability') else []
+        for x in codes(e):
             if x not in sess:
-                c.append(f'no session {x}')
-            elif sess[x]['area'] != e['area']:
+                c.append(f'no session {x}'); continue
+            if sess[x]['area'] != e['area']:
                 c.append(f'{x} is in {sess[x]["area"]}')
             if x in sched:
                 t = (sched[x]['day'], sched[x]['start'])
                 if t in presents.get(e['email'], set()) | presents.get(norm(e['name']), set()):
-                    c.append('presents at this time')
+                    c.append(f'{x}: presents at this time')
                 if unavailable(e.get('availability'), *t):
-                    c.append('unavailable at this time')
+                    c.append(f'{x}: unavailable at this time')
                 if at[e['email'] or norm(e['name'])].count(t) > 1:
-                    c.append('chairs two sessions at this time')
-                if sess.get(x, {}).get('area') == 'VIRTUAL' and not ({e['email'], norm(e['name'])} & virtual_people):
-                    c.append('not a virtual presenter (fine if they agree)')
-        e['check'] = '; '.join(x for x in c if x)
+                    c.append(f'{x}: chairs two sessions at this time')
+                if sess[x]['area'] == 'VIRTUAL' and not ({e['email'], norm(e['name'])} & virtual_people):
+                    c.append(f'{x}: not a virtual presenter (fine if they agree)')
+        e['check'] = '; '.join(dict.fromkeys(x for x in c if x))
 
 
 def area_rows(area, vols, entries, sess, sched, assign_of=None):
@@ -328,7 +333,7 @@ def area_rows(area, vols, entries, sess, sched, assign_of=None):
     mine_s = sorted((x for x in sess if sess[x]['area'] == area), key=lambda x: (DAYS.index(sched[x]['day']), sched[x]['start']) if x in sched else (9, x))
     per = 2 if area == 'VIRTUAL' else 1
     if sched:
-        got = collections.Counter(e['session'] for e in entries.values() if e['area'] == area and e.get('session') and yes(e.get('confirmed')))
+        got = collections.Counter(x for e in entries.values() if e['area'] == area and yes(e.get('confirmed')) for x in codes(e))
         open_ = [x for x in mine_s if got[x] < per]
         rows += [[''] * NC, [NEEDING, 'Title', 'When', 'Chairs still needed'] + [''] * (NC - 4)]
         rows += [[x, sess[x]['title'], f"{sched[x]['day']} {sched[x]['start']}" if x in sched else '', per - got[x]] + [''] * (NC - 4) for x in open_]
@@ -388,9 +393,12 @@ def instructions(cfg):
             ['Availability', 'In plain words, when they cannot chair: e.g. "Mon AM; not Thursday afternoon". The Check column shows how it was read.'],
             ['Notes', 'Anything useful, in free text: a topic they would like, a preferred day, someone to co-chair with. Claude reads these when '
                       'placing chairs on sessions.'],
-            ['Session', 'Leave blank: once the schedule is set, Claude places each confirmed chair on a session in your area where they do not '
-                        'speak and that does not clash with their talks or availability, close to their own topic where it can. Or type a '
-                        'session code yourself.'],
+            ['Scheduled sessions', 'Filled in by Claude: the sessions of their own talks, with day and time once the schedule is set (blank '
+                                   'before sessions exist).'],
+            ['Chairing session(s)', 'Leave blank: once the schedule is set, Claude places each confirmed chair on one session in your area '
+                                    'where they do not speak and that does not clash with their talks or availability, close to their own '
+                                    'topic where it can. Or type session codes yourself. A few people may chair more than one: list the '
+                                    'codes separated by ";" (e.g. QEC03; QEC07), or say so in Notes and Claude adds a second.'],
             [NOTE_COL, 'Filled in by Claude from the APS lists: another talk found under the same name (to confirm), or an abstract '
                        'that is not in our program.'],
             [CHECK_COL, 'Filled in by Claude: how Availability was read, and any problem with a placement (presents at that time, '
@@ -434,7 +442,7 @@ def sync(data_dir):
         rows, n_people = area_rows(a, vols, entries, sess, sched, assign)
         tabs[a] = (rows, n_people)
         counts[a] = (need(a, [x for x in sess if sess[x]['area'] == a]), n_people,
-                     sum(1 for e in entries.values() if e['area'] == a and e.get('session') and yes(e.get('confirmed'))))
+                     sum(len(codes(e)) for e in entries.values() if e['area'] == a and yes(e.get('confirmed'))))
     others = sorted((v for v in vols if not v['area']), key=lambda v: v['name'])
     b = book(cfg, areas, tabs, overview, reviewers, counts, others, lambda a: names.get(a, ''))
     fresh = row is None
