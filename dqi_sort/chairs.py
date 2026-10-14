@@ -1,37 +1,48 @@
-"""Stage 10: session chairs. Link volunteers to abstracts, group sessions into recruiting topics, write the
-coordinator's handoff sheet.
+"""Stage 10: session chairs, recruited area by area: one spreadsheet with a tab per review area.
 
-    python -m dqi_sort.chairs topics-prepare DATA_DIR
-    python -m dqi_sort.chairs topics-check   DATA_DIR
-    python -m dqi_sort.chairs handoff        DATA_DIR
+    python -m dqi_sort.chairs sync DATA_DIR
 
-topics-prepare  writes work/chairs/sessions.md (every in-person session: ID, area, title, scope) and prompt.md
-                (prompts/chair_topics_spec.md). One Claude agent groups the sessions into recruiting topics and writes
-                work/chairs/topics.json; topics-check validates it (every session in exactly one topic).
-handoff         reads the APS volunteer lists (config.yaml `chair_volunteers`: in_person and virtual files), keeps
-                the rows whose sub-category starts with the division code, merges people by email, and links each to
-                their abstracts: the row's abstract ID, plus any other talk by the same name (flagged for the lead).
-                Writes chairs/topics.csv (topic, area, sessions, when they run, chairs needed: one per in-person
-                session, two per virtual session, no backups; the virtual conference is one topic) and chairs/volunteers.csv,
-                and the handoff Google Sheet in the review folder: Topics, Volunteers (with empty return columns
-                status, topics, unavailable, note, the only cells the coordinator edits) and How to fill in.
-                Suggested topic: the topic of the volunteer's own session, or Virtual for virtual chairs.
+sync  reads the APS volunteer lists (config.yaml `chair_volunteers`: in_person and virtual files), keeps the rows whose
+      sub-category starts with the division code, merges people by email, and links each to their abstracts (the
+      row's abstract ID, plus any other talk by the same name, flagged to confirm). Then it writes or updates the chairs
+      spreadsheet in the review folder:
+      - Overview: one row per review area (the same areas as the review sheets), with Responsible (the subject-matter
+        expert who recruits for the area; pre-filled with its reviewer) and Status, both editable, and the chairs needed
+        and confirmed.
+      - One tab per area: its chair slots (one per in-person session, two per virtual session; no backups), each with
+        the session, title, time and room and four editable columns, Chair, Email, Status, Note; then the volunteers
+        whose own talk is in that area, with when they present. A chair from the expert's own network is simply typed in.
+      - Other volunteers (abstract not in our program) and How to fill in.
+      What people typed is read back first and kept, and saved to chairs/chairs.csv and chairs/area_status.csv. A Check
+      column flags a chair who presents at the session's time, chairs two sessions at once, or (in a virtual session)
+      does not present virtually. Sessions fall in their current review area, so a session moved after review is simply
+      listed where it now is. Also writes chairs/volunteers.csv.
 """
 import argparse, collections, json, os, re, sys
 from dqi_sort import sessions as S
 
 DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri']
-VIRTUAL = 'Virtual conference'
-RETURN_COLS = ['Status', 'Topics', 'Unavailable', 'Note']
+SLOT_COLS = ['Session', 'Title', 'When', 'Room', 'Slot', 'Chair', 'Email', 'Status', 'Note', 'Check']
+EDIT = [5, 6, 7, 8]                       # Chair, Email, Status, Note
+VOL_COLS = ['Volunteer', 'Email', 'Affiliation', 'Can chair', 'Chaired before', 'Presents (their talks)', 'Match note', 'Status', 'Unavailable']
+VOL_EDIT = [7, 8]                          # Status (confirmed, declined, no reply) and Unavailable (e.g. Mon AM; Thu)
+NEW_ROWS = 8                               # blank volunteer rows for people from the expert's own network
 HOW = [['Column', 'What to enter'],
-       ['Status', 'confirmed, declined or no reply'],
-       ['Topics', 'One or more topics from the Topics tab, exactly as written there, separated by ;'],
-       ['Unavailable', 'Days or half-days they cannot chair, e.g. Mon AM; Thu. Leave blank if none.'],
+       ['Chair', "The chair's name. Any suitable person: a volunteer listed below, or someone from your own network."],
+       ['Email', "The chair's email."],
+       ['Status', 'invited, confirmed or declined'],
        ['Note', 'Anything else, in free text'],
        ['', ''],
-       ['Notes', 'Offer a topic, not a session: sessions are matched to confirmed chairs later, never against their own talks or '
-                 'stated unavailability. In-person sessions get chairs who present in person; the virtual conference needs '
-                 'two confirmed chairs per session, preferably virtual presenters. Only the four return columns can be edited.']]
+       ['Volunteers table', 'Instead of placing someone yourself, set a volunteer\'s Status to confirmed (and Unavailable, e.g. Mon AM; Thu). '
+                            'On the next refresh Claude places the confirmed volunteers who are not yet in a slot on open sessions in '
+                            'this area where they are not a speaker and that do not clash with their talks or unavailability, '
+                            'matching topics to their own talks where it can; the slot\'s Note says so. Add people from your network in the blank rows at the end '
+                            '(name and email in the first two columns).'],
+       ['', ''],
+       ['Rules', 'One confirmed chair per in-person session and two per virtual session; no backups. A chair should not present '
+                 'at the same time as the session (the Presents column shows when volunteers present), and virtual sessions are '
+                 'best chaired by people presenting virtually. The Check column flags problems each time the sheet is refreshed. '
+                 'Only the Chair, Email, Status and Note cells (and, on the Overview, Responsible and Status) can be edited.']]
 
 
 def col(row, *names):
@@ -44,37 +55,6 @@ def col(row, *names):
 
 def norm(name):
     return re.sub(r'[^a-z]', '', name.lower())
-
-
-# ---------- topics ----------
-def topics_prepare(data_dir):
-    sess = [s for s in S.read_csv(os.path.join(data_dir, 'sorting', 'sessions.csv')) if s['area'] != 'VIRTUAL']
-    d = os.path.join(data_dir, 'work', 'chairs')
-    os.makedirs(d, exist_ok=True)
-    with open(os.path.join(d, 'sessions.md'), 'w', encoding='utf-8') as f:
-        f.write(f'# In-person sessions ({len(sess)})\n\n' + '\n'.join(f"- {s['session_id']} [{s['area']}] {s['title']}: {s['scope']}" for s in sess) + '\n')
-    with open(os.path.join(S.HERE, 'prompts', 'chair_topics_spec.md'), encoding='utf-8') as f:
-        spec = f.read()
-    check = f'cd {S.HERE} && .venv/bin/python -m dqi_sort.chairs topics-check {os.path.abspath(data_dir)}'
-    with open(os.path.join(d, 'prompt.md'), 'w', encoding='utf-8') as f:
-        f.write(spec.replace('{DIR}', os.path.abspath(d)).replace('{CHECK}', check))
-    print(f'{len(sess)} sessions -> {d}')
-
-
-def topics_check(data_dir):
-    sess = {s['session_id'] for s in S.read_csv(os.path.join(data_dir, 'sorting', 'sessions.csv')) if s['area'] != 'VIRTUAL'}
-    with open(os.path.join(data_dir, 'work', 'chairs', 'topics.json'), encoding='utf-8') as f:
-        topics = json.load(f)
-    seen = collections.Counter(x for t in topics for x in t['sessions'])
-    errs = [f'{x} is in {n} topics' for x, n in seen.items() if n > 1] + [f'{x} is in no topic' for x in sorted(sess - set(seen))]
-    errs += [f'{x} is not an in-person session' for x in seen if x not in sess]
-    errs += [f"topic {t['topic']!r} has {len(t['sessions'])} sessions" for t in topics if not 2 <= len(t['sessions']) <= 10]
-    names = collections.Counter(t['topic'] for t in topics)
-    errs += [f'topic name {n!r} is used twice' for n, c in names.items() if c > 1]
-    for e in errs:
-        print('ERROR', e)
-    print('OK' if not errs else f'{len(errs)} errors', f'({len(topics)} topics)')
-    return errs
 
 
 # ---------- volunteers ----------
@@ -125,96 +105,249 @@ def volunteers(data_dir, cfg, talks):
     return out
 
 
-def handoff(data_dir):
+def unavailable(text, day, start):
+    """True if "Mon AM; Thu" (days or half-days) covers a session on this day starting at this time."""
+    for part in re.split(r'[;,]', text or ''):
+        m = re.search(r'\b(mon|tue|wed|thu|fri)[a-z]*\b\s*(am|pm)?', part, re.I)
+        if m and m.group(1)[:3].title() == day:
+            half = (m.group(2) or '').lower()
+            if not half or (half == 'am') == (start < '12:00'):
+                return True
+    return False
+
+
+def place(people, entries, vols, sess, sched, assign, talks, presents, data_dir):
+    """Place the confirmed volunteers who are not yet in a slot, area by area, all at once: each on an open session in
+    their area where they are not a speaker and that does not clash with their talks or unavailability, choosing the
+    placement with the best total topical fit between each chair's own talk and their session (a soft preference:
+    a feasible placement always wins over a good fit). Edits entries; returns notes on anyone who could not be placed."""
+    import numpy as np
+    from scipy.optimize import linear_sum_assignment
+    taken = {(e[1].lower() or norm(e[0])) for e in entries.values() if e[0]}
+    by_key = {(v['name'], v['email']): v for v in vols}
+    active = {i: t for i, t in talks.items() if t['status'] == 'active'}
+    members = collections.defaultdict(list)
+    for i, a in assign.items():
+        if a and i in active:
+            members[a].append(i)
+    space, notes = None, []
+    todo = collections.defaultdict(list)
+    for (area, name, email), (status, unav) in sorted(people.items()):
+        if status == 'confirmed' and (email or norm(name)) not in taken:
+            todo[area].append((name, email, unav))
+    for area, chairs in todo.items():
+        n_slots = 2 if area == 'VIRTUAL' else 1
+        slots = [(x, str(k)) for x in sess if sess[x]['area'] == area and x in sched for k in range(1, n_slots + 1)
+                 if not entries.get((x, str(k)), ('',))[0]]
+        if not slots:
+            notes += [f'{c[0]}: no open slot in {area}' for c in chairs]; continue
+        cost = np.full((len(chairs), len(slots)), 1e6)
+        for r, (name, email, unav) in enumerate(chairs):
+            v = by_key.get((name, email), {})
+            own = [i for i in (v.get('talk_ids') or '').split(';') if i in active]
+            busy = presents.get(email, set()) | presents.get(norm(name), set())
+            speaks = {assign.get(i) for i in own}
+            x0 = None
+            if own:
+                space = space or Space(data_dir, active)
+                vecs = [space.vec(i) for i in own if space.vec(i) is not None]
+                x0 = np.mean(vecs, axis=0) if vecs else None
+            for c, (x, k) in enumerate(slots):
+                t = (sched[x]['day'], sched[x]['start'])
+                if x in speaks or t in busy or unavailable(unav, *t):
+                    continue
+                cost[r, c] = -float(space.centroid(members[x]) @ x0) if x0 is not None else 0.0
+        rows, cols = linear_sum_assignment(cost)
+        for r, c in zip(rows, cols):
+            name, email, _ = chairs[r]
+            if cost[r, c] >= 1e6:
+                notes.append(f'{name}: no open session in {area} without a clash'); continue
+            entries[slots[c]] = (name, email, 'confirmed', 'placed by Claude: no clash with their talks or unavailability, and a close topic where possible')
+        placed = set(rows)
+        notes += [f'{chairs[r][0]}: more confirmed chairs than open slots in {area}' for r in range(len(chairs)) if r not in placed]
+    for n in notes:
+        print('PLACE', n)
+    return notes
+
+
+def Space(data_dir, talks):
+    from dqi_sort.pack import Space as _Space
+    return _Space(data_dir, talks)
+
+
+def read_back(sheets, sid):
+    """What people typed: ({(session, slot): (chair, email, status, note)}, {area: (responsible, status)})."""
+    entries, overview, people = {}, {}, {}
+    try:
+        meta = sheets.spreadsheets().get(spreadsheetId=sid, fields='sheets(properties(title))').execute(num_retries=5)
+    except Exception:
+        return entries, overview, people
+    titles = [x['properties']['title'] for x in meta['sheets']]
+    for t in titles:
+        vals = sheets.spreadsheets().values().get(spreadsheetId=sid, range=f"'{t}'!A2:J2000").execute(num_retries=5).get('values', [])
+        if not vals:
+            continue
+        head = vals[0]
+        if t == 'Overview' and head[:1] == ['Area']:
+            for r in vals[1:]:
+                r = r + [''] * 8
+                if r[0]:
+                    overview[r[0]] = (r[2].strip(), r[6].strip())
+        elif head[:1] == ['Session']:
+            in_vols = False
+            for r in vals[1:]:
+                r = r + [''] * 10
+                if r[0] == 'Volunteer':
+                    in_vols = True; continue
+                if not in_vols:
+                    if r[0]:
+                        entries[(r[0], r[4])] = tuple(x.strip() for x in r[5:9])
+                elif r[0].strip():
+                    people[(t, r[0].strip(), r[1].strip().lower())] = (r[7].strip().lower(), r[8].strip())
+    return entries, overview, people
+
+
+def sync(data_dir):
+    from dqi_sort import gsheets
     cfg = S.load_config(data_dir)
     talks = {t['talk_id']: t for t in S.read_csv(os.path.join(data_dir, 'talks.csv'))}
     sess = {s['session_id']: s for s in S.read_csv(os.path.join(data_dir, 'sorting', 'sessions.csv'))}
     assign = {a['talk_id']: a['session_id'] for a in S.read_csv(os.path.join(data_dir, 'sorting', 'assignments.csv'))}
     slots = {s['slot_id']: s for s in S.read_csv(os.path.join(data_dir, 'schedule', 'slots.csv'))}
     sched = {r['session_id']: slots[r['slot_id']] for r in S.read_csv(os.path.join(data_dir, 'schedule', 'schedule.csv'))}
-    if topics_check(data_dir):
-        sys.exit('fix work/chairs/topics.json first')
-    with open(os.path.join(data_dir, 'work', 'chairs', 'topics.json'), encoding='utf-8') as f:
-        topics = json.load(f)
-    virtual = sorted(s for s in sess if sess[s]['area'] == 'VIRTUAL')
-    topics.append({'topic': VIRTUAL, 'area': 'VIRTUAL', 'sessions': virtual})
-    topic_of = {x: t['topic'] for t in topics for x in t['sessions']}
-    when = lambda x: f"{sched[x]['day']} {sched[x]['start']}" if x in sched else ''
-    trows = []
-    for t in topics:
-        n = len(t['sessions'])
-        need = 2 * n if t['area'] == 'VIRTUAL' else n          # one confirmed chair per session, two per virtual session; no backups
-        days = sorted({sched[x]['day'] for x in t['sessions'] if x in sched}, key=DAYS.index)
-        trows.append({'topic': t['topic'], 'area': t['area'], 'sessions': ';'.join(t['sessions']), 'n_sessions': n, 'chairs_needed': need,
-                      'days': ' '.join(days), 'titles': '; '.join(f"{x} {sess[x]['title']} ({when(x)})" for x in t['sessions'])})
+    rooms = {r['room_id']: r for r in S.read_csv(os.path.join(data_dir, 'venue', 'rooms.csv'))}
+    names = {a: v.get('name', '') for a, v in (cfg.get('areas') or {}).items()}
+    spath = os.path.join(data_dir, 'sorting', 'area_status.csv')
+    reviewers = {r['area']: r['responsible'] for r in S.read_csv(spath)} if os.path.exists(spath) else {}
+    when = lambda x: f"{sched[x]['day']} {sched[x]['start']}–{sched[x]['end']}" if x in sched else ''
     vols = volunteers(data_dir, cfg, talks)
     for v in vols:
         own = [assign.get(i, '') for i in v['talk_ids'].split(';') if i]
-        tops = [topic_of[x] for x in own if x in topic_of]
-        v['suggested_topic'] = VIRTUAL if v['chair_mode'] == 'virtual' or 'virtual' in v['presenting_mode'] else (tops[0] if tops else '')
-        v['own_sessions'] = ';'.join(f"{x} ({when(x)})" for x in own if x)
-    os.makedirs(os.path.join(data_dir, 'chairs'), exist_ok=True)
-    S.write_csv(os.path.join(data_dir, 'chairs', 'topics.csv'), ['topic', 'area', 'sessions', 'n_sessions', 'chairs_needed', 'days', 'titles'], trows)
-    S.write_csv(os.path.join(data_dir, 'chairs', 'volunteers.csv'),
-                ['volunteer_id', 'name', 'email', 'affiliation', 'chair_mode', 'presenting_mode', 'chaired_before', 'talk_ids',
-                 'own_sessions', 'suggested_topic', 'match_note'], vols)
-    sheet(data_dir, cfg, trows, vols, talks)
-    supply = collections.Counter(v['suggested_topic'] for v in vols)
-    print(f"{len(vols)} volunteers ({sum(v['chair_mode'] != 'in_person' for v in vols)} can chair virtually); {len(trows)} topics needing "
-          f"{sum(t['chairs_needed'] for t in trows)} chairs; topics with fewer suggested volunteers than chairs needed: "
-          f"{sum(1 for t in trows if supply[t['topic']] < t['chairs_needed'])}")
-
-
-def sheet(data_dir, cfg, trows, vols, talks):
-    from dqi_sort import gsheets
-    from dqi_sort.sheets import Book, tab_requests, protect_req, HEADER_ROW, LOG_COLS
-    folder = (cfg.get('sheets') or {}).get('folder_id')
-    name = (cfg.get('sheets') or {}).get('folder_name', 'DQI')
-    b = Book(f'{name}: session chair handoff for the coordinator. Edit only the four return columns of the Volunteers tab.')
-    b.tab('Topics', ['Topic', 'Area', 'Sessions', 'Chairs needed', 'Days', 'Sessions and times'],
-          [[t['topic'], t['area'], t['n_sessions'], t['chairs_needed'], t['days'], t['titles'].replace('; ', '\n')] for t in trows],
-          lambda sid, n: tab_requests(sid, n, [240, 80, 70, 90, 140, 560], wrap_cols=[0, 5]) + protect_req(sid))
-    vr = []
-    for v in sorted(vols, key=lambda v: (v['suggested_topic'] or 'zzz', v['name'])):
-        titles = '\n'.join(f"{i}: {talks[i]['title']}" for i in v['talk_ids'].split(';') if i in talks)
-        vr.append([v['volunteer_id'], v['name'], v['email'], v['affiliation'], v['chair_mode'].replace('_', '-'),
-                   v['presenting_mode'].replace('_', '-'), v['chaired_before'], titles, v['own_sessions'].replace(';', '\n'),
-                   v['suggested_topic'], v['match_note'], '', '', '', ''])
-    header = ['ID', 'Name', 'Email', 'Affiliation', 'Can chair', 'Presenting', 'Chaired before', 'Their abstracts', 'Their sessions',
-              'Suggested topic', 'Match note'] + RETURN_COLS
-    editable = list(range(len(header) - 4, len(header)))
-    b.tab('Volunteers', header, vr, lambda sid, n: tab_requests(sid, n, [60, 160, 200, 200, 80, 80, 70, 330, 150, 200, 200, 100, 200, 140, 220],
-                                                                   wrap_cols=[3, 7, 8, 9, 10, 12, 14], notes_cols=editable)
-          + protect_req(sid, n, editable))
-    b.tab('How to fill in', HOW[0], HOW[1:], lambda sid, n: tab_requests(sid, n, [140, 700], wrap_cols=[1]) + protect_req(sid))
-    drive, sheets = gsheets.services()
+        v['own_sessions'] = ';'.join(x for x in own if x)
+        v['area'] = next((sess[x]['area'] for x in own if x in sess), '')
+        v['presents'] = '; '.join(f"{x} ({when(x)})" for x in own if x in sched)
     log_path = os.path.join(data_dir, 'sorting', 'sheets.csv')
     log = S.read_csv(log_path) if os.path.exists(log_path) else []
-    row = next((r for r in reversed(log) if r['kind'] == 'chairs'), None)
+    row = next((r for r in reversed(log) if r['kind'] == 'chairs-areas'), None)
+    drive, sheets = gsheets.services()
+    entries, overview, people = read_back(sheets, row['sheet_id']) if row else ({}, {}, {})
+    # who presents when, to check chairs
+    presents = collections.defaultdict(set)              # normalised name or email -> {(day, start)}
+    for v in vols:
+        for x in v['own_sessions'].split(';'):
+            if x in sched:
+                presents[v['email']].add((sched[x]['day'], sched[x]['start']))
+                presents[norm(v['name'])].add((sched[x]['day'], sched[x]['start']))
+    for i, t in talks.items():
+        if t['status'] == 'active' and assign.get(i) in sched:
+            presents[norm(t['speaker'])].add((sched[assign[i]]['day'], sched[assign[i]]['start']))
+    virtual_people = {v['email'] for v in vols if 'virtual' in v['presenting_mode']} | {norm(v['name']) for v in vols if 'virtual' in v['presenting_mode']}
+    placed_notes = place(people, entries, vols, sess, sched, assign, talks, presents, data_dir)
+    chairing = collections.defaultdict(list)
+    for (sid_, slot), (chair, email, status, note) in entries.items():
+        if chair and sid_ in sched:
+            chairing[email.lower() or norm(chair)].append((sched[sid_]['day'], sched[sid_]['start'], sid_))
+    areas = sorted({s['area'] for s in sess.values()}, key=lambda a: (a == 'VIRTUAL', a))
+    tabs, saved = {}, []
+    for area in areas:
+        rows = []
+        for x in sorted((x for x in sess if sess[x]['area'] == area), key=lambda x: (DAYS.index(sched[x]['day']) if x in sched else 9, sched.get(x, {}).get('start', ''), x)):
+            for k in range(1, (2 if area == 'VIRTUAL' else 1) + 1):
+                chair, email, status, note = entries.get((x, str(k)), ('', '', '', ''))
+                check = []
+                key = email.lower() or norm(chair)
+                if chair and x in sched:
+                    t = (sched[x]['day'], sched[x]['start'])
+                    if t in presents.get(email.lower(), set()) | presents.get(norm(chair), set()):
+                        check.append('presents at this time')
+                    if sum(1 for d, st, other in chairing[key] if (d, st) == t) > 1:
+                        check.append('chairs another session at this time')
+                    if area == 'VIRTUAL' and not ({email.lower(), norm(chair)} & virtual_people):
+                        check.append('not a virtual presenter (fine if they agree)')
+                room = rooms.get(sched.get(x, {}).get('room_id', ''), {}).get('name', 'virtual') if x in sched else ''
+                rows.append([x, sess[x]['title'], when(x), room, k, chair, email, status, note, '; '.join(check)])
+                saved.append({'session_id': x, 'slot': k, 'chair': chair, 'email': email, 'status': status, 'note': note, 'check': '; '.join(check)})
+        tabs[area] = rows
+    write_sheet(data_dir, cfg, drive, sheets, log, log_path, row, areas, names, tabs, vols, talks, overview, reviewers, people)
+    os.makedirs(os.path.join(data_dir, 'chairs'), exist_ok=True)
+    S.write_csv(os.path.join(data_dir, 'chairs', 'chairs.csv'), ['session_id', 'slot', 'chair', 'email', 'status', 'note', 'check'], saved)
+    S.write_csv(os.path.join(data_dir, 'chairs', 'area_status.csv'), ['area', 'responsible', 'status'],
+                [{'area': a, 'responsible': overview.get(a, (reviewers.get(a, ''), ''))[0], 'status': overview.get(a, ('', ''))[1]} for a in areas])
+    S.write_csv(os.path.join(data_dir, 'chairs', 'volunteers.csv'),
+                ['volunteer_id', 'name', 'email', 'affiliation', 'chair_mode', 'presenting_mode', 'chaired_before', 'talk_ids',
+                 'own_sessions', 'area', 'match_note'], vols)
+    need = sum(len(r) for r in tabs.values())
+    done = sum(1 for x in saved if x['status'].lower() == 'confirmed')
+    print(f'{len(vols)} volunteers; {need} chair slots in {len(areas)} areas; {done} confirmed; '
+          f"{sum(1 for x in saved if x['check'])} flagged by the check")
+
+
+def write_sheet(data_dir, cfg, drive, sheets, log, log_path, row, areas, names, tabs, vols, talks, overview, reviewers, people):
+    from dqi_sort import gsheets
+    from dqi_sort.sheets import Book, tab_requests, protect_req, color_req, HEADER_ROW, LOG_COLS, NOTES
+    folder = (cfg.get('sheets') or {}).get('folder_id')
+    title = (cfg.get('sheets') or {}).get('folder_name', 'DQI')
+    b = Book(f'{title}: session chairs, by review area. Edit only the tinted cells.')
+    orows = []
+    for a in areas:
+        n = len(tabs[a])
+        resp, stat = overview.get(a, (reviewers.get(a, ''), ''))
+        confirmed = f'=COUNTIF(\'{a}\'!H{HEADER_ROW + 1}:H{HEADER_ROW + n},"confirmed")'
+        orows.append([a, names.get(a, ''), resp, len({r[0] for r in tabs[a]}), n, confirmed, stat])
+    b.tab('Overview', ['Area', 'Name', 'Responsible', 'Sessions', 'Chairs needed', 'Confirmed', 'Status'], orows,
+          lambda sid, n: tab_requests(sid, n, [80, 320, 200, 80, 100, 90, 320], wrap_cols=[1, 6], notes_cols=[2, 6]) + protect_req(sid, n, [2, 6]))
+    for a in areas:
+        mine = sorted((v for v in vols if v['area'] == a), key=lambda v: v['name'])
+        known = {(v['name'], v['email']) for v in mine}
+        vrows = [[v['name'], v['email'], v['affiliation'], v['chair_mode'].replace('_', '-'), v['chaired_before'], v['presents'], v['match_note'],
+                  *people.get((a, v['name'], v['email']), ('', ''))] for v in mine]
+        vrows += [[n, e, '', '', '', '', 'added by the area', *people[(t, n, e)]] for (t, n, e) in people if t == a and (n, e) not in known]
+        vrows += [[''] * 9 for _ in range(NEW_ROWS)]
+        n_slots = len(tabs[a])
+        rows = tabs[a] + [[''] * 10, VOL_COLS + [''], *[r + [''] for r in vrows]]
+
+        def fmt(sid, n, n_slots=n_slots):
+            reqs = tab_requests(sid, n, [80, 300, 150, 110, 45, 170, 200, 90, 220, 220], wrap_cols=[1, 5, 8, 9])
+            reqs += [color_req(sid, HEADER_ROW, HEADER_ROW + n_slots, c, c + 1, NOTES) for c in EDIT]
+            reqs.append({'repeatCell': {'range': {'sheetId': sid, 'startRowIndex': HEADER_ROW + n_slots + 1, 'endRowIndex': HEADER_ROW + n_slots + 2},
+                                        'cell': {'userEnteredFormat': {'textFormat': {'bold': True}}}, 'fields': 'userEnteredFormat.textFormat.bold'}})
+            reqs.append({'setDataValidation': {'range': {'sheetId': sid, 'startRowIndex': HEADER_ROW, 'endRowIndex': HEADER_ROW + n_slots,
+                                                         'startColumnIndex': 7, 'endColumnIndex': 8},
+                                               'rule': {'condition': {'type': 'ONE_OF_LIST', 'values': [{'userEnteredValue': v} for v in ('invited', 'confirmed', 'declined')]},
+                                                        'showCustomUi': True, 'strict': False}}})
+            v0, nv = HEADER_ROW + n_slots + 2, n - n_slots - 2      # the volunteer rows
+            reqs += [color_req(sid, v0, v0 + nv, c, c + 1, NOTES) for c in VOL_EDIT]
+            reqs += [color_req(sid, v0 + nv - NEW_ROWS, v0 + nv, 0, 2, NOTES)]
+            free = [{'sheetId': sid, 'startRowIndex': HEADER_ROW, 'endRowIndex': HEADER_ROW + n_slots, 'startColumnIndex': c, 'endColumnIndex': c + 1} for c in EDIT]
+            free += [{'sheetId': sid, 'startRowIndex': v0, 'endRowIndex': v0 + nv, 'startColumnIndex': c, 'endColumnIndex': c + 1} for c in VOL_EDIT]
+            free += [{'sheetId': sid, 'startRowIndex': v0 + nv - NEW_ROWS, 'endRowIndex': v0 + nv, 'startColumnIndex': 0, 'endColumnIndex': 2}]
+            return reqs + [{'addProtectedRange': {'protectedRange': {'range': {'sheetId': sid}, 'unprotectedRanges': free, 'warningOnly': False,
+                                                                     'description': 'Generated by dqi_sort.chairs'}}}]
+        b.tab(a, SLOT_COLS, rows, fmt)
+    other = [[v['name'], v['email'], v['affiliation'], v['chair_mode'].replace('_', '-'), v['chaired_before'], v['match_note']]
+             for v in sorted(vols, key=lambda v: v['name']) if not v['area']]
+    b.tab('Other volunteers', ['Volunteer', 'Email', 'Affiliation', 'Can chair', 'Chaired before', 'Note'], other,
+          lambda sid, n: tab_requests(sid, n, [180, 220, 220, 90, 90, 360], wrap_cols=[2, 5]) + protect_req(sid))
+    b.tab('How to fill in', HOW[0], HOW[1:], lambda sid, n: tab_requests(sid, n, [140, 700], wrap_cols=[1]) + protect_req(sid))
     fresh = row is None
-    sid = gsheets.create_sheet(drive, f'{name}: session chair handoff', folder) if fresh else row['sheet_id']
+    sid = gsheets.create_sheet(drive, f'{title}: session chairs', folder) if fresh else row['sheet_id']
     b.write(sheets, sid, fresh)
     commit = __import__('subprocess').run(['git', '-C', data_dir, 'rev-parse', '--short', 'HEAD'], capture_output=True, text=True).stdout.strip()
     now = __import__('datetime').datetime.now().isoformat(timespec='minutes')
     if fresh:
-        log.append({'kind': 'chairs', 'area': '', 'round': '', 'commit': commit, 'content': '', 'sheet_id': sid, 'url': gsheets.url(sid), 'made': now})
+        log.append({'kind': 'chairs-areas', 'area': '', 'round': '', 'commit': commit, 'content': '', 'sheet_id': sid, 'url': gsheets.url(sid), 'made': now})
     else:
         row.update(commit=commit, made=now)
     S.write_csv(log_path, LOG_COLS, log)
-    print('chair handoff:', gsheets.url(sid))
+    print('chairs sheet:', gsheets.url(sid))
 
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument('cmd', choices=['topics-prepare', 'topics-check', 'handoff'])
+    ap.add_argument('cmd', choices=['sync'])
     ap.add_argument('data_dir')
     a = ap.parse_args()
-    if a.cmd == 'topics-prepare':
-        topics_prepare(a.data_dir)
-    elif a.cmd == 'topics-check':
-        sys.exit(1 if topics_check(a.data_dir) else 0)
-    else:
-        handoff(a.data_dir)
+    sync(a.data_dir)
 
 
 if __name__ == '__main__':

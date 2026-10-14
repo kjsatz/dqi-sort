@@ -17,3 +17,21 @@ def test_volunteers_merge_by_email_link_by_id_and_name(tmp_path):
              '2': {'talk_id': '2', 'speaker': 'Ada Lovelace', 'status': 'active'}}
     v = C.volunteers(str(d), {'division_code': '17', 'chair_volunteers': {'in_person': 'ip.csv', 'virtual': 'v.csv'}}, talks)
     assert len(v) == 1 and v[0]['chair_mode'] == 'both' and v[0]['talk_ids'] == '1;2' and 'by name' in v[0]['match_note']
+
+
+def test_unavailable_days_and_half_days():
+    assert C.unavailable('Mon AM; Thu', 'Mon', '08:00') and not C.unavailable('Mon AM; Thu', 'Mon', '13:30')
+    assert C.unavailable('Mon AM; Thu', 'Thu', '16:15') and not C.unavailable('', 'Fri', '08:00')
+
+
+def test_place_avoids_own_session_and_talk_time():
+    sess = {'A1': {'area': 'A'}, 'A2': {'area': 'A'}, 'A3': {'area': 'A'}}
+    sched = {'A1': {'day': 'Mon', 'start': '08:00'}, 'A2': {'day': 'Mon', 'start': '08:00'}, 'A3': {'day': 'Tue', 'start': '08:00'}}
+    vols = [{'name': 'Ada', 'email': 'ada@u', 'talk_ids': ''}]
+    entries = {}
+    people = {('A', 'Ada', 'ada@u'): ('confirmed', 'Tue')}
+    C.place(people, entries, vols, sess, sched, {}, {}, {'ada@u': {('Mon', '08:00')}}, '.')
+    assert entries == {}                                    # presents Monday 08:00, unavailable Tuesday: nowhere to go
+    people = {('A', 'Ada', 'ada@u'): ('confirmed', '')}
+    C.place(people, entries, vols, sess, sched, {}, {}, {'ada@u': {('Mon', '08:00')}}, '.')
+    assert list(entries) == [('A3', '1')] and entries[('A3', '1')][2] == 'confirmed'
