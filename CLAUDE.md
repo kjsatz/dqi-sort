@@ -23,7 +23,7 @@ Tools for sorting the APS Global Physics Summit DQI (Division of Quantum Informa
 - `config.example.yaml`: config template, including the list of other APS units.
 - `docs/`: how to run the embeddings, cards and attendance model, and how to set up Google Sheets access (`google_sheets.md`).
 - `dqi_sort/gsheets.py`: Google sign-in (OAuth as the lead) and Drive folder setup. `dqi_sort/sheets.py`: `sync` (sync-sheets) writes the shared sheet and new area sheets from the sort in git; reading returned sheets back is still to do.
-- `review.py` (stage 7: read a returned area sheet, apply the reviewer's changes three-way, move talks while acting on notes). `decide.py`: the lead's decisions on a talk's status (offer to another unit, exchanged, returned, received, poster, keep), logged with date and unit in `sorting/status_log.csv`.
+- `schedule.py` (stage 8: room sizes against the grid, then the solver that puts sessions into room-time slots). `review.py` (stage 7: read a returned area sheet, apply the reviewer's changes three-way, move talks while acting on notes). `decide.py`: the lead's decisions on a talk's status (offer to another unit, exchanged, returned, received, poster, keep), logged with date and unit in `sorting/status_log.csv`.
 - `workbook.py`, `mockgrid.py`, `score.py`: past-year dry runs (read old sorting workbooks, make a 2027-format grid, score against the human sort with a blind judge; `docs/dry_runs.md`).
 - `prototype/`: scripts and prompts from the first test on the 2026 superconducting sheet. Reference only; hard-coded paths.
 
