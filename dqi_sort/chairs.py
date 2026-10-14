@@ -24,12 +24,16 @@ import argparse, collections, json, os, re, sys
 from dqi_sort import sessions as S
 
 DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri']
-COLS = ['Volunteer', 'Email', 'Affiliation', 'Abstract ID', 'Can chair', 'Chaired before', 'Their talks', 'Match note', 'Emailed?',
-        'Confirmed?', 'Availability', 'Notes', 'Session', 'Check']
+NOTE_COL = 'Abstract note (Claude)'
+CHECK_COL = 'Claude check: availability as read, clashes'
+COLS = ['Volunteer', 'Email', 'Affiliation', 'Abstract ID', 'Their talks', NOTE_COL, 'Emailed?', 'Confirmed?', 'Availability', 'Notes',
+        'Session', CHECK_COL]
 NC = len(COLS)
-EDIT = [3, 8, 9, 10, 11, 12]               # Abstract ID, Emailed?, Confirmed?, Availability, Notes, Session
-BOXES = [8, 9]                             # Emailed?, Confirmed? as checkboxes
-NEW_ROWS = 10                              # blank rows for people from the expert's own network
+EDIT = [3, 6, 7, 8, 9, 10]                 # Abstract ID, Emailed?, Confirmed?, Availability, Notes, Session
+BOXES = [6, 7]                             # Emailed?, Confirmed? as checkboxes
+READ = {'name': ['Volunteer'], 'email': ['Email'], 'abstract_id': ['Abstract ID'], 'emailed': ['Emailed?'],   # fields by header:
+        'confirmed': ['Confirmed?'], 'availability': ['Availability'], 'notes': ['Notes'], 'session': ['Session']}  # renames keep working
+NEW_ROWS = 25                              # blank rows for people from the expert's own network
 NEEDING = 'Sessions still needing a chair'
 ENTRY = ['area', 'name', 'email', 'abstract_id', 'emailed', 'confirmed', 'availability', 'notes', 'session', 'check']
 SUBJECT = 'Session chair for DQI at the Global Physics Summit'
@@ -194,20 +198,22 @@ def read_back(sheets, sid, areas):
                 if r[0]:
                     overview[r[0]] = (r[2].strip(), r[7].strip())
             continue
-        if [h.strip() for h in (vals[0] if vals else [])][:NC] != COLS:   # an older layout: do not misread its columns
-            print(f'{t}: the tab has an older layout; its entries are not read')
+        head = [h.strip() for h in (vals[0] if vals else [])]
+        at = {f: next((head.index(h) for h in names if h in head), None) for f, names in READ.items()}
+        if at['name'] is None or at['email'] is None:
+            print(f'{t}: no Volunteer and Email columns; its entries are not read')
             continue
         seen.add(t)
         for r in vals[1:]:
-            r = r + [''] * NC
-            if r[0] == NEEDING:
+            get = lambda f: (r[at[f]] if at[f] is not None and at[f] < len(r) else '').strip()
+            if get('name') == NEEDING or (r and r[0] == NEEDING):
                 break
-            if r[0].strip():
-                entries[(t, r[0].strip(), r[1].strip().lower())] = {
-                    'area': t, 'name': r[0].strip(), 'email': r[1].strip().lower(),
-                    'abstract_id': ', '.join(re.findall(r'\d{5,}', r[3])),
-                    'emailed': 'TRUE' if yes(r[8]) else '', 'confirmed': 'TRUE' if yes(r[9]) else '', 'availability': r[10].strip(),
-                    'notes': r[11].strip(), 'session': r[12].strip()}
+            if get('name'):
+                entries[(t, get('name'), get('email').lower())] = {
+                    'area': t, 'name': get('name'), 'email': get('email').lower(),
+                    'abstract_id': ', '.join(re.findall(r'\d{5,}', get('abstract_id'))),
+                    'emailed': 'TRUE' if yes(get('emailed')) else '', 'confirmed': 'TRUE' if yes(get('confirmed')) else '',
+                    'availability': get('availability'), 'notes': get('notes'), 'session': get('session')}
     return (entries, seen), overview
 
 
@@ -309,17 +315,16 @@ def area_rows(area, vols, entries, sess, sched, assign_of=None):
     for v in mine:
         e = entries.get((area, v['name'], v['email']), {})
         rows.append([v['name'], v['email'], v['affiliation'], e.get('abstract_id') or v['talk_ids'].replace(';', ', '),
-                     v['chair_mode'].replace('_', '-'), v['chaired_before'],
                      '; '.join(when(x) for x in v['own_sessions'].split(';') if x), v['match_note'],
                      yes(e.get('emailed')), yes(e.get('confirmed')), e.get('availability', ''), e.get('notes', ''), e.get('session', ''), e.get('check', '')])
     for (a, n, m), e in sorted(entries.items()):
         if a == area and (n, m) not in known:
             theirs = [assign_of.get(i, '') for i in re.split(r'[;,\s]+', e.get('abstract_id') or '') if i]
-            rows.append([n, m, '', e.get('abstract_id', ''), '', '', '; '.join(when(x) for x in theirs if x), 'added by the area',
+            rows.append([n, m, '', e.get('abstract_id', ''), '; '.join(when(x) for x in theirs if x), 'added by the area',
                          yes(e.get('emailed')), yes(e.get('confirmed')), e.get('availability', ''), e.get('notes', ''),
                          e.get('session', ''), e.get('check', '')])
     n_people = len(rows)
-    rows += [[''] * 8 + [False, False] + [''] * 4 for _ in range(NEW_ROWS)]
+    rows += [[''] * 6 + [False, False] + [''] * 4 for _ in range(NEW_ROWS)]
     mine_s = sorted((x for x in sess if sess[x]['area'] == area), key=lambda x: (DAYS.index(sched[x]['day']), sched[x]['start']) if x in sched else (9, x))
     per = 2 if area == 'VIRTUAL' else 1
     if sched:
@@ -338,7 +343,7 @@ def book(cfg, areas, tabs, overview, reviewers, counts, others, name_of):
     for a in areas:
         n_need, n_people, placed = counts[a]
         resp, stat = overview.get(a, (reviewers.get(a, ''), ''))
-        conf = f"=COUNTIF('{a}'!J{HEADER_ROW + 1}:J{HEADER_ROW + n_people + NEW_ROWS},TRUE)"
+        conf = f"=COUNTIF('{a}'!H{HEADER_ROW + 1}:H{HEADER_ROW + n_people + NEW_ROWS},TRUE)"
         orows.append([a, name_of(a), resp, n_need, conf, placed, topic(a, cfg), stat])
     b.tab('Overview', ['Area', 'Name', 'Responsible', 'Chairs needed', 'Confirmed', 'Placed on sessions', 'Topic in the invitation', 'Status'], orows,
           lambda sid, n: tab_requests(sid, n, [80, 320, 200, 100, 90, 110, 220, 320], wrap_cols=[1, 7], notes_cols=[2, 7]) + protect_req(sid, n, [2, 7]))
@@ -347,7 +352,7 @@ def book(cfg, areas, tabs, overview, reviewers, counts, others, name_of):
 
         def fmt(sid, n, n_people=n_people):
             people = n_people + NEW_ROWS
-            reqs = tab_requests(sid, n, [170, 210, 200, 90, 80, 70, 170, 190, 75, 85, 170, 320, 110, 230], wrap_cols=[2, 3, 6, 7, 10, 11, 13])
+            reqs = tab_requests(sid, n, [170, 210, 200, 90, 170, 200, 75, 85, 170, 320, 110, 240], wrap_cols=[2, 3, 4, 5, 8, 9, 11])
             reqs += [color_req(sid, HEADER_ROW, HEADER_ROW + people, c, c + 1, NOTES) for c in EDIT]
             reqs.append(color_req(sid, HEADER_ROW + n_people, HEADER_ROW + people, 0, 2, NOTES))
             reqs.append({'repeatCell': {'range': {'sheetId': sid, 'startRowIndex': HEADER_ROW + people + 1, 'endRowIndex': HEADER_ROW + people + 2},
@@ -360,9 +365,9 @@ def book(cfg, areas, tabs, overview, reviewers, counts, others, name_of):
             return reqs + [{'addProtectedRange': {'protectedRange': {'range': {'sheetId': sid}, 'unprotectedRanges': free, 'warningOnly': False,
                                                                      'description': 'Generated by dqi_sort.chairs'}}}]
         b.tab(a, COLS, rows, fmt)
-    b.tab('Other volunteers', ['Volunteer', 'Email', 'Affiliation', 'Can chair', 'Chaired before', 'Note'],
-          [[v['name'], v['email'], v['affiliation'], v['chair_mode'].replace('_', '-'), v['chaired_before'], v['match_note']] for v in others],
-          lambda sid, n: tab_requests(sid, n, [180, 220, 220, 90, 90, 360], wrap_cols=[2, 5]) + protect_req(sid))
+    b.tab('Other volunteers', ['Volunteer', 'Email', 'Affiliation', NOTE_COL],
+          [[v['name'], v['email'], v['affiliation'], v['match_note']] for v in others],
+          lambda sid, n: tab_requests(sid, n, [180, 220, 240, 420], wrap_cols=[2, 3]) + protect_req(sid))
     how = instructions(cfg)
     b.tab('Instructions', how[0], how[1:], lambda sid, n: tab_requests(sid, n, [190, 760], wrap_cols=[1]) + protect_req(sid))
     return b
@@ -386,7 +391,10 @@ def instructions(cfg):
             ['Session', 'Leave blank: once the schedule is set, Claude places each confirmed chair on a session in your area where they do not '
                         'speak and that does not clash with their talks or availability, close to their own topic where it can. Or type a '
                         'session code yourself.'],
-            ['Check', 'Filled in by Claude: how Availability was read, and any problem with a placement.'],
+            [NOTE_COL, 'Filled in by Claude from the APS lists: another talk found under the same name (to confirm), or an abstract '
+                       'that is not in our program.'],
+            [CHECK_COL, 'Filled in by Claude: how Availability was read, and any problem with a placement (presents at that time, '
+                        'two sessions at once, not a virtual presenter for a virtual session).'],
             ['Invitation', f'Subject: {SUBJECT}\n\n' + TEMPLATE.format(name='<name>', dates=dates, topic='<the topic in the Overview>', requester='<your name>')]]
 
 
