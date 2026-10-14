@@ -2,6 +2,7 @@
 
     python -m dqi_sort.schedule budget DATA_DIR [--apply]
     python -m dqi_sort.schedule solve  DATA_DIR [--iters 400000] [--seed 1]
+    python -m dqi_sort.schedule grid   DATA_DIR
 
 budget  decides each in-person session's room size class against the rooms the grid has, length by length: the
         sessions with the highest estimated attendance (the attendance model) get the largest rooms, so each class
@@ -17,7 +18,13 @@ solve   assigns every session to a room-time slot (schedule/slots.csv) and write
         embeddings), near-duplicates above all; high-interest sessions spread evenly over the time blocks; each
         room keeping a coherent identity (similar sessions follow each other in a room) without one area filling
         a room for more than a few sessions in a row. Simulated annealing over swaps of sessions with the same length
-        and size. Virtual sessions go to virtual slots in a window all their speakers can make.
+        and size. Virtual sessions go to virtual slots in a window all their speakers can make. Also: at most two
+        very closely related sessions (the top 2% of pairs) on the same day, and each room kept to one topic family
+        (the area's `modality` in config.yaml, e.g. superconducting, else the area).
+grid    writes the schedule as a session grid in Google Sheets (the APS layout), in the review folder: rooms as
+        columns, with name and capacity; one row per time block; each cell holds the session code and title and, on
+        another line, the session's day requests. DQI's room slots are light green. Locked (a view of git); updated
+        in place on each run and recorded in sorting/sheets.csv. Virtual sessions are on a second tab.
 """
 import argparse, collections, json, math, os, random, re, sys
 import numpy as np
@@ -89,7 +96,7 @@ def budget(data_dir, apply=False):
 
 DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri']
 WEIGHTS = {'speaker': 1000, 'day_not': 60, 'day_prefer': 15, 'parallel': 400, 'near_duplicate': 80, 'spread': 0.5,
-           'room_flow': 300, 'same_area': 15, 'run': 30, 'max_run': 3}
+           'room_flow': 300, 'same_area': 15, 'run': 30, 'max_run': 3, 'close_same_day': 50, 'close_pct': 98, 'room_family': 20}
 NEG = re.compile(r"\b(not|no|avoid|cannot|can't|unavailable|travel\w*|leav\w*|depart\w*|return\w*|except)\b", re.I)
 POS = re.compile(r'\b(prefer\w*|ideally|only|must|available|early|best)\b', re.I)
 DAYW = re.compile(r'\b(mon|tue|wed|thu|fri)[a-z]*\b', re.I)
@@ -142,6 +149,10 @@ def solve(data_dir, iters=400000, seed=1):
     off = sim[~np.eye(len(ids), dtype=bool)]
     t0, tdup = np.percentile(off, 90), np.percentile(off, 99.5)
     pen = np.maximum(0, sim - t0) * w['parallel'] + (sim >= tdup) * w['near_duplicate']
+    tclose = np.percentile(off, w['close_pct'])            # "very closely related": at most two of a kind per day
+    close = {i: {ids[j] for j in np.nonzero(sim[k_] >= tclose)[0] if ids[j] != i} for k_, i in enumerate(ids)}
+    areas_cfg = cfg.get('areas') or {}
+    family = {i: (areas_cfg.get(sess[i]['area'], {}) or {}).get('modality') or sess[i]['area'] for i in ids}
     flow = (sim - np.median(off)) * w['room_flow']          # neighbours in a room: closer than a typical pair is better
     np.fill_diagonal(pen, 0)
     k = {i: n for n, i in enumerate(ids)}
@@ -188,6 +199,8 @@ def solve(data_dir, iters=400000, seed=1):
 
     def room_cost(seq):                      # one room's sessions in time order
         cost, run = 0.0, 1
+        if seq:                              # a room keeps one topic family (superconducting, spin, ...)
+            cost += w['room_family'] * (len(seq) - max(collections.Counter(family[i] for i in seq).values()))
         for a, b in zip(seq, seq[1:]):
             same_day = slots[assign[a]]['day'] == slots[assign[b]]['day']
             if same_day:
@@ -197,6 +210,9 @@ def solve(data_dir, iters=400000, seed=1):
             else:
                 run = 1
         return cost
+
+    def close_cost(xs):                      # sessions with more than one very close session on their day
+        return w['close_same_day'] * sum(max(0, sum(1 for y in close[x] if day_of[y] == day_of[x]) - 1) for x in xs)
 
     def blocks():
         out = collections.defaultdict(list)
@@ -221,7 +237,8 @@ def solve(data_dir, iters=400000, seed=1):
         return (sum(block_cost(v) for v in bl.values()) + sum(day_cost(i) for i in ids) + sum(room_cost(v) for v in rs.values())
                 + spread(bl))
 
-    cur = total()
+    day_of = {i: slots[assign[i]]['day'] for i in ids}
+    cur = total() + close_cost(ids)
     movable = collections.defaultdict(list)
     for i in ids:
         if i not in locked:
@@ -236,8 +253,10 @@ def solve(data_dir, iters=400000, seed=1):
         if ba == bb:
             continue
         ra, rb = slots[assign[a]]['room_id'], slots[assign[b]]['room_id']
-        old = block_cost(bl[ba]) + block_cost(bl[bb]) + day_cost(a) + day_cost(b) + room_cost(rs[ra]) + (room_cost(rs[rb]) if rb != ra else 0) + spread(bl)
+        near = {a, b} | close[a] | close[b]
+        old = block_cost(bl[ba]) + block_cost(bl[bb]) + day_cost(a) + day_cost(b) + room_cost(rs[ra]) + (room_cost(rs[rb]) if rb != ra else 0) + spread(bl) + close_cost(near)
         assign[a], assign[b] = assign[b], assign[a]
+        day_of[a], day_of[b] = day_of[b], day_of[a]
         bl[ba].remove(a); bl[bb].remove(b); bl[ba].append(b); bl[bb].append(a)
         for r in {ra, rb}:
             rs[r].sort(key=lambda i: order[block(i)])
@@ -245,12 +264,13 @@ def solve(data_dir, iters=400000, seed=1):
             rs[ra][rs[ra].index(a)] = b; rs[rb][rs[rb].index(b)] = a
             for r in (ra, rb):
                 rs[r].sort(key=lambda i: order[block(i)])
-        new = block_cost(bl[ba]) + block_cost(bl[bb]) + day_cost(a) + day_cost(b) + room_cost(rs[ra]) + (room_cost(rs[rb]) if rb != ra else 0) + spread(bl)
+        new = block_cost(bl[ba]) + block_cost(bl[bb]) + day_cost(a) + day_cost(b) + room_cost(rs[ra]) + (room_cost(rs[rb]) if rb != ra else 0) + spread(bl) + close_cost(near)
         T = T0 * (1 - it / iters) + 0.05
         if new <= old or rnd.random() < math.exp((old - new) / T):
             cur += new - old
         else:                                 # undo
             assign[a], assign[b] = assign[b], assign[a]
+            day_of[a], day_of[b] = day_of[b], day_of[a]
             bl[ba].remove(b); bl[bb].remove(a); bl[ba].append(a); bl[bb].append(b)
             if ra != rb:
                 rs[ra][rs[ra].index(b)] = a; rs[rb][rs[rb].index(a)] = b
@@ -261,7 +281,8 @@ def solve(data_dir, iters=400000, seed=1):
     assign.update(vres)
     out = [{'session_id': i, 'slot_id': assign[i], 'locked': 'true' if i in locked else 'false'} for i in sorted(assign)]
     S.write_csv(spath, ['session_id', 'slot_id', 'locked'], out)
-    report(data_dir, sess, assign, slots, rooms, members, talks, cards, sim, k, tdup, t0, est, req, speakers, blocks(), rooms_seq(), w)
+    report(data_dir, sess, assign, slots, rooms, members, talks, cards, sim, k, tdup, t0, est, req, speakers, blocks(), rooms_seq(), w,
+           close, family)
     return assign
 
 
@@ -288,7 +309,7 @@ def virtual_slots(data_dir, rows, members, talks, slots):
     return out
 
 
-def report(data_dir, sess, assign, slots, rooms, members, talks, cards, sim, k, tdup, t0, est, req, speakers, bl, rs, w):
+def report(data_dir, sess, assign, slots, rooms, members, talks, cards, sim, k, tdup, t0, est, req, speakers, bl, rs, w, close, family):
     lines = ['# The schedule (proposed)', '', 'Generated by `python -m dqi_sort.schedule solve`; do not edit. Rows: time blocks; one line per room.', '']
     clashes, dup_par, close_par, day_bad, day_pref = [], [], [], [], []
     for b, v in sorted(bl.items(), key=lambda kv: (DAYS.index(kv[0][0]), kv[0][1])):
@@ -306,11 +327,16 @@ def report(data_dir, sess, assign, slots, rooms, members, talks, cards, sim, k, 
         if n_pref and d not in good:
             day_pref.append(f"{i} on {d}: preferred " + '/'.join(sorted(good)))
     n_req = sum(1 for i in req if sum(req[i][0].values()) or req[i][2])
+    day_of = {i: slots[assign[i]]['day'] for i in assign}
+    crowded = sorted({f"{day_of[i]}: {', '.join(sorted({i} | {j for j in close[i] if day_of.get(j) == day_of[i]}))}"
+                      for i in close if sum(1 for j in close[i] if day_of.get(j) == day_of[i]) > 1})
     lines += ['## Checks', '',
               f'- Every session has a slot of its own length in a room of its decided size: yes ({len(assign)} sessions).',
               f'- Speakers in two sessions at once: {len(clashes)}' + (': ' + '; '.join(clashes) if clashes else ''),
               f'- Day requests: {n_req} sessions hold a talk with one; {len(day_bad)} "not this day" broken, {len(day_pref)} preferences missed.',
-              f'- Near-duplicate sessions in parallel (similarity at least {tdup:.3f}, the top 0.5% of pairs): {len(dup_par)}.', '']
+              f'- Near-duplicate sessions in parallel (similarity at least {tdup:.3f}, the top 0.5% of pairs): {len(dup_par)}.',
+              f'- Days with more than two very closely related sessions (top {100 - w["close_pct"]}% of pairs): {len(crowded)}' + (': ' + '; '.join(crowded) if crowded else '') + '.',
+              f'- Rooms by topic family: ' + ', '.join(f"{r} {fam} {n}/{len(v)}" for r, v in sorted(rs.items()) for fam, n in [collections.Counter(family[i] for i in v).most_common(1)[0]]) + '.', '']
     if day_bad or day_pref:
         lines += ['### Day requests not met', ''] + [f'- {x}' for x in day_bad + day_pref] + ['']
     if dup_par:
@@ -339,9 +365,103 @@ def report(data_dir, sess, assign, slots, rooms, members, talks, cards, sim, k, 
     print('\n'.join(lines[:14]))
 
 
+GREEN = {'red': 0.84, 'green': 0.94, 'blue': 0.84}
+
+
+def request_note(members, cards):
+    bad, good = collections.Counter(), collections.Counter()
+    n_pref = 0
+    for t in members:
+        b, g = day_request((cards.get(t) or {}).get('constraints'))
+        bad.update(b); good.update(g); n_pref += bool(g)
+    parts = [f"not {'/'.join(d for d in DAYS if d in bad)}" + (f' ({max(bad.values())} talks)' if max(bad.values()) > 1 else '')] if bad else []
+    if n_pref:
+        parts.append(f"prefers {'/'.join(d for d in DAYS if d in good)}")
+    return 'Requests: ' + '; '.join(parts) if parts else ''
+
+
+def grid_rows(sched, slots, rooms, sess, members, cards):
+    """(header, rows, green cells) for the in-person grid: rooms as columns, time blocks as rows."""
+    ip = [sl for sl in slots.values() if sl['track'] == 'in_person']
+    room_ids = sorted({sl['room_id'] for sl in ip}, key=lambda r: (['large', 'medium', 'small'].index(rooms[r]['size']), r))
+    blocks = sorted({(sl['day'], sl['start'], sl['end']) for sl in ip}, key=lambda b: (DAYS.index(b[0]), b[1]))
+    at = {(sl['day'], sl['start'], sl['room_id']): sl['slot_id'] for sl in ip}
+    by_slot = {v: k for k, v in sched.items()}
+    header = ['Room'] + [rooms[r]['name'] for r in room_ids]
+    rows = [['Capacity'] + [f"{rooms[r]['capacity']} ({rooms[r]['size']})" for r in room_ids]]
+    green = []
+    for n, (d, st, en) in enumerate(blocks):
+        row = [f'{d} {st}–{en}']
+        for c, r in enumerate(room_ids):
+            slot = at.get((d, st, r))
+            if not slot:
+                row.append(''); continue
+            green.append((n + 1, c + 1))
+            i = by_slot.get(slot)
+            if not i:
+                row.append('(open)'); continue
+            note = request_note(members[i], cards)
+            row.append(f"{i}\n{sess[i]['title']}" + (f'\n{note}' if note else ''))
+        rows.append(row)
+    return header, rows, green
+
+
+def grid(data_dir):
+    from dqi_sort import gsheets
+    from dqi_sort.sheets import Book, tab_requests, protect_req, color_req, HEADER_ROW, LOG_COLS
+    cfg = S.load_config(data_dir)
+    folder = (cfg.get('sheets') or {}).get('folder_id')
+    if not folder:
+        sys.exit('no sheets.folder_id in config.yaml')
+    sched = {r['session_id']: r['slot_id'] for r in S.read_csv(os.path.join(data_dir, 'schedule', 'schedule.csv'))}
+    slots = {s['slot_id']: s for s in S.read_csv(os.path.join(data_dir, 'schedule', 'slots.csv'))}
+    rooms = {r['room_id']: r for r in S.read_csv(os.path.join(data_dir, 'venue', 'rooms.csv'))}
+    sess = {s['session_id']: s for s in S.read_csv(os.path.join(data_dir, 'sorting', 'sessions.csv'))}
+    members = collections.defaultdict(list)
+    for a in S.read_csv(os.path.join(data_dir, 'sorting', 'assignments.csv')):
+        if a['session_id']:
+            members[a['session_id']].append(a['talk_id'])
+    with open(os.path.join(data_dir, 'cards.jsonl'), encoding='utf-8') as f:
+        cards = {c['talk_id']: c for c in map(json.loads, f) if c}
+    header, rows, green = grid_rows(sched, slots, rooms, sess, members, cards)
+    ncol = len(header)
+    commit = __import__('subprocess').run(['git', '-C', data_dir, 'rev-parse', '--short', 'HEAD'], capture_output=True, text=True).stdout.strip()
+    name = (cfg.get('sheets') or {}).get('folder_name', 'DQI')
+    b = Book(f'{name}: session grid (from git {commit}). Green: our room slots.')
+
+    def fmt(sid, n):
+        reqs = tab_requests(sid, n, [120] + [190] * (ncol - 1), wrap_cols=range(ncol))
+        reqs.append({'updateSheetProperties': {'properties': {'sheetId': sid, 'gridProperties': {'frozenRowCount': HEADER_ROW + 1, 'frozenColumnCount': 1}},
+                                               'fields': 'gridProperties(frozenRowCount,frozenColumnCount)'}})
+        reqs += [color_req(sid, HEADER_ROW + r, HEADER_ROW + r + 1, c, c + 1, GREEN) for r, c in green]
+        reqs.append({'repeatCell': {'range': {'sheetId': sid, 'startRowIndex': HEADER_ROW, 'endRowIndex': HEADER_ROW + 1},
+                                    'cell': {'userEnteredFormat': {'textFormat': {'italic': True}}}, 'fields': 'userEnteredFormat.textFormat.italic'}})
+        return reqs + protect_req(sid)
+    b.tab('In person', header, rows, fmt)
+    vrows = [[f"{slots[sched[i]]['day']} {slots[sched[i]]['start']}–{slots[sched[i]]['end']}", i, sess[i]['title'], request_note(members[i], cards)]
+             for i in sorted((i for i in sched if sess.get(i, {}).get('area') == 'VIRTUAL'),
+                             key=lambda i: (DAYS.index(slots[sched[i]]['day']), slots[sched[i]]['start']))]
+    b.tab('Virtual', ['Time (MDT)', 'Session', 'Title', 'Requests'], vrows,
+          lambda sid, n: tab_requests(sid, n, [150, 90, 420, 260], wrap_cols=[2, 3]) + [color_req(sid, HEADER_ROW, HEADER_ROW + n, 0, 4, GREEN)] + protect_req(sid))
+    drive, sheets = gsheets.services()
+    log_path = os.path.join(data_dir, 'sorting', 'sheets.csv')
+    log = S.read_csv(log_path) if os.path.exists(log_path) else []
+    row = next((r for r in reversed(log) if r['kind'] == 'grid'), None)
+    fresh = row is None
+    sid = gsheets.create_sheet(drive, f'{name}: session grid', folder) if fresh else row['sheet_id']
+    b.write(sheets, sid, fresh)
+    now = __import__('datetime').datetime.now().isoformat(timespec='minutes')
+    if fresh:
+        log.append({'kind': 'grid', 'area': '', 'round': '', 'commit': commit, 'content': '', 'sheet_id': sid, 'url': gsheets.url(sid), 'made': now})
+    else:
+        row.update(commit=commit, made=now)
+    S.write_csv(log_path, LOG_COLS, log)
+    print('session grid:', gsheets.url(sid))
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument('cmd', choices=['budget', 'solve'])
+    ap.add_argument('cmd', choices=['budget', 'solve', 'grid'])
     ap.add_argument('data_dir')
     ap.add_argument('--apply', action='store_true')
     ap.add_argument('--iters', type=int, default=400000)
@@ -349,8 +469,10 @@ def main():
     a = ap.parse_args()
     if a.cmd == 'budget':
         budget(a.data_dir, a.apply)
-    else:
+    elif a.cmd == 'solve':
         solve(a.data_dir, a.iters, a.seed)
+    else:
+        grid(a.data_dir)
 
 
 if __name__ == '__main__':
