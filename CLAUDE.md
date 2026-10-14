@@ -10,7 +10,6 @@ Tools for sorting the APS Global Physics Summit DQI (Division of Quantum Informa
 - People decide at the checkpoints in `PROCESS.md`. Claude drafts, proposes and flags; it does not make the checkpoint decisions.
 - Data in the private repo is plain CSV / JSONL, sorted by stable ID, so diffs are readable. Never delete talk rows; change their status.
 - `main` is protected: never push to it. Work on a branch and open a pull request; the `checks` workflow (no data files, tests) must pass. Enable the local hook once per clone with `git config core.hooksPath .githooks`.
-- `review/process-base` and `review/process` exist only for the PROCESS.md review pull request (the base lacks PROCESS.md so every line can take a comment). Never merge it. Agreed changes to PROCESS.md go to `main` in their own pull request.
 
 ## Layout
 
