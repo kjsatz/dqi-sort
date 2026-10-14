@@ -5,6 +5,8 @@
 Run after every merge to the data repo, from the lead's computer (sign-in: docs/google_sheets.md). It
 - makes a fresh area sheet for each area whose part of the sort changed since that area's last sheet (or the
   areas named). Area sheets are never rewritten: each round is a new file, named with the area, round and commit.
+  An area whose current round is out (it has a Status and is not yet read back with `dqi_sort.review apply`) gets no
+  new round: the reviewer keeps the sheet they started, and changes from elsewhere wait for the next round.
 - then updates the shared sheet in place. Its first tab, Area assignments, links each area's current sheet and has
   two columns people fill in, Responsible and Status; sync reads them first and keeps them, and saves them to
   sorting/area_status.csv. Its other tabs (session summary, sessions, lonely abstracts, moves) and the rest of the
@@ -335,6 +337,15 @@ def sync(data_dir, areas=None, all_areas=False, attendance=True):
         todo = [a for a in in_sort if a not in last or last[a]['content'] != content_hash(a, sess, talks)]
     est = S.estimates(data_dir, [s for s in sess if s['minutes'] != '120'], cfg) if attendance else {}
     drive, sheets = gsheets.services()
+    shared = next((r for r in reversed(log) if r['kind'] == 'shared'), None)
+    status = read_assignments(sheets, shared['sheet_id']) if shared else {}      # what people typed: keep it across syncs
+    rpath = os.path.join(data_dir, 'sorting', 'reviews.csv')
+    applied = {(r['area'], r['round']) for r in S.read_csv(rpath)} if os.path.exists(rpath) else set()
+    if not areas:                                # never replace a sheet someone is working on
+        out = [a for a in todo if a in last and (a, last[a]['round']) not in applied and any(status.get(a, ('', '')))]
+        for a in out:
+            print(f"{a}: round {last[a]['round']} is out ({' / '.join(x for x in status[a] if x)}); its changes wait for the next round")
+        todo = [a for a in todo if a not in out]
     year_name = (cfg.get('sheets') or {}).get('folder_name', 'DQI sort')
     now = datetime.datetime.now().isoformat(timespec='minutes')
 
@@ -349,10 +360,8 @@ def sync(data_dir, areas=None, all_areas=False, attendance=True):
                     'sheet_id': aid, 'url': gsheets.url(aid), 'made': now})
         print(f'{area} round {rnd}:', gsheets.url(aid))
 
-    shared = next((r for r in reversed(log) if r['kind'] == 'shared'), None)
     fresh = shared is None
     sid = gsheets.create_sheet(drive, f'{year_name}: shared sort', folder) if fresh else shared['sheet_id']
-    status = {} if fresh else read_assignments(sheets, sid)      # what people typed: keep it across syncs
     latest = {}
     for r in log:
         if r['kind'] == 'area':
