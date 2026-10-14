@@ -3,6 +3,8 @@
     python -m dqi_sort.schedule budget DATA_DIR [--apply]
     python -m dqi_sort.schedule solve  DATA_DIR [--iters 400000] [--seed 1]
     python -m dqi_sort.schedule grid   DATA_DIR
+    python -m dqi_sort.schedule check  DATA_DIR
+    python -m dqi_sort.schedule swap   DATA_DIR SESSION SESSION
 
 budget  decides each in-person session's room size class against the rooms the grid has, length by length: the
         sessions with the highest estimated attendance (the attendance model) get the largest rooms, so each class
@@ -21,6 +23,9 @@ solve   assigns every session to a room-time slot (schedule/slots.csv) and write
         and size. Virtual sessions go to virtual slots in a window all their speakers can make. Also: at most two
         very closely related sessions (the top 2% of pairs) on the same day, and each room kept to one topic family
         (the area's `modality` in config.yaml, e.g. superconducting, else the area).
+check   rewrites views/schedule.md (the checks and the grid) for the current schedule, without changing it.
+swap    swaps the slots of two sessions of the same length and room size, then checks. Swapping within one room keeps
+        each session's invited-talk block (stage 9).
 grid    writes the schedule as a session grid in Google Sheets (the APS layout), in the review folder: rooms as
         columns, with name and capacity; one row per time block; each cell holds the session type (Symposium,
         Mini-Symposium or Contributed), code and title and, after a blank line, the session's day requests. DQI's room slots are light green. Locked (a view of git); updated
@@ -113,14 +118,16 @@ def day_request(text):
             days = {'Mon', 'Tue'}
         if not days:
             continue
-        if NEG.search(seg):
+        if re.search(r'\bonly\b', seg, re.I):          # "Monday to Wednesday only (travel)": every other day is out
+            bad |= set(DAYS) - days
+        elif NEG.search(seg):
             bad |= days
         elif POS.search(seg) or re.search(r'as early as possible', seg, re.I):
             good |= days
     return bad, good - bad
 
 
-def solve(data_dir, iters=400000, seed=1):
+def solve(data_dir, iters=400000, seed=1, check_only=False):
     from dqi_sort.pack import Space
     cfg = S.load_config(data_dir)
     w = dict(WEIGHTS, **(cfg.get('scheduling_weights') or {}))
@@ -135,7 +142,9 @@ def solve(data_dir, iters=400000, seed=1):
     rooms = {r['room_id']: r for r in S.read_csv(os.path.join(data_dir, 'venue', 'rooms.csv'))}
     slots = {s['slot_id']: s for s in S.read_csv(os.path.join(data_dir, 'schedule', 'slots.csv'))}
     spath = os.path.join(data_dir, 'schedule', 'schedule.csv')
-    locked = {r['session_id']: r['slot_id'] for r in (S.read_csv(spath) if os.path.exists(spath) else []) if r.get('locked') == 'true'}
+    current = S.read_csv(spath) if os.path.exists(spath) else []
+    locked = {r['session_id']: r['slot_id'] for r in current if r.get('locked') == 'true' or check_only}
+    was_locked = {r['session_id'] for r in current if r.get('locked') == 'true'}
     inp = [s for s in rows if s['area'] != 'VIRTUAL']
     if any(not s['size'] for s in inp):
         sys.exit('some sessions have no room size: run `schedule budget --apply` first')
@@ -244,6 +253,8 @@ def solve(data_dir, iters=400000, seed=1):
         if i not in locked:
             movable[cls(sess[i])].append(i)
     classes = [c for c in movable if len(movable[c]) > 1]
+    if not classes:
+        iters = 0
     T0 = 30.0
     bl, rs = blocks(), rooms_seq()
     for it in range(iters):
@@ -277,13 +288,27 @@ def solve(data_dir, iters=400000, seed=1):
             for r in {ra, rb}:
                 rs[r].sort(key=lambda i: order[block(i)])
     # virtual sessions: a slot in a window every speaker can make
-    vres = virtual_slots(data_dir, rows, members, talks, slots)
-    assign.update(vres)
-    out = [{'session_id': i, 'slot_id': assign[i], 'locked': 'true' if i in locked else 'false'} for i in sorted(assign)]
-    S.write_csv(spath, ['session_id', 'slot_id', 'locked'], out)
+    if not check_only:
+        assign.update(virtual_slots(data_dir, rows, members, talks, slots))
+        out = [{'session_id': i, 'slot_id': assign[i], 'locked': 'true' if i in locked else 'false'} for i in sorted(assign)]
+        S.write_csv(spath, ['session_id', 'slot_id', 'locked'], out)
     report(data_dir, sess, assign, slots, rooms, members, talks, cards, sim, k, tdup, t0, est, req, speakers, blocks(), rooms_seq(), w,
            close, family)
     return assign
+
+
+def swap(data_dir, a, b):
+    """Swap the slots of two sessions of the same length and room size, then re-check the schedule."""
+    spath = os.path.join(data_dir, 'schedule', 'schedule.csv')
+    rows = S.read_csv(spath)
+    sess = {s['session_id']: s for s in S.read_csv(os.path.join(data_dir, 'sorting', 'sessions.csv'))}
+    if (sess[a]['minutes'], sess[a]['size']) != (sess[b]['minutes'], sess[b]['size']):
+        sys.exit(f'{a} and {b} differ in length or room size; they cannot swap')
+    at = {r['session_id']: r for r in rows}
+    at[a]['slot_id'], at[b]['slot_id'] = at[b]['slot_id'], at[a]['slot_id']
+    S.write_csv(spath, ['session_id', 'slot_id', 'locked'], rows)
+    print(f"{a} -> {at[a]['slot_id']}; {b} -> {at[b]['slot_id']}")
+    solve(data_dir, check_only=True)
 
 
 def virtual_slots(data_dir, rows, members, talks, slots):
@@ -464,8 +489,9 @@ def grid(data_dir):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument('cmd', choices=['budget', 'solve', 'grid'])
+    ap.add_argument('cmd', choices=['budget', 'solve', 'grid', 'check', 'swap'])
     ap.add_argument('data_dir')
+    ap.add_argument('sessions', nargs='*', help='swap: the two sessions')
     ap.add_argument('--apply', action='store_true')
     ap.add_argument('--iters', type=int, default=400000)
     ap.add_argument('--seed', type=int, default=1)
@@ -474,6 +500,10 @@ def main():
         budget(a.data_dir, a.apply)
     elif a.cmd == 'solve':
         solve(a.data_dir, a.iters, a.seed)
+    elif a.cmd == 'check':
+        solve(a.data_dir, check_only=True)
+    elif a.cmd == 'swap':
+        swap(a.data_dir, *a.sessions)
     else:
         grid(a.data_dir)
 
