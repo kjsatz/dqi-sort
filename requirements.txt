@@ -7,3 +7,4 @@ pytest
 matplotlib   # attendance report figures
 google-api-python-client   # review sheets (docs/google_sheets.md)
 google-auth-oauthlib
+scipy>=1.11
