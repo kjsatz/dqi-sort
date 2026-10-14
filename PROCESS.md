@@ -1,0 +1,422 @@
+# DQI session sorting and scheduling
+
+This is how we propose to sort the Division of Quantum Information (DQI) abstracts for the APS Global Physics Summit into sessions, schedule those sessions into rooms, and recruit chairs. Claude drafts each step. People decide at five checkpoints.
+
+Principles:
+
+- **People decide at checkpoints.** Claude produces drafts, options and flags. A named person approves before work moves on. Each checkpoint is logged in `checkpoints.md` in the data repo: what was asked, the lead's answer in the lead's own words, and what was done.
+- **Two tracks, a hard partition.** The in-person meeting and the smaller virtual meeting are sorted separately (see [Virtual conference](#virtual-conference)). A talk never moves between them: no step proposes it, and the checks refuse it. Everything below is the in-person track unless it says otherwise.
+- **One DQI-wide sort with soft boundaries.** Talks are grouped by content, not by submission category. Review is split into 5–10 areas drawn along natural lines, but talks flow freely between areas.
+- **All state is plain-text CSV in git.** Every change is a commit, so anyone can see what moved and why.
+- **The code is public; the data is private.** Abstracts never go in the public repo.
+- **Late changes are small, local edits.** Adding or withdrawing a talk touches only what it affects.
+
+## Process
+
+| Stage | Claude | People |
+| --- | --- | --- |
+| 0. Prepare | Builds `config.yaml`; turns the APS schedule into the venue files (see [Venue intake](#venue-intake)) | Provide the session format, the room list and distances, the room-time grid, the symposium schedule, invited-talk notes, the chair volunteer list and past attendance (see [Before abstracts arrive](#before-abstracts-arrive)) |
+| 1. Intake | Parses the APS workbook (one in-person table and one virtual table), repairs text-encoding damage where it can (keeping the original), flags duplicates | — |
+| 2. Presentation cards | Writes a standard card for each talk, one abstract at a time (Claude Haiku; see [Presentation cards](#presentation-cards)) | Spot-check a sample |
+| 3. Linking | Looks across all talks at once: groups multi-part talks into series (including talks that ask to follow or share a session with another talk), and normalizes affiliations to institutions | Confirm uncertain links |
+| 4. Routing and flags | Splits the talks into 5–10 work areas for drafting; writes `views/flags.md`, the one list of talks the lead must decide (see [Talks for the lead](#talks-for-the-lead)), starting with a short list of in-person talks proposed to leave the oral program: to another APS unit, or to a poster for non-scientific content | **Checkpoint:** decide the proposed talks (a handful) and each other flagged talk |
+| 5. Draft sessions | One agent per work area, in parallel, groups that area's talks into coherent sessions without fixing their length; talks with no good home in the area go to the pool (see [Drafting and the global pass](#drafting-and-the-global-pass)). The virtual track is drafted here too, and its draft is final: it places every virtual talk | — |
+| 6. Global pass | One agent with all of DQI in view builds sessions across areas from the pool, merges, splits and trades talks between sessions until the sort fits the 144- and 108-minute slots; independent critics review each area and the agent weighs their suggestions; keeps options where a split is genuinely open, and groups the finished sessions into review areas. Talks it cannot place are held for the lead with a proposal, in `views/flags.md`. Opens a pull request with a report of every move and why | **Checkpoint:** lead reviews and merges the pull request |
+| 7. Sort review | Generates the shared sheet and one area sheet per area; checks each returned sheet against the version sent, opens a pull request with the changes; finally places any remaining lonely abstracts | **Checkpoint:** reviewers edit their area sheet; lead merges the pull requests (see [Sort review](#sort-review)) |
+| 8. Schedule | Estimates attendance for every session; proposes room trades with symposia; then a solver assigns sessions to room-time slots (see [Scheduling](#scheduling)) | **Checkpoint:** decide the trades; approve or adjust the schedule |
+| 9. Talk order | Sets each room's invited-talk position and re-orders every session around it (see [Talk order](#talk-order)) | Spot-check |
+| 10. Chairs (starts with stage 7, runs in parallel) | Links volunteers to their abstracts and lists them in the recruiting spreadsheet, a tab per review area; once the schedule is set, reads the notes, places the confirmed chairs on sessions without clashes and checks every chair | The area's expert recruits the chairs it needs, from the volunteers and their own network, during review; lead approves (see [Chairs](#chairs)) |
+| 11. Deliver | Runs the validator; writes the sort into a copy of APS's sorting page (sessions, talk order, chairs, rooms); reconciles APS's abstract list with the delivered one; handles late adds, withdrawals and moves (see [Delivery](#delivery)) | Approve each late change and the reconciliation |
+
+After the meeting, we keep the final sort and the edits people made to Claude's drafts. They are the best input for improving the process next year.
+
+## Presentation cards
+
+Each talk gets a card, written by Claude Haiku from its title, abstract, submitter notes and affiliation. Cards are the common format every later step reads.
+
+| Field | Contents |
+| --- | --- |
+| `platform` | The device or system the work is about (up to 8 words) |
+| `problem` | The goal or question (up to 8 words) |
+| `approach` | experiment, theory, simulation/modeling, fabrication/materials characterization, or methods/tooling |
+| `key_claim` | One sentence on what was done or found (up to 30 words) |
+| `keywords` | 3–6 specific technical terms |
+| `best_category`, `runner_up_category` | The DQI submission categories the content fits best, whatever was submitted |
+| `session_pitch` | A plausible title for the session the talk would sit in |
+| `affiliation` | The affiliation as submitted (normalized to an institution in stage 3) |
+| `multi_part` | If the talk says it is one part of a series: its part number, the number of parts, and words that identify the other parts |
+| `constraints` | Scheduling requests from the submitter notes |
+| `leadership_review` | Empty, or **Needs leadership review: may not meet the standard for an oral talk**, with a one-line reason. Only for a talk with no scientific content at all: an essay or opinion piece with no method or result, or claims about things outside physics (consciousness, ethics, the universe at large) with no physics argument ("non-scientific" below): one or two a year. Bold claims, unconventional foundations, proposals without data and applications with little physics are normal talks |
+| `promotional` | Empty, or a one-line reason when the abstract reads mainly as promotion of a product, company or platform. Common at this meeting and usually fine: listed so the lead can keep an eye on it, with no action expected |
+| `other_unit` | Empty, or another APS unit the talk could go to, with a strength (`could fit` or `belongs there`) and a one-line reason |
+| `malformed` | Empty, or a one-line note when the text is too damaged or too thin to tell what the talk is about (no abstract, an unfilled template, text garbled beyond reading) |
+
+We do not fix typos or small damage in the text: a talk only needs enough text to be placed in the right session. Intake undoes encoding damage automatically and silently (Japanese or accented text turned into nonsense characters, hidden markup), because it costs nothing and helps the cards; nobody reviews these fixes. Beyond that, the card flags a talk only when the text is too damaged or too thin to tell what the talk is about; such a talk (an invited talk listed by speaker name only, for example) is placed from its category and listed for the lead. A real title with no abstract is enough.
+
+Two kinds of association need all talks in view, so they are done in stage 3, not on the card:
+
+- **Multi-part series.** Claude reads every talk with a `multi_part` entry together and assigns series IDs (`series`, `series_part` in `talks.csv`). Parts are often submitted to different categories, so matching uses titles, speakers and the card's hints, not the category. Uncertain links go to the lead. A talk whose submitter asks to follow another talk, or to be in the same session as it, is treated as a two-part series in the order asked, so the pair stays together through drafting and the global pass. These requests come from the card's `constraints` and name the other talk by speaker or title. A request for the same session without an order keeps the pair together, in either order. A request to be apart from a specific talk is recorded in `linking/apart.csv`, and no session may hold both. A series never mixes in-person and virtual talks.
+- **Institutions.** Claude reads the full list of submitted affiliations once and maps each to one institution name, so "MIT" and "Massachusetts Institute of Technology" match.
+
+The list of other APS units (divisions and topical groups, such as DAMOP, DCMP, GPMFC and GIMS) is kept in `config.yaml`. We keep talks in DQI and use them to fill our sessions. Moving a talk to another unit is for a talk that really does not belong: one with no quantum-information content at all, squarely in another unit's field (classical machine learning, nuclear structure, classical fluids). Quantum physics that sits near another field stays. Past human sorts sent away 0 to 3 talks a year (2023, 2025, 2026). These are identified early, at the stage 4 checkpoint, so the lead can ask the other unit to take them before sorting starts; a talk we are trying to exchange is set aside (`exchange_pending`) meanwhile. If we later run out of room, the lead may offer more. Every step with another unit (offered, exchanged, returned, received) is recorded with its date, time, unit and a note in `sorting/status_log.csv` and committed to git at once: our own record, whatever the other unit's sheets say.
+
+## Talks for the lead
+
+Every talk the lead must decide is in one generated file, `views/flags.md`, and each talk is listed once. It is rewritten at stage 4 and again when the global pass finishes. Its sections, in order:
+
+1. **Held for the lead.** In-person talks proposed to leave the oral program, from two sources: the stage 4 list (before drafting) and the global pass (talks it could not place). They are recorded in `sorting/held.csv`. Each is shown with its abstract number, title, speaker, affiliation, card (platform, problem, approach, key claim, keywords), any other flags, and the proposal with a one-line reason. There are three proposals: **poster** (non-scientific content), **another unit** (named), or **no proposal** (a DQI talk with no good home this year; the lead decides). The lead decides each with `python -m dqi_sort.decide`: `offer UNIT` sets the talk aside while we try to exchange it to that unit (then `exchanged` when the unit takes it, or `returned` when it does not, which puts it in the pool of lonely abstracts); `poster`; or `keep`, which leaves it in DQI (in the pool if it is in no session). Talks waiting on another unit are listed in the file with the unit and the date offered.
+2. **Non-scientific?** Talks flagged by `leadership_review` that are not held: no scientific content at all: an essay or opinion piece with no method or result, or claims about things outside physics (consciousness, ethics, the universe at large) with no physics argument. One or two a year. In person, the lead keeps each one or makes it a poster; we rarely downgrade. Virtual talks stay where they are (see [Virtual conference](#virtual-conference)).
+3. **Too little text to place, uncertain series, possible duplicate submissions, invited speakers with another talk.** A group (a series or a duplicate pair) names a talk listed above rather than repeating it.
+4. **Card says another unit, kept in DQI.** Claude judged these fit DQI after all.
+5. **For information, no action expected:** promotional abstracts and the "could fit another unit" counts.
+
+The packing report counts the held talks and points here; it does not list them again.
+
+## Drafting and the global pass
+
+Grouping similar talks is local work that splits well across agents; fitting the whole sort to the slots is global work that needs one view. So sessions are made in two steps.
+
+**Drafts (stage 5).** The work areas from stage 4 are only a way to divide the drafting. Each area's agent groups its talks into sessions of about 8 to 13 units (an oral talk is 1 unit, an invited talk 3), choosing coherent topics without worrying yet whether a session will be 144 or 108 minutes. A talk with no good home in the area goes to the pool of lonely abstracts. Bridge talks, whose nearest neighbours are mostly in other areas, are marked on the cards and are released first when something has to go: they are the talks most likely to make a good session together with lonely talks from other areas. Each area aims for the meeting's mix of lengths: about as many sessions of 11–12 units and of 8–9 units as the grid has long and short slots, avoiding 10-unit sessions, which fit neither length (on the 2025 dry run this halved the moves the global pass had to make). A session's scope says what belongs in it and does not name other sessions, whose titles change.
+
+**Global pass (stage 6).** One agent sees every draft session (title, scope, units and talk titles) and the pool. It builds sessions across areas from pool and bridge talks, merges thin sessions, splits fat ones, and moves talks between neighbouring sessions in any area. Nothing is frozen: the two session lengths are a source of flexibility, since adding or removing three talks (or one invited talk) turns one length into the other. The candidate lists also name the most similar sessions drafted in different areas, so near-duplicates can be merged or re-split, or at least scheduled apart. The virtual track is not part of the global pass. A talk with no reasonable home in DQI is held for the lead with a proposal (poster, another unit, or none), never left in the pool unexplained.
+
+A length check runs between rounds of moves. A 144-minute session holds 12 units and a 108-minute session 9; a session may be one unit short. From the unit counts and the number of slots of each length, the check lists which sessions must grow or shrink and by how much (10 units, for example, is a 144-minute session two short or a 108-minute session one over). The agent makes the moves that fit the topics best, and the two repeat until the sort fits.
+
+Rather than reading every card, the global agent works from short lists computed from the card embeddings (EmbeddingGemma, `docs/embeddings.md`): for each pool talk, the nearest sessions and the nearest other pool talks; for each session that must grow, the nearby sessions with talks to spare and which of their talks are closest; for each session that must shrink, its talks furthest from the rest. The embeddings also give each session a coherence score and its weakest-fitting talks, which reviewers see.
+
+**Critique before people see it.** Once the sort fits, one independent critic per review area reads that area's sessions with full cards, as an expert in the field would, and suggests moves, retitles and better seams anywhere in DQI. The global agent then weighs the suggestions in a second round, applying those that clearly improve a session as moves or swaps that keep the sort fitting. One round is enough unless it still changes a lot; then the pull request goes to the lead.
+
+**Options.** Many topics can be split several reasonable ways. Where the split is genuinely open, the global pass keeps two or three alternatives for that group of sessions, and the reviewers choose. When one split is clearly right, there is just that one.
+
+## Avoiding single-group sessions
+
+A session should not feel like one group's meeting. Drafts and the global pass treat this as a soft rule: try to keep any one institution to at most 4 talks per session (`max_same_institution` in `config.yaml`). Split such a session only when a similar session exists to take some of the talks; if the talks really only fit well together, the session stays as it is. Exceptions are listed in the packing report for the lead to see.
+
+Institution is a proxy for research group. A large institution can host several unrelated groups, so reviewers can accept a flagged session. A multi-part series from one group still counts as several talks.
+
+## Review areas
+
+Review is split into 5–10 areas along natural lines, made at the end of the global pass from the finished sessions: each session goes to the area that most of its talks' card categories belong to (by content, not by where the talks happened to be drafted). Areas should be roughly equal in size, but a small topic that is clearly its own thing can be a small area, and a large block of closely related sessions (superconducting qubits, for example) can be a large one. Areas are for dividing the reviewing work; they are not walls, and talks move between them.
+
+Sessions are not all the same size: a 144-minute session holds 12 contributed talks and a 108-minute session holds 9, with an invited talk counting as 3. So fill is shown in minutes against each session's own length.
+
+## Lonely abstracts
+
+Any talk not currently in a session is a lonely abstract. Talks become lonely when a draft releases them (the global pass then places them), when a reviewer sends them away and no good home is found, or when they arrive late. After the global pass the pool should be small. It is shown to everyone on the shared sheet (below), which is regenerated every time a change is merged, so it is always current.
+
+Near the end of review, one clean-up step empties the pool: Claude finds the best available home for each remaining lonely abstract (a session with room, or a small swap) and opens a pull request listing each placement and why. The aim is to fill our sessions exactly. If a few talks are left over when every session is full, they should be talks another unit would want: the card's other-unit note marks them, and `python -m dqi_sort.areas endgame` ranks them ("belongs there" first, then the fewest close neighbours in DQI). So the global pass and the clean-up step both leave those out first, and the lead offers them. Moving a talk to another unit is a last resort here too. The pool must be empty at delivery.
+
+## Sort review
+
+Reviewers get two kinds of Google Sheet, both generated from the CSVs in git.
+
+**Shared sheet (everyone; locked except two columns).** The whole sort as it stands, and who is reviewing what:
+
+- **Area assignments:** one row per area, with a link to its current area sheet (the latest round), its sessions and talks, and two columns people fill in: **Responsible** (who reviews the area; they may delegate) and **Status** (a note for the lead, for example when they are done). The sync keeps what people type there and saves it to `sorting/area_status.csv`, so git has a dated record of each.
+- **Session summary:** every session with its title, area, length and fill.
+- **Sessions:** every talk, grouped by session in order.
+- **Lonely abstracts:** every talk not in a session, with its summary.
+- **Moves:** a running ledger of every talk moved into or out of the lonely pool, between areas, to or from another APS unit, and every new talk added.
+
+**Area sheet (editable, one per area).** Just that area's part:
+
+- **Session summary:** one row per session, with session ID, title, type (contributed, mini-symposium or symposium), length, minutes filled (computed), estimated peak attendance and suggested room size (both from the model), a room size override (blank keeps the suggestion) and human notes.
+- **Sessions:** one row per talk, with session ID, order, talk ID, title, speaker, institution, one-line summary, a **Move to lonely abstracts** checkbox and human notes.
+
+What reviewers do:
+
+- reorder talks
+- edit session titles
+- check the box to send a talk away (it means "not in this session"; Claude then looks for a better home, see Intake)
+- copy in talks from the shared Lonely abstracts tab
+- copy in a talk from another area, after agreeing it with that area (on Slack)
+
+Anything else goes in the human notes, such as "this should follow talk 1234".
+
+### How sheets and git stay in step
+
+`sync-sheets` runs after every merge to the private data repo. It runs from Claude Code on the lead's computer, signed in as the lead's own Google account, so the sheets belong to the lead and live in a Drive folder of their choosing (setup: `docs/google_sheets.md`; the sign-in files stay on that computer, never in a repo). It does two things:
+
+- **Updates the shared sheet in place.** Nobody edits it, so this is safe.
+- **Makes a new area sheet for each area that was checked in** since the last run. Area sheets are never changed while a reviewer has them; each round gets a fresh copy, named with its area, round and commit. A talk that moves away in the meantime shows up in the shared Moves ledger, but the reviewer's own sheet is left alone. An area whose current round is out (it has a Status in the shared sheet and has not been read back yet) gets no new round: changes from other areas wait for its next round.
+
+Areas are read back one at a time, as each is marked done, not all at the end. That way talks a reviewer sends to the lonely pool are visible to the others sooner.
+
+Every sheet is stamped with the commit it was generated from, in a header row and in the file description, e.g. "Generated from git 50de1a, 12 Nov 14:03".
+
+### Sheet style
+
+Simple and readable:
+
+- a title row with the area, round and stamp, then a frozen, bold header row
+- each session's rows in a light alternating band, with invited talks in bold
+- titles wrapped and column widths set, so nothing is cut off
+- the Move to lonely abstracts column as real checkboxes
+- fill shown as minutes used of the session's length, shaded when a session is under-filled
+- human notes columns lightly tinted, so it's clear where to type
+
+### New talks
+
+The lead adds a late submission with one command (`python -m dqi_sort.late add`, see [Delivery](#delivery)). A talk brought in from another unit is recorded with `python -m dqi_sort.decide received UNIT TALK` instead, which dates it and marks where it came from. It goes into the lonely pool or straight into a named session. A card is built for it, the ledger records it, and it appears on the next generated sheets. To put it into an area sheet that is already out, the lead can paste the row in; intake recognizes it as a new talk.
+
+### Intake
+
+When an area sheet comes back, Claude compares it with the version that was sent (its stamped commit) to work out what the reviewer changed. It then applies only those changes to the current state of the sort. This three-way comparison is what lets several areas work at once.
+
+Checks before anything is applied:
+
+- **Nothing missing.** Every talk that was sent is still in a session or checked for the lonely pool.
+- **Every added talk is accounted for.** A talk copied in from the lonely pool is removed from the pool. A talk copied in from another area is removed from that area, and the pull request says where it came from. A brand-new talk must already be in `talks.csv` (via `late add` or `decide received`).
+- **Conflicts are flagged, not guessed.** Two cases count as conflicts. One is when a talk this reviewer changed was also moved by someone else since the sheet was made. The other is when two areas both copied in the same talk. Either way, the first merged change stands and the pull request lists the conflict for the lead.
+- **Knock-on gaps are reported.** If a talk was taken from an area, that area's next sheet shows the gap. Its review pull request also notes the gap, in case the session needs topping up.
+
+Commands: `python -m dqi_sort.review read DATA_DIR AREA` (what changed, as a report), `review apply` (apply it to the sort, three-way), and `review move` (one move while acting on a note; it refuses to overfill a session). Claude then applies the changes, interprets the human notes, and opens one pull request per returned sheet.
+
+**Talks sent away find a home at once when they can.** A ticked talk only means the reviewer does not want it in that session. Claude looks for a good home right away (`review homes` lists the closest sessions by content, with their fill), and moves the talk when the fit is clearly good: into a session with room, or by a small swap. The pull request says where it went and why, so the lead or the reviewer can say no. When no good home exists, the talk stays in the lonely pool for the end-of-review clean-up. This keeps the pool small without asking reviewers to negotiate moves among themselves. The pull request lists every change, every move between areas, every conflict, and any note it could not act on. Human notes are kept in git (`sorting/notes.csv`).
+
+Every applied move is appended to the ledger (`sorting/moves.csv`).
+
+Where the global pass kept alternative splits, the area sheet has an extra Options tab. Leadership-review and other-unit flags go to the lead, not to the area sheets.
+
+## Packing report
+
+The global pass changes the whole sort at once, so it arrives as a GitHub pull request. The description lists:
+
+- each talk that moved, with where it moved from and to, and a one-line reason
+- talks drawn into a session from another area or category
+- each session's fill and its coherence score
+- any session with more than one empty talk slot (there should be none: the length check picks each session's length to keep it full, within the number of 144- and 108-minute slots available), and how many sessions of each length were built against the slots for each
+- any session with more than the allowed talks from one institution
+- the total against the session budget
+- how many talks are held for the lead (they are listed, with cards and proposals, in `views/flags.md`)
+
+The lead reads the report, comments on the pull request, and merges it when it's right.
+
+## Data
+
+The data repo holds one set of files per year:
+
+| File | One row per | Columns |
+| --- | --- | --- |
+| `config.yaml` | — | Division number, session lengths (144 and 108 minutes in person this year; 120 virtual), talk lengths (12 and 36), session budget, DQI submission categories, other APS units, APS column layout, scheduling weights |
+| `talks.csv` | talk | talk_id, track (in_person / virtual), type, minutes, title, speaker, affiliation, institution, submitted_category, area, series, series_part, time_windows (virtual only), status, flags, notes |
+| `abstracts.jsonl` | talk | talk_id, title, body, submitter_notes (repaired text), raw (the text as received, when a repair was made), text_fix (what was changed and by whom) |
+| `cards.jsonl` | talk | Presentation card as JSON |
+| `institutions.csv` | submitted affiliation | affiliation, institution |
+| `linking/series.csv` | talk in a multi-part series | series_id, talk_id, part, sure (yes / no), note |
+| `linking/apart.csv` | pair of talks that asked to be apart | talk_a, talk_b, note |
+| `sorting/held.csv` | in-person talk held for the lead | talk_id, stage (4: the list before drafting; 6: the global pass), action (poster / other_unit / decide), unit, reason |
+| `sorting/status_log.csv` | change of a talk's status | when (date and time), talk_id, from_status, to_status, unit (for exchanges), by, note |
+| `checkpoints.md` | checkpoint | date and stage, what was asked, the lead's words (quoted exactly), what was done and in which commits |
+| `embeddings/cards.npz` | talk | Card embeddings (EmbeddingGemma; NumPy, float16); see `docs/embeddings.md` |
+| `sorting/sessions.csv` | session | session_id, title, kind (contributed / mini-symposium / symposium), minutes (144 or 108), size (small / medium / large: the room size class people decided), area, locked, scope (one sentence: what belongs here), notes |
+| `sorting/assignments.csv` | talk | talk_id, session_id (blank for lonely abstracts), order, locked, note |
+| `sorting/moves.csv` | move | when, commit, talk_id, from (session, area, lonely, new, or another unit), to, by, reason |
+| `sorting/sheets.csv` | sheet made | kind (shared / area / grid / recruiting / delivery), area, round, commit, content (hash of the area's sessions when sent), sheet_id, url, made |
+| `sorting/area_status.csv` | review area | area, responsible, status (as typed in the shared sheet; saved at each sync) |
+| `sorting/notes.csv` | human note | round, area, reviewer, talk_id or session_id, note, resolution |
+| `venue/rooms.csv` | room | room_id, name, capacity, size (small / medium / large), zone, invited_block_144, invited_block_108 |
+| `venue/room_distances.csv` | pair of rooms | room_a, room_b, walk_minutes (rough) |
+| `schedule/slots.csv` | room-time slot | slot_id, track, day, start, end, minutes, room_id (blank for virtual) |
+| `schedule/schedule.csv` | session | session_id, slot_id, locked |
+| `history/attendance.csv` | past session | year, session_code, title, type (contributed / mini-symposium / symposium), primary_unit, day, start, end, minutes, room, capacity, peak (most people inside at once), entries, avg_visit_min, peak_share, full, note; source links in a comment header |
+| `history/attendance_model.npz` | — | The fitted attendance model; see `docs/attendance.md` |
+| `chairs/volunteers.csv` | volunteer | volunteer_id, name, email, affiliation, chair_mode (in_person / virtual / both), presenting_mode, talk_ids (semicolon-separated), match_note |
+| `chairs/chairs.csv` | chair (person per area) | area, name, email, affiliation, abstract_id, emailed, confirmed, availability, notes, session (once placed), check (as saved from the recruiting spreadsheet) |
+| `chairs/area_status.csv` | review area | area, responsible, status (from the recruiting spreadsheet's Overview) |
+| `delivery/in_person.csv`, `delivery/virtual.csv` | abstract | the abstract lists as sent to APS: APS's columns as received, with session, speaking order and sorter note filled in |
+| `delivery/sessions.csv` | session | track, session code, oral and invited counts, date and time, title, chairs (name, email, affiliation, status; two for virtual), room |
+| `views/reconciliation.md` | — | APS's input list against the delivered list: every omission and addition with the decision behind it |
+
+Rules:
+
+1. Session IDs are short and stable (`RDOUT1`, `TA`). Titles can change freely.
+2. Files are sorted by their stable ID, so moving a talk changes one line.
+3. Talks are never deleted. A talk's status is `active` (in the sort), `exchange_pending` (offered to another unit and set aside while it decides), `other_unit` (exchanged away), `poster`, `duplicate` (another entry of the same talk, such as an invited placeholder next to the real submission; the entry with more information is kept) or `withdrawn`. Every change of status goes through `python -m dqi_sort.decide` and is recorded with its date, time and unit in `sorting/status_log.csv`. A talk brought in from another unit is `active` and marked `from_unit:UNIT` in its flags.
+4. `locked=true` means automation will not move it. Reviewers lock what they have decided.
+5. The validator (`python -m dqi_sort.validate DATA_DIR`) checks whatever exists so far, and runs after every late change:
+   - every active talk is in exactly one session or in the lonely pool (the pool must be empty at delivery), and no other talk is in a session
+   - no session mixes the in-person and virtual tracks
+   - each session fits its length, at most one 12-minute slot short
+   - multi-part talks are consecutive, in part order, in one session
+   - invited talks start on a 36-minute boundary (at the room's block once scheduled)
+   - at most `max_same_institution` talks from one institution per session (a warning)
+   - the session count is within budget
+   - every session is in one slot of its track and length, and no slot holds two sessions
+   - no speaker is double-booked
+   - one confirmed chair per session (two per virtual session); no chair speaks in their session, presents at the same time or chairs two sessions at once
+   - the reconciliation: every talk in APS's list that is in no session, and every talk in a session that is not in APS's list, is a logged decision (see [Delivery](#delivery))
+
+   With `--delivery`, what must hold before the APS sheet is written becomes an error rather than a warning: an empty pool, no talk still offered to another unit, every session scheduled and chaired.
+6. Alternative splits are files under `sorting/options/<area>/`. Picking one is a single commit.
+7. Generated views (`views/sessions.md`, `views/schedule.md`, an interactive topic map) are for reading only. Nobody edits them.
+
+Room distances can be rough, and pairs may be left out. A missing pair counts as near if both rooms are in the same zone and far otherwise. A first version can be just `rooms.csv` with zones.
+
+## Scheduling
+
+**The grid.** Each day has a fixed pattern of session times. This year, Monday to Thursday each have four sessions (144, 108, 144 and 108 minutes) and Friday has three (144, 108, 144). Most rooms are ours for every session time all week; a few rooms are available only for some. The invited symposium sessions arrive already scheduled; they are entered as locked sessions in their slots. `slots.csv` lists every room-time slot we have.
+
+Hard rules:
+
+- every session gets exactly one slot, of its own length (the global pass builds as many 144- and 108-minute sessions as there are slots of each)
+- every session gets a room of its decided size class
+- no speaker is in two places at once
+- submitters' day constraints are honoured where possible
+- confirmed chairs are not scheduled against their own talks or stated unavailability (if returns are in)
+
+Preferences, with weights set in `config.yaml`:
+
+- within a size class, sessions with higher expected attendance get the larger rooms
+- high-interest sessions are spread across the week, Friday included, so every slot has strong content; expected attendance is never a reason to put weaker sessions in a slot
+- similar topics do not run at the same time
+- a theme does not run too many sessions in a row
+- each room keeps a coherent identity: mostly one topic family (superconducting, spin, defects, AMO, or one theory area), with similar sessions following each other
+- no more than two very closely related sessions on the same day, so one group of people is not in the same topic all day; when two do share a day, they run back to back in the same or a nearby room
+- related sessions held back to back are in rooms physically close to each other (short walk between them)
+
+Expected attendance comes from past RFID data in `history/attendance.csv`. Badges are tracked in and out of each room; we use the peak number inside at once, which is what a room must seat. A session whose peak reached 90% of the room's capacity counts as full: its peak is treated as a lower bound, because a full room hides the real demand.
+
+The model (`docs/attendance.md`) separates two things. A session's **interest** is how many people it would draw in an average slot; it is estimated from the most similar past session titles and the session type, and it does not depend on when the session is scheduled. A **slot effect** says how much a day and time raise or lower attendance (Friday, for example); it is used only to size the room once a session has its slot, never to decide which sessions get which slots.
+
+**Room size.** Before scheduling, every session gets a room size class (small, medium or large; the classes and their seat counts are set in `config.yaml` from `venue/rooms.csv`). It is decided in two rounds:
+
+1. **Per session.** The model estimates each session's peak attendance and suggests a size from that session alone, by cutoffs on the estimate (`size_cutoffs` in `config.yaml`; to start, small below 90, medium from 90, large from 140), with a note when the high end of its range would overflow the room. The cutoffs are deliberately low: a starting point for people to move, not a capacity calculation. Symposia get at least a 200-seat room whatever the estimate, so invited sessions are never put in the smallest rooms. Reviewers keep or override the suggestion in their area sheet, using what the model cannot see (a topic with unusual buzz this year, a well-known speaker).
+2. **Budget.** The totals are then checked against the rooms of each size. If a class is oversubscribed (say 60 sessions want medium or large rooms and there are 50), Claude lists the candidates to move down: the sessions in that class with the lowest estimated attendance, symposia excluded, as many as needed plus a few alternatives. People pick which ones move. If a class has spare rooms, the highest-attendance sessions just below it are offered the upgrade the same way.
+
+The decided size is then a hard rule for the scheduler. Commands: `python -m dqi_sort.schedule budget DATA_DIR` proposes the sizes (within each session length, the highest estimated attendance gets the largest rooms the grid has; sizes reviewers set are kept) and writes `views/room_sizes.md`; `--apply` writes them into `sorting/sessions.csv` once the lead agrees. `schedule solve DATA_DIR` then assigns every session a slot (simulated annealing over swaps of sessions with the same length and size) and writes `schedule/schedule.csv` and `views/schedule.md`, with the checks: speakers, day requests (read from the cards' constraints), near-duplicates in parallel, days with more than two very closely related sessions, each room's topic family, interest per time block. `schedule grid DATA_DIR` writes it as a session grid in Google Sheets, in the APS layout: rooms as columns with name and capacity, one row per time block, each cell the session type (Symposium, Mini-Symposium or Contributed), code and title, then a blank line and its day requests, and our room slots in light green.
+
+**Room trades with symposia.** Right before sessions are assigned to rooms, we decide deliberately whether to trade rooms with any symposia:
+
+1. Claude estimates the expected attendance of every session, ours and the symposia, from the past two years of RFID counts and the topics.
+2. It lists symposia likely to draw fewer people than their room holds, and our sessions likely to draw more than the rooms they would otherwise get.
+3. It proposes trades: a symposium moves to a smaller room and one of our sessions takes its larger room.
+4. The lead decides which trades to ask APS for. The trades are recorded in `schedule/schedule.csv` before the solver runs.
+
+Symposia stay in medium or large rooms, never small ones. Last year's room sizes were roughly small 144, medium 288 and large 500; the size classes are set in `rooms.csv`.
+
+## Venue intake
+
+The schedule spreadsheet APS gives us is hard to read, so turning it into our venue files is an early, hands-on step between the lead and Claude. Claude reads the spreadsheet and proposes the files; the lead checks and corrects them, and anything unclear is resolved together. The result:
+
+- `venue/rooms.csv`: every room we can use, with capacity and zone
+- `venue/room_distances.csv`: rough walking times, as far as they are known
+- `schedule/slots.csv`: every room-time slot that is ours
+- `schedule/schedule.csv`: the symposia and anything else already assigned, locked
+
+This step is done once, before sorting starts, and revisited only if APS changes the grid.
+
+## Talk order
+
+Invited talks should not all open their sessions. If each room puts its invited talk at a different point, attendees can move between rooms to catch several.
+
+Sessions are built from 36-minute blocks: one invited talk or three contributed talks. A session has 0 or 1 invited talks (occasionally 2). This year there are two lengths:
+
+| Session length | Blocks | Invited talk can be talk number |
+| --- | --- | --- |
+| 144 minutes | 4 | 1, 4, 7 or 10 |
+| 108 minutes | 3 | 1, 4 or 7 |
+
+After the schedule is approved:
+
+1. **Room positions.** Each room gets an invited-talk block for its 144-minute sessions and one for its 108-minute sessions (`invited_block_144`, `invited_block_108` in `rooms.csv`). The positions are chosen so that rooms running at the same time, especially nearby rooms and similar topics, stagger their invited talks. The lead can also set them by hand.
+2. **Re-order.** Claude re-orders each session with the invited talk fixed in its room's block. It does not just rotate or slide the invited talk into place; it rethinks the order so the session still flows. Talks that set up the invited talk come before it, follow-ups come after, and multi-part talks stay consecutive and do not straddle it. Submitters' "after X" requests still hold.
+3. **Check.** The validator confirms that every invited talk starts on a 36-minute boundary and that every session fits its slot. Changes go into `sorting/assignments.csv` as one commit with a short note per session.
+
+Commands: `python -m dqi_sort.order positions DATA_DIR` (each room's blocks, by a search that keeps invited talks running at the same time at different positions, more so in nearby rooms and similar topics; `views/invited_positions.md`), `order prepare` (one folder per area with the sessions that hold an invited talk, for one Claude agent each, `prompts/order_spec.md`), `order apply` and `order check`. When a room's block cannot be reached (too few contributed talks before it), the nearest block that can is used. A late change to the schedule should swap sessions within a room (`schedule swap`), so each keeps its invited-talk block.
+
+## Virtual conference
+
+The virtual meeting is a separate, much smaller track: about 30–40 talks last year. It is sorted on its own and treated as its own area in review and in chair recruiting. The aim is modest: fit every talk within the timing constraints, with sessions that are plausibly coherent in topic.
+
+- **A closed track.** Every virtual talk gets a virtual session. Virtual talks are not proposed for posters or other units, and nothing moves in or out of DQI unless it is absolutely necessary (the lead's call). No talk moves between the virtual and in-person tracks.
+- **Sessions** are 120 minutes: 10 contributed talks, or an invited talk in place of 3 of them (rare).
+- **Time zone comes first.** Submitters pick one or more of the virtual time windows that work for them (listed in Mountain Time). When a submitter gives none, we infer a window from their affiliation's location. Talks are grouped so that every speaker in a session can make the session's window, then by topic as far as the time zones allow.
+- **Non-scientific talks** (flagged by `leadership_review`) are placed at the end of a session, together where the windows allow. A promotional tone needs nothing.
+- **Drafted once.** The virtual draft (stage 5) is final for sorting; the global pass does not touch it.
+- **Scheduling** places each virtual session in a virtual slot that all its speakers can make.
+- **Chairs:** two confirmed chairs per session, preferably virtual presenters (see [Chairs](#chairs)).
+
+## Chairs
+
+Chair recruiting starts with the sort review (stage 7): by then each area's sessions are known, so its expert knows how many chairs to find. It runs in one **recruiting spreadsheet**, separate from the review sheets because it is a living document: a week or more of back-and-forth, edited by several people. Each review area has a tab, handled by someone who knows the field and can reach into their own network. Each session needs exactly one confirmed chair (two for a virtual session); there are no backups.
+
+1. **Volunteers.** APS sends one volunteer list for all of APS, with an in-person tab and a virtual tab. We keep the rows whose sub-category starts with our division number (17 in 2026; `division_code` in `config.yaml`), merge people by email, and link each to their abstracts (by the row's abstract ID; another talk under the same name is flagged to confirm). A volunteer appears in the area of their own talk; volunteers whose abstract is not in our program have their own tab, for any area to draw on.
+2. **The recruiting spreadsheet** (`python -m dqi_sort.chairs sync DATA_DIR`, made once and then updated in place):
+   - **Overview:** each area with **Responsible** (pre-filled with its reviewer) and **Status**, both editable, the chairs needed, confirmed and placed, and the topic phrase for its invitation.
+   - **A tab per area:** its volunteers (contact, abstract IDs, **Scheduled sessions**: the sessions of their own talks, with day and time once scheduled, and Claude's abstract note) with editable **Abstract ID** (pre-filled for volunteers; for someone added, filled in if they can find it, so their talk is taken into account), **Emailed?** and **Confirmed?** checkboxes, **Availability** (plain text, e.g. `Mon AM; not Thursday afternoon`), **Notes** (free text: a topic they would like, a preferred day, a co-chair, a decline) and **Chairing session(s)** (session codes; a few people chair more than one, e.g. `QEC03; QEC07`); blank rows for people from the expert's own network; once scheduled, the sessions still needing a chair.
+   - **Instructions**, including: strive for a diverse set of chairs in terms of career stage, institution, and demographics; and the invitation (below).
+3. **Recruit early, place late.** During review the expert collects confirmed chairs; sessions are assigned once the schedule is set. Claude first reads the Notes of the confirmed chairs and types a Session for anyone whose wishes need it; then the sync places each of the rest of each area's confirmed chairs on one session, all at once: never in a session where they speak, never at a time they present or are unavailable, and on a related topic where it can (a soft preference: chairing is community service, and a close topic is a bonus). A **Claude availability interpretation** column shows how each Availability was read and flags problems (presents at that time, two sessions at once, not a virtual presenter for a virtual session).
+4. **Kept in step.** Every sync reads what people typed first (each area's tab is the whole truth for that area: rows deleted there go) and saves it to git (`chairs/chairs.csv`, `chairs/area_status.csv`).
+5. **The lead approves** the placed chairs, and the experts tell each chair their session. Nothing is sent automatically.
+
+**The invitation** (short; the expert fills in the name, the area's topic phrase from the Overview, and their own name):
+
+> Subject: Session chair for DQI at the Global Physics Summit
+>
+> Dear {name},
+>
+> We are working on scheduling the Global Physics Summit ({dates}) and need volunteer session chairs in {topic} for the Division of Quantum Information. If you're available, please reply with any schedule constraints or requests. The sessions are being scheduled soon, and we won't schedule anything in conflict with your talk. If possible, please get back to me within 72 hours to facilitate scheduling. Thank you for considering volunteering!
+>
+> Best,
+> {requester}
+
+**In-person and virtual chairs.** In-person sessions get chairs who are presenting in person; virtual sessions get chairs who are presenting virtually, preferably people who submitted to the virtual conference. In-person attendees can chair virtual sessions, but we keep the two groups separate unless we run short.
+
+**Timing.** Ideally chairs are known before scheduling (stage 8), so their unavailability goes into the solver as a hard rule. If they come later, we schedule anyway, since collisions are rare; the sync places each chair where they have no clash, and the Check column catches the rest.
+
+## Delivery
+
+What APS wants back is its own sorting page, filled in. `python -m dqi_sort.deliver DATA_DIR` runs the validator with the delivery checks first and stops on any error (`--force` writes a draft, marked as such, for a look). It writes one Google Sheet in the review folder, made once and then rewritten in place, with a page per track (In person, Virtual). Each page is one long page, not split by area as APS's 2026 input was, in the layout of the 2026 page:
+
+- top left, the sorting categories with their counts of abstracts;
+- next to it, the session slots per time block: allocated (our room slots), created, remaining;
+- to the right, **Created Sessions**: session code, oral and invited counts, date and time, title, the chair (name, email, affiliation, status; two chairs for a virtual session) and the room;
+- below the categories, every abstract in APS's own columns, as received, with **Session Abbreviation**, **Speaking Order** and **Sorter Notes** filled in. The sessions come in area order, as in the review, each talk in speaking order. The talks in no session follow, with the reason as the sorter note (exchanged to another unit, poster, duplicate, withdrawn). A talk added late or received from another unit, not in APS's list, gets a row built from `talks.csv`.
+
+The format may change in 2027; the writer follows APS's columns as they arrive, adding the three columns if they are missing.
+
+**Reconciliation.** Before sending, we compare APS's abstract list (the input) with the delivered list (the talks in a session): input − omitted + added = delivered. Every omission must be a logged decision (exchanged, poster, duplicate, withdrawn) and every addition too (received from another unit, a late addition); anything else is an error. The list, with each decision's date and note, is on the sheet's Reconciliation page and in `views/reconciliation.md`, for the lead to read before sending. The sheet, the files in `delivery/` and the reconciliation are committed to the data repo.
+
+**Late changes** are small, local edits, each committed at once and followed by the validator, which prints the problems in what changed:
+
+- `python -m dqi_sort.late add DATA_DIR TALK [--to SESSION --position N]`: a late submission (give its title, speaker, type, track, category and abstract if it is not already in `talks.csv`). It goes into the pool or straight into a session, and is logged as a late addition. Then its card and embedding are built so `review homes` can suggest a home.
+- `python -m dqi_sort.late withdraw DATA_DIR TALK`: status `withdrawn`, out of its session. A gap before an invited talk moves it off its block; the check says so, and the lead fills the gap from the pool or another session, or re-orders.
+- `python -m dqi_sort.late move DATA_DIR TALK SESSION --reason TEXT [--position N]`: one move. It refuses to overfill a session or cross the tracks. A change of time is a same-room swap (`schedule swap`), so each session keeps its invited-talk block.
+
+After delivery, changes go to APS directly; we record them the same way so the data repo stays the record of what was sent.
+
+## When the abstracts arrive
+
+The first step, before the cards: **reconcile the invited speakers.** The lead has a list of the invited speakers we expect, with their topics. Compare it with the invited talks that land in APS's sheet: who is missing, who is there but not expected, who appears twice (a placeholder next to the real entry), and whose entry has no abstract. Missing and unexpected speakers go to the lead to chase with APS; the expected topics give the cards of invited talks that arrive with only a name. Log the outcome as a checkpoint.
+
+## Before abstracts arrive
+
+- [x] Process the past two years' RFID counts into `history/attendance.csv`
+- [ ] Room list with capacities and zones (`venue/rooms.csv`), then rough walking distances when the floor plan is known
+- [ ] Room-time grid and symposium schedule from APS
+- [ ] Session lengths (144 and 108 minutes) and how many slots of each length, into `config.yaml` and `slots.csv`
+- [ ] Virtual time windows and slots, and this year's division number (24?)
+- [ ] DQI submission categories and the list of other APS units, into `config.yaml`
+- [ ] Reviewers for each area (areas are drawn in stage 4)
+- [ ] Last year's full workbook with the final sort, for a dry run
+- [ ] Chair volunteer list format from APS (last year's as an example)
+- [ ] The list of expected invited speakers and their topics, for the reconciliation on arrival
+
+## Roles
+
+- **Lead:** runs the pipeline, decides flagged talks and routing, merges the global-pass pull request, approves the schedule.
+- **Area reviewers:** choose between options where the global pass kept them; reorder, retitle and annotate their area sheet; kick out talks or take in lonely ones or (by agreement) talks from other areas.
+- **Area chair recruiters:** one subject-matter expert per review area (often its reviewer) recruits the chairs the area needs in its tab of the recruiting spreadsheet, from the volunteers and their own network.
+
+## Tools
+
+- **Public repo:** parser, prompts, validators, solvers, embedding and map scripts, review-sheet generator.
+- **Private repo:** one per year, holding the data above.
+- **Claude Haiku, as subagents in Claude Code:** presentation cards.
+- **Claude Opus via Claude Code:** linking, session drafts, the global pass and its packing report, talk order and review.
+- **Google EmbeddingGemma, run locally:** embeds each card, for the topic map, the weak-fit checks and attendance estimates. Free; nothing leaves the machine.
+- **OR-Tools:** the length check and the schedule solver.
+- **Google Sheets and Drive APIs, signed in as the lead:** `sync-sheets`, run from Claude Code after each merge (`docs/google_sheets.md`).
+
+Speaker names are not sent to Claude for the cards; affiliations are, for the single-group rule.
