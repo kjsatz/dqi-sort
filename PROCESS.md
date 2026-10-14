@@ -102,7 +102,7 @@ Sessions are not all the same size: a 144-minute session holds 12 contributed ta
 
 ## Lonely abstracts
 
-Any talk not currently in a session is a lonely abstract. Talks become lonely when a draft releases them (the global pass then places them), when a reviewer kicks them out, or when they arrive late. After the global pass the pool should be small. It is shown to everyone on the shared sheet (below), which is regenerated every time a change is merged, so it is always current.
+Any talk not currently in a session is a lonely abstract. Talks become lonely when a draft releases them (the global pass then places them), when a reviewer sends them away and no good home is found, or when they arrive late. After the global pass the pool should be small. It is shown to everyone on the shared sheet (below), which is regenerated every time a change is merged, so it is always current.
 
 Near the end of review, one clean-up step empties the pool: Claude finds the best available home for each remaining lonely abstract (a session with room, or a small swap) and opens a pull request listing each placement and why. The aim is to fill our sessions exactly. If a few talks are left over when every session is full, they should be talks another unit would want: the card's other-unit note marks them, and `python -m dqi_sort.areas endgame` ranks them ("belongs there" first, then the fewest close neighbours in DQI). So the global pass and the clean-up step both leave those out first, and the lead offers them. Moving a talk to another unit is a last resort here too. The pool must be empty at delivery.
 
@@ -127,7 +127,7 @@ What reviewers do:
 
 - reorder talks
 - edit session titles
-- check the box to kick a talk out
+- check the box to send a talk away (it means "not in this session"; Claude then looks for a better home, see Intake)
 - copy in talks from the shared Lonely abstracts tab
 - copy in a talk from another area, after agreeing it with that area (on Slack)
 
@@ -170,7 +170,9 @@ Checks before anything is applied:
 - **Conflicts are flagged, not guessed.** Two cases count as conflicts. One is when a talk this reviewer changed was also moved by someone else since the sheet was made. The other is when two areas both copied in the same talk. Either way, the first merged change stands and the pull request lists the conflict for the lead.
 - **Knock-on gaps are reported.** If a talk was taken from an area, that area's next sheet shows the gap. Its review pull request also notes the gap, in case the session needs topping up.
 
-Commands: `python -m dqi_sort.review read DATA_DIR AREA` (what changed, as a report), `review apply` (apply it to the sort, three-way), and `review move` (one move while acting on a note; it refuses to overfill a session). Claude then applies the changes, interprets the human notes, and opens one pull request per returned sheet. The pull request lists every change, every move between areas, every conflict, and any note it could not act on. Human notes are kept in git (`sorting/notes.csv`).
+Commands: `python -m dqi_sort.review read DATA_DIR AREA` (what changed, as a report), `review apply` (apply it to the sort, three-way), and `review move` (one move while acting on a note; it refuses to overfill a session). Claude then applies the changes, interprets the human notes, and opens one pull request per returned sheet.
+
+**Talks sent away find a home at once when they can.** A ticked talk only means the reviewer does not want it in that session. Claude looks for a good home right away (`review homes` lists the closest sessions by content, with their fill), and moves the talk when the fit is clearly good: into a session with room, or by a small swap. The pull request says where it went and why, so the lead or the reviewer can say no. When no good home exists, the talk stays in the lonely pool for the end-of-review clean-up. This keeps the pool small without asking reviewers to negotiate moves among themselves. The pull request lists every change, every move between areas, every conflict, and any note it could not act on. Human notes are kept in git (`sorting/notes.csv`).
 
 Every applied move is appended to the ledger (`sorting/moves.csv`).
 

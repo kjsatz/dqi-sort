@@ -34,14 +34,16 @@ def test_move_refuses_a_full_session(tmp_path):
     import csv, pytest
     d = tmp_path; (d / 'sorting').mkdir()
     with open(d / 'talks.csv', 'w', newline='') as f:
-        w = csv.writer(f); w.writerow(['talk_id', 'minutes', 'status'])
-        w.writerows([[str(k), '12', 'active'] for k in range(1, 12)])
+        w = csv.writer(f); w.writerow(['talk_id', 'minutes', 'status', 'track'])
+        w.writerows([[str(k), '12', 'active', 'in_person'] for k in range(1, 12)])
     with open(d / 'sorting' / 'sessions.csv', 'w', newline='') as f:
-        w = csv.writer(f); w.writerow(['session_id', 'minutes']); w.writerows([['A', '108'], ['B', '108']])
+        w = csv.writer(f); w.writerow(['session_id', 'minutes', 'area']); w.writerows([['A', '108', 'X'], ['B', '108', 'X'], ['V', '120', 'VIRTUAL']])
     with open(d / 'sorting' / 'assignments.csv', 'w', newline='') as f:
         w = csv.writer(f); w.writerow(['talk_id', 'session_id', 'order', 'locked', 'note'])
         w.writerows([[str(k), 'A', str(k), 'false', ''] for k in range(1, 10)] + [['10', 'B', '1', 'false', ''], ['11', '', '', 'false', '']])
     with pytest.raises(SystemExit):
         R.move_one(str(d), '11', 'A', 'x')                 # A holds 9 x 12 = 108 already
+    with pytest.raises(SystemExit):
+        R.move_one(str(d), '11', 'V', 'x')                 # an in-person talk never goes to a virtual session
     R.move_one(str(d), '11', 'B', 'x')
     assert any(r['talk_id'] == '11' and r['session_id'] == 'B' for r in csv.DictReader(open(d / 'sorting' / 'assignments.csv')))
