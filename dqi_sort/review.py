@@ -3,6 +3,7 @@
     python -m dqi_sort.review read  DATA_DIR AREA
     python -m dqi_sort.review apply DATA_DIR AREA
     python -m dqi_sort.review move  DATA_DIR TALK TO [--position N] --reason TEXT [--by claude]
+    python -m dqi_sort.review homes DATA_DIR [TALK ...]
 
 read   fetches the area's current round (sorting/sheets.csv) and compares it with the version that was sent: the sort
        at the commit stamped on the sheet. It writes work/review/AREA-rN/changes.json and report.md: talks moved
@@ -14,6 +15,10 @@ apply  applies those changes to the current sort (a three-way merge): a change i
        resolution blank), records the round in sorting/reviews.csv, and reports sessions that no longer fit their
        length. Claude then acts on the notes with `move` and opens one pull request for the area.
 move   moves one talk to a session (at a position, default the end) or to "lonely", with a reason, during review.
+homes  for each talk named (default: every lonely abstract), the sessions closest to it by content (card embeddings),
+       with their fill and whether their area's round is out. A reviewer who ticks a talk for the pool only means
+       "not in this session": Claude looks here for a good home at once and moves it (or makes a small swap) when
+       the fit is clearly good, and leaves it lonely for the end-of-review clean-up when it is not.
 
 A round is applied once. sync-sheets makes no new round for an area whose current round is out (not applied yet)
 and has a Status: the reviewer keeps the sheet they started, and changes from elsewhere wait for the next round.
@@ -266,7 +271,63 @@ def apply(data_dir, area):
         print('CONFLICT', c)
     for p in fill_problems(data_dir, touched):
         print('FILL', p)
+    sent_away = [c['talk'] for c in ch['kicked'] if c['talk'] in assign and not assign[c['talk']]['session_id']]
+    if sent_away:
+        print('\nHomes for the talks sent to the pool (move one with `review move` if the fit is clearly good):')
+        print(homes_text(data_dir, sent_away))
     return conflicts
+
+
+def homes(data_dir, ids=None, k=6):
+    """{talk: [(similarity, session, used, capacity, title, area out?)]}: nearest sessions, with room first."""
+    from dqi_sort.pack import Space
+    talks = {t['talk_id']: t for t in S.read_csv(os.path.join(data_dir, 'talks.csv')) if t['status'] == 'active'}
+    assign = S.read_csv(os.path.join(data_dir, 'sorting', 'assignments.csv'))
+    sess = {s['session_id']: s for s in S.read_csv(os.path.join(data_dir, 'sorting', 'sessions.csv'))}
+    if ids is None:
+        ids = sorted((a['talk_id'] for a in assign if not a['session_id'] and a['talk_id'] in talks), key=S.id_key)
+    rpath = os.path.join(data_dir, 'sorting', 'reviews.csv')
+    applied = {(r['area'], r['round']) for r in S.read_csv(rpath)} if os.path.exists(rpath) else set()
+    spath = os.path.join(data_dir, 'sorting', 'sheets.csv')
+    latest = {r['area']: r['round'] for r in S.read_csv(spath) if r['kind'] == 'area'} if os.path.exists(spath) else {}
+    out_areas = {a for a, rnd in latest.items() if (a, rnd) not in applied}
+    space = Space(data_dir, talks)
+    mpath = os.path.join(data_dir, 'sorting', 'moves.csv')
+    left = {m['talk_id']: m['from'] for m in (S.read_csv(mpath) if os.path.exists(mpath) else []) if m['to'] == 'lonely'}
+    groups = collections.defaultdict(list)
+    for a in assign:
+        if a['session_id'] and a['talk_id'] in talks:
+            groups[a['session_id']].append(a['talk_id'])
+    out = {}
+    for i in ids:
+        x = space.vec(i)
+        if x is None:
+            out[i] = []
+            continue
+        rows = []
+        for sid, members in groups.items():
+            members = [m for m in members if m != i and space.vec(m) is not None]
+            if not members or sid not in sess or sid == left.get(i) or i in groups[sid]:   # not where it is, or was sent away from
+                continue
+            if (sess[sid]['area'] == 'VIRTUAL') != (talks[i]['track'] == 'virtual'):   # the tracks are a hard partition
+                continue
+            used = sum(int(talks[m]['minutes']) for m in groups[sid] if m != i)
+            rows.append((float(space.centroid(members) @ x), sid, used, int(sess[sid]['minutes']), sess[sid]['title'], sess[sid]['area'] in out_areas))
+        rows.sort(reverse=True)
+        room = [r for r in rows if r[2] + int(talks[i]['minutes']) <= r[3]]
+        out[i] = room[:k] + [r for r in rows[:k] if r not in room[:k]]
+    return out
+
+
+def homes_text(data_dir, ids=None):
+    talks = {t['talk_id']: t for t in S.read_csv(os.path.join(data_dir, 'talks.csv'))}
+    lines = []
+    for i, rows in homes(data_dir, ids).items():
+        lines.append(f"{i} ({talks[i]['minutes']} min) {talks[i]['title'][:80]}")
+        for sim, sid, used, cap, title, out in rows:
+            room = 'room' if used + int(talks[i]['minutes']) <= cap else 'full'
+            lines.append(f"   {sim:.3f} {sid:9s} {used:3d}/{cap} {room}{' (its area sheet is out)' if out else ''}  {title[:60]}")
+    return '\n'.join(lines)
 
 
 def move_one(data_dir, talk, to, reason, by='claude', position=None, force=False):
@@ -279,6 +340,10 @@ def move_one(data_dir, talk, to, reason, by='claude', position=None, force=False
         sys.exit(f'{talk} is not an active talk')
     if to and to not in sessions:
         sys.exit(f'no session {to}')
+    if to:
+        area = next(s['area'] for s in S.read_csv(os.path.join(data_dir, 'sorting', 'sessions.csv')) if s['session_id'] == to)
+        if (area == 'VIRTUAL') != (talks[talk]['track'] == 'virtual'):
+            sys.exit(f"{talk} is a {talks[talk]['track']} talk; {to} is in the other track (the tracks are a hard partition)")
     a = assign.setdefault(talk, {'talk_id': talk, 'session_id': '', 'order': '', 'locked': 'false', 'note': ''})
     frm = a['session_id']
     if to and to != frm and not force:           # refuse to overfill a session; make room first (or --force)
@@ -300,9 +365,9 @@ def move_one(data_dir, talk, to, reason, by='claude', position=None, force=False
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument('cmd', choices=['read', 'apply', 'move'])
+    ap.add_argument('cmd', choices=['read', 'apply', 'move', 'homes'])
     ap.add_argument('data_dir')
-    ap.add_argument('args', nargs='+', help='AREA for read and apply; TALK TO for move')
+    ap.add_argument('args', nargs='*', help='AREA for read and apply; TALK TO for move; talk IDs (optional) for homes')
     ap.add_argument('--reason', default='')
     ap.add_argument('--by', default='claude')
     ap.add_argument('--position', type=int)
@@ -312,6 +377,8 @@ def main():
         read(a.data_dir, a.args[0])
     elif a.cmd == 'apply':
         apply(a.data_dir, a.args[0])
+    elif a.cmd == 'homes':
+        print(homes_text(a.data_dir, a.args or None))
     else:
         if len(a.args) != 2 or not a.reason:
             sys.exit('move needs TALK TO and --reason')
