@@ -25,7 +25,7 @@ from dqi_sort import sessions as S
 
 DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri']
 NOTE_COL = 'Abstract note (Claude)'
-CHECK_COL = 'Claude check: availability as read, clashes'
+CHECK_COL = 'Claude availability interpretation'
 COLS = ['Volunteer', 'Email', 'Affiliation', 'Abstract ID', 'Scheduled sessions', NOTE_COL, 'Emailed?', 'Confirmed?', 'Availability', 'Notes',
         'Chairing session(s)', CHECK_COL]
 NC = len(COLS)
@@ -357,7 +357,7 @@ def book(cfg, areas, tabs, overview, reviewers, counts, others, name_of):
 
         def fmt(sid, n, n_people=n_people):
             people = n_people + NEW_ROWS
-            reqs = tab_requests(sid, n, [170, 210, 200, 90, 170, 200, 75, 85, 170, 320, 110, 240], wrap_cols=[2, 3, 4, 5, 8, 9, 11])
+            reqs = tab_requests(sid, n, [170, 210, 200, 90, 170, 200, 75, 85, 170, 320, 140, 240], wrap_cols=[2, 3, 4, 5, 8, 9, 11])
             reqs += [color_req(sid, HEADER_ROW, HEADER_ROW + people, c, c + 1, NOTES) for c in EDIT]
             reqs.append(color_req(sid, HEADER_ROW + n_people, HEADER_ROW + people, 0, 2, NOTES))
             reqs.append({'repeatCell': {'range': {'sheetId': sid, 'startRowIndex': HEADER_ROW + people + 1, 'endRowIndex': HEADER_ROW + people + 2},
@@ -401,8 +401,8 @@ def instructions(cfg):
                                     'codes separated by ";" (e.g. QEC03; QEC07), or say so in Notes and Claude adds a second.'],
             [NOTE_COL, 'Filled in by Claude from the APS lists: another talk found under the same name (to confirm), or an abstract '
                        'that is not in our program.'],
-            [CHECK_COL, 'Filled in by Claude: how Availability was read, and any problem with a placement (presents at that time, '
-                        'two sessions at once, not a virtual presenter for a virtual session).'],
+            [CHECK_COL, 'Filled in by Claude: how Availability was read (e.g. "read as unavailable: Mon AM, Thu PM"), and any problem '
+                        'with a placement (presents at that time, two sessions at once, not a virtual presenter for a virtual session).'],
             ['Invitation', f'Subject: {SUBJECT}\n\n' + TEMPLATE.format(name='<name>', dates=dates, topic='<the topic in the Overview>', requester='<your name>')]]
 
 
