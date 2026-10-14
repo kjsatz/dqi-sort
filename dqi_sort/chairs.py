@@ -34,9 +34,9 @@ HOW = [['Column', 'What to enter'],
        ['Note', 'Anything else, in free text'],
        ['', ''],
        ['Volunteers table', 'Instead of placing someone yourself, set a volunteer\'s Status to confirmed (and Unavailable, e.g. Mon AM; Thu). '
-                            'On the next refresh Claude places each confirmed volunteer who is not yet in a slot on the open session in '
-                            'this area closest to their own talk, where they are not a speaker and that does not clash with their talk '
-                            'or their unavailability; the slot\'s Note says so. Add people from your network in the blank rows at the end '
+                            'On the next refresh Claude places the confirmed volunteers who are not yet in a slot on open sessions in '
+                            'this area where they are not a speaker and that do not clash with their talks or unavailability, '
+                            'matching topics to their own talks where it can; the slot\'s Note says so. Add people from your network in the blank rows at the end '
                             '(name and email in the first two columns).'],
        ['', ''],
        ['Rules', 'One confirmed chair per in-person session and two per virtual session; no backups. A chair should not present '
@@ -117,42 +117,62 @@ def unavailable(text, day, start):
 
 
 def place(people, entries, vols, sess, sched, assign, talks, presents, data_dir):
-    """Put each confirmed volunteer who is not yet in a slot on the open session in their area closest to their own
-    talk, where they are not a speaker and that does not clash with their talks or unavailability. Edits entries."""
+    """Place the confirmed volunteers who are not yet in a slot, area by area, all at once: each on an open session in
+    their area where they are not a speaker and that does not clash with their talks or unavailability, choosing the
+    placement with the best total topical fit between each chair's own talk and their session (a soft preference:
+    a feasible placement always wins over a good fit). Edits entries; returns notes on anyone who could not be placed."""
     import numpy as np
-    from dqi_sort.pack import Space
+    from scipy.optimize import linear_sum_assignment
     taken = {(e[1].lower() or norm(e[0])) for e in entries.values() if e[0]}
     by_key = {(v['name'], v['email']): v for v in vols}
     active = {i: t for i, t in talks.items() if t['status'] == 'active'}
-    space = None
-    notes = []
+    members = collections.defaultdict(list)
+    for i, a in assign.items():
+        if a and i in active:
+            members[a].append(i)
+    space, notes = None, []
+    todo = collections.defaultdict(list)
     for (area, name, email), (status, unav) in sorted(people.items()):
-        if status != 'confirmed' or (email or norm(name)) in taken:
-            continue
-        v = by_key.get((name, email), {})
-        own_talks = [i for i in (v.get('talk_ids') or '').split(';') if i in active]
-        busy = presents.get(email, set()) | presents.get(norm(name), set())
-        speaks = {assign.get(i) for i in own_talks}
+        if status == 'confirmed' and (email or norm(name)) not in taken:
+            todo[area].append((name, email, unav))
+    for area, chairs in todo.items():
         n_slots = 2 if area == 'VIRTUAL' else 1
-        open_slots = [(x, str(k)) for x in sess if sess[x]['area'] == area and x in sched and x not in speaks
-                      for k in range(1, n_slots + 1) if not entries.get((x, str(k)), ('',))[0]
-                      and (sched[x]['day'], sched[x]['start']) not in busy and not unavailable(unav, sched[x]['day'], sched[x]['start'])]
-        if not open_slots:
-            notes.append(f'{name}: no open session in {area} without a clash'); continue
-        if own_talks:
-            space = space or Space(data_dir, active)
-            x0 = np.mean([space.vec(i) for i in own_talks if space.vec(i) is not None], axis=0)
-            members = collections.defaultdict(list)
-            for i, a in assign.items():
-                if a and i in active:
-                    members[a].append(i)
-            open_slots.sort(key=lambda xs: -float(space.centroid(members[xs[0]]) @ x0))
-        x, k = open_slots[0]
-        entries[(x, k)] = (name, email, 'confirmed', 'placed by Claude: the closest open session to their own talk, with no clash')
-        taken.add(email or norm(name))
+        slots = [(x, str(k)) for x in sess if sess[x]['area'] == area and x in sched for k in range(1, n_slots + 1)
+                 if not entries.get((x, str(k)), ('',))[0]]
+        if not slots:
+            notes += [f'{c[0]}: no open slot in {area}' for c in chairs]; continue
+        cost = np.full((len(chairs), len(slots)), 1e6)
+        for r, (name, email, unav) in enumerate(chairs):
+            v = by_key.get((name, email), {})
+            own = [i for i in (v.get('talk_ids') or '').split(';') if i in active]
+            busy = presents.get(email, set()) | presents.get(norm(name), set())
+            speaks = {assign.get(i) for i in own}
+            x0 = None
+            if own:
+                space = space or Space(data_dir, active)
+                vecs = [space.vec(i) for i in own if space.vec(i) is not None]
+                x0 = np.mean(vecs, axis=0) if vecs else None
+            for c, (x, k) in enumerate(slots):
+                t = (sched[x]['day'], sched[x]['start'])
+                if x in speaks or t in busy or unavailable(unav, *t):
+                    continue
+                cost[r, c] = -float(space.centroid(members[x]) @ x0) if x0 is not None else 0.0
+        rows, cols = linear_sum_assignment(cost)
+        for r, c in zip(rows, cols):
+            name, email, _ = chairs[r]
+            if cost[r, c] >= 1e6:
+                notes.append(f'{name}: no open session in {area} without a clash'); continue
+            entries[slots[c]] = (name, email, 'confirmed', 'placed by Claude: no clash with their talks or unavailability, and a close topic where possible')
+        placed = set(rows)
+        notes += [f'{chairs[r][0]}: more confirmed chairs than open slots in {area}' for r in range(len(chairs)) if r not in placed]
     for n in notes:
         print('PLACE', n)
     return notes
+
+
+def Space(data_dir, talks):
+    from dqi_sort.pack import Space as _Space
+    return _Space(data_dir, talks)
 
 
 def read_back(sheets, sid):
