@@ -110,8 +110,9 @@ Near the end of review, one clean-up step empties the pool: Claude finds the bes
 
 Reviewers get two kinds of Google Sheet, both generated from the CSVs in git.
 
-**Shared sheet (read-only, everyone).** The whole sort as it stands:
+**Shared sheet (everyone; locked except two columns).** The whole sort as it stands, and who is reviewing what:
 
+- **Area assignments:** one row per area, with a link to its current area sheet (the latest round), its sessions and talks, and two columns people fill in: **Responsible** (who reviews the area; they may delegate) and **Status** (a note for the lead, for example when they are done). The sync keeps what people type there and saves it to `sorting/area_status.csv`, so git has a dated record of each.
 - **Session summary:** every session with its title, area, length and fill.
 - **Sessions:** every talk, grouped by session in order.
 - **Lonely abstracts:** every talk not in a session, with its summary.
@@ -137,7 +138,9 @@ Anything else goes in the human notes, such as "this should follow talk 1234".
 `sync-sheets` runs after every merge to the private data repo. It runs from Claude Code on the lead's computer, signed in as the lead's own Google account, so the sheets belong to the lead and live in a Drive folder of their choosing (setup: `docs/google_sheets.md`; the sign-in files stay on that computer, never in a repo). It does two things:
 
 - **Updates the shared sheet in place.** Nobody edits it, so this is safe.
-- **Makes a new area sheet for each area that was checked in** since the last run. Area sheets are never changed while a reviewer has them; each round gets a fresh copy, named with its area, round and commit. A talk that moves away in the meantime shows up in the shared Moves ledger, but the reviewer's own sheet is left alone.
+- **Makes a new area sheet for each area that was checked in** since the last run. Area sheets are never changed while a reviewer has them; each round gets a fresh copy, named with its area, round and commit. A talk that moves away in the meantime shows up in the shared Moves ledger, but the reviewer's own sheet is left alone. An area whose current round is out (it has a Status in the shared sheet and has not been read back yet) gets no new round: changes from other areas wait for its next round.
+
+Areas are read back one at a time, as each is marked done, not all at the end. That way talks a reviewer sends to the lonely pool are visible to the others sooner.
 
 Every sheet is stamped with the commit it was generated from, in a header row and in the file description, e.g. "Generated from git 50de1a, 12 Nov 14:03".
 
@@ -167,7 +170,7 @@ Checks before anything is applied:
 - **Conflicts are flagged, not guessed.** Two cases count as conflicts. One is when a talk this reviewer changed was also moved by someone else since the sheet was made. The other is when two areas both copied in the same talk. Either way, the first merged change stands and the pull request lists the conflict for the lead.
 - **Knock-on gaps are reported.** If a talk was taken from an area, that area's next sheet shows the gap. Its review pull request also notes the gap, in case the session needs topping up.
 
-Claude then applies the changes, interprets the human notes, and opens one pull request per returned sheet. The pull request lists every change, every move between areas, every conflict, and any note it could not act on. Human notes are kept in git (`sorting/notes.csv`).
+Commands: `python -m dqi_sort.review read DATA_DIR AREA` (what changed, as a report), `review apply` (apply it to the sort, three-way), and `review move` (one move while acting on a note; it refuses to overfill a session). Claude then applies the changes, interprets the human notes, and opens one pull request per returned sheet. The pull request lists every change, every move between areas, every conflict, and any note it could not act on. Human notes are kept in git (`sorting/notes.csv`).
 
 Every applied move is appended to the ledger (`sorting/moves.csv`).
 
@@ -208,6 +211,7 @@ The data repo holds one set of files per year:
 | `sorting/assignments.csv` | talk | talk_id, session_id (blank for lonely abstracts), order, locked, note |
 | `sorting/moves.csv` | move | when, commit, talk_id, from (session, area, lonely, new, or another unit), to, by, reason |
 | `sorting/sheets.csv` | review sheet made | kind (shared / area), area, round, commit, content (hash of the area's sessions when sent), sheet_id, url, made |
+| `sorting/area_status.csv` | review area | area, responsible, status (as typed in the shared sheet; saved at each sync) |
 | `sorting/notes.csv` | human note | round, area, reviewer, talk_id or session_id, note, resolution |
 | `venue/rooms.csv` | room | room_id, name, capacity, size (small / medium / large), zone, invited_block_144, invited_block_108 |
 | `venue/room_distances.csv` | pair of rooms | room_a, room_b, walk_minutes (rough) |

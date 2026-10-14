@@ -19,5 +19,16 @@ def test_area_book_rows_and_fill_formula():
     names = [t[0] for t in b.tabs]
     assert names == ['Session summary', 'Sessions']
     summary_rows, session_rows = b.tabs[0][2], b.tabs[1][2]
-    assert summary_rows[0][4].startswith('=SUMIFS(Sessions!$G$3:$G$4')
-    assert [r[2] for r in session_rows] == ['1', '2'] and session_rows[0][8] is False
+    assert summary_rows[0][4].startswith('=SUMIFS(Sessions!$H$3:$H$4')               # minutes in H, checkbox in J
+    assert [r[3] for r in session_rows] == ['1', '2'] and session_rows[0][9] is False
+    assert session_rows[1][1].startswith("=IFERROR(VLOOKUP(A4,'Session summary'")     # the session title, following edits
+
+
+def test_assignments_tab_first_and_only_two_columns_open():
+    from dqi_sort import sheets as SH
+    b = SH.shared_book('Y', 'stamp', [], {}, {}, {}, [], [], [['QEC', 'error correction', '=HYPERLINK("u", "QEC round 1")', 1, 15, 160, 'A. B.', 'done', 't']])
+    name, header, rows, fmt = b.tabs[0]
+    assert name == SH.ASSIGN_TAB and header[6:8] == ['Responsible', 'Status']
+    prot = [r['addProtectedRange']['protectedRange'] for r in fmt(7, len(rows)) if 'addProtectedRange' in r]
+    assert [(u['startColumnIndex'], u['endRowIndex'] - u['startRowIndex']) for u in prot[0]['unprotectedRanges']] == [(6, 1), (7, 1)]
+    assert all(any('addProtectedRange' in r for r in f(9, 0)) for _, _, _, f in b.tabs[1:])    # the other tabs are locked
