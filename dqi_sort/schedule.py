@@ -22,8 +22,8 @@ solve   assigns every session to a room-time slot (schedule/slots.csv) and write
         very closely related sessions (the top 2% of pairs) on the same day, and each room kept to one topic family
         (the area's `modality` in config.yaml, e.g. superconducting, else the area).
 grid    writes the schedule as a session grid in Google Sheets (the APS layout), in the review folder: rooms as
-        columns, with name and capacity; one row per time block; each cell holds the session code and title and, after a
-        blank line, the session's day requests. DQI's room slots are light green. Locked (a view of git); updated
+        columns, with name and capacity; one row per time block; each cell holds the session type (Symposium,
+        Mini-Symposium or Contributed), code and title and, after a blank line, the session's day requests. DQI's room slots are light green. Locked (a view of git); updated
         in place on each run and recorded in sorting/sheets.csv. Virtual sessions are on a second tab.
 """
 import argparse, collections, json, math, os, random, re, sys
@@ -366,6 +366,7 @@ def report(data_dir, sess, assign, slots, rooms, members, talks, cards, sim, k, 
 
 
 GREEN = {'red': 0.84, 'green': 0.94, 'blue': 0.84}
+KINDS = {'symposium': 'Symposium', 'mini-symposium': 'Mini-Symposium', 'contributed': 'Contributed'}
 
 
 def request_note(members, cards):
@@ -400,8 +401,10 @@ def grid_rows(sched, slots, rooms, sess, members, cards):
             i = by_slot.get(slot)
             if not i:
                 row.append('(open)'); continue
+            s = sess.get(i) or {'title': '', 'kind': 'symposium'}        # symposia arrive locked and may not be in our sort
+            kind = KINDS.get(s.get('kind', ''), s.get('kind', '').title())
             note = request_note(members[i], cards)
-            row.append(f"{i}\n{sess[i]['title']}" + (f'\n\n{note}' if note else ''))      # a blank line before the requests
+            row.append(f"{kind}\n{i}\n{s['title']}" + (f'\n\n{note}' if note else ''))      # a blank line before the requests
         rows.append(row)
     return header, rows, green
 
