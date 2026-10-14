@@ -32,3 +32,9 @@ def test_assignments_tab_first_and_only_two_columns_open():
     prot = [r['addProtectedRange']['protectedRange'] for r in fmt(7, len(rows)) if 'addProtectedRange' in r]
     assert [(u['startColumnIndex'], u['endRowIndex'] - u['startRowIndex']) for u in prot[0]['unprotectedRanges']] == [(6, 1), (7, 1)]
     assert all(any('addProtectedRange' in r for r in f(9, 0)) for _, _, _, f in b.tabs[1:])    # the other tabs are locked
+
+
+def test_held_back_needs_a_status_not_just_a_name():
+    last = {'A': {'round': '2'}, 'B': {'round': '2'}, 'C': {'round': '1'}}
+    status = {'A': ('Ann', ''), 'B': ('Bob', 'in progress'), 'C': ('Cy', 'Done')}
+    assert Sh.held_back(['A', 'B', 'C'], last, {('C', '1')}, status) == ['B']    # A not started; C read back
