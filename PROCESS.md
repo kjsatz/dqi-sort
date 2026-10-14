@@ -222,7 +222,7 @@ The data repo holds one set of files per year:
 | `history/attendance.csv` | past session | year, session_code, title, type (contributed / mini-symposium / symposium), primary_unit, day, start, end, minutes, room, capacity, peak (most people inside at once), entries, avg_visit_min, peak_share, full, note; source links in a comment header |
 | `history/attendance_model.npz` | — | The fitted attendance model; see `docs/attendance.md` |
 | `chairs/volunteers.csv` | volunteer | volunteer_id, name, email, affiliation, chair_mode (in_person / virtual / both), presenting_mode, talk_ids (semicolon-separated), match_note |
-| `chairs/chairs.csv` | chair (person per area) | area, name, email, status (confirmed / declined / no reply), availability, notes, session (once placed), check (as saved from the recruiting spreadsheet) |
+| `chairs/chairs.csv` | chair (person per area) | area, name, email, abstract_id, emailed, confirmed, availability, notes, session (once placed), check (as saved from the recruiting spreadsheet) |
 | `chairs/area_status.csv` | review area | area, responsible, status (from the recruiting spreadsheet's Overview) |
 
 Rules:
@@ -335,7 +335,7 @@ Chair recruiting starts with the sort review (stage 7): by then each area's sess
 1. **Volunteers.** APS sends one volunteer list for all of APS, with an in-person tab and a virtual tab. We keep the rows whose sub-category starts with our division number (17 in 2026; `division_code` in `config.yaml`), merge people by email, and link each to their abstracts (by the row's abstract ID; another talk under the same name is flagged to confirm). A volunteer appears in the area of their own talk; volunteers whose abstract is not in our program have their own tab, for any area to draw on.
 2. **The recruiting spreadsheet** (`python -m dqi_sort.chairs sync DATA_DIR`, made once and then updated in place):
    - **Overview:** each area with **Responsible** (pre-filled with its reviewer) and **Status**, both editable, the chairs needed, confirmed and placed, and the topic phrase for its invitation.
-   - **A tab per area:** its volunteers (contact, how they can chair, whether they have chaired before, their talks and, once scheduled, when they present) with editable **Status** (confirmed, declined, no reply), **Availability** (plain text, e.g. `Mon AM; not Thursday afternoon`), **Notes** (free text: a topic they would like, a preferred day, a co-chair) and **Session**; blank rows for people from the expert's own network; once scheduled, the sessions still needing a chair.
+   - **A tab per area:** its volunteers (contact, how they can chair, whether they have chaired before, their talks and, once scheduled, when they present) with editable **Abstract ID** (pre-filled for volunteers; for someone added, filled in if they can find it, so their talk is taken into account), **Emailed?** and **Confirmed?** checkboxes, **Availability** (plain text, e.g. `Mon AM; not Thursday afternoon`), **Notes** (free text: a topic they would like, a preferred day, a co-chair, a decline) and **Session**; blank rows for people from the expert's own network; once scheduled, the sessions still needing a chair.
    - **Instructions**, including: strive for a diverse set of chairs in terms of career stage, institution, and demographics; and the invitation (below).
 3. **Recruit early, place late.** During review the expert collects confirmed chairs; sessions are assigned once the schedule is set. Claude first reads the Notes of the confirmed chairs and types a Session for anyone whose wishes need it; then the sync places the rest of each area's confirmed chairs all at once: never in a session where they speak, never at a time they present or are unavailable, and on a related topic where it can (a soft preference: chairing is community service, and a close topic is a bonus). A **Check** column shows how each Availability was read and flags problems (presents at that time, two sessions at once, not a virtual presenter for a virtual session).
 4. **Kept in step.** Every sync reads what people typed first (each area's tab is the whole truth for that area: rows deleted there go) and saves it to git (`chairs/chairs.csv`, `chairs/area_status.csv`).
@@ -343,9 +343,11 @@ Chair recruiting starts with the sort review (stage 7): by then each area's sess
 
 **The invitation** (short; the expert fills in the name, the area's topic phrase from the Overview, and their own name):
 
+> Subject: Session chair for DQI at the Global Physics Summit
+>
 > Dear {name},
 >
-> We are working on scheduling the Global Physics Summit ({dates}) and need volunteer session chairs in {topic} for the Division of Quantum Information. If you're available, please reply with any schedule constraints or requests. The sessions are being scheduled soon, and we won't schedule anything in conflict with your talk. Thank you for considering volunteering!
+> We are working on scheduling the Global Physics Summit ({dates}) and need volunteer session chairs in {topic} for the Division of Quantum Information. If you're available, please reply with any schedule constraints or requests. The sessions are being scheduled soon, and we won't schedule anything in conflict with your talk. If possible, please get back to me within 72 hours to facilitate scheduling. Thank you for considering volunteering!
 >
 > Best,
 > {requester}
