@@ -315,6 +315,8 @@ After the schedule is approved:
 2. **Re-order.** Claude re-orders each session with the invited talk fixed in its room's block. It does not just rotate or slide the invited talk into place; it rethinks the order so the session still flows. Talks that set up the invited talk come before it, follow-ups come after, and multi-part talks stay consecutive and do not straddle it. Submitters' "after X" requests still hold.
 3. **Check.** The validator confirms that every invited talk starts on a 36-minute boundary and that every session fits its slot. Changes go into `sorting/assignments.csv` as one commit with a short note per session.
 
+Commands: `python -m dqi_sort.order positions DATA_DIR` (each room's blocks, by a search that keeps invited talks running at the same time at different positions, more so in nearby rooms and similar topics; `views/invited_positions.md`), `order prepare` (one folder per area with the sessions that hold an invited talk, for one Claude agent each, `prompts/order_spec.md`), `order apply` and `order check`. When a room's block cannot be reached (too few contributed talks before it), the nearest block that can is used. A late change to the schedule should swap sessions within a room (`schedule swap`), so each keeps its invited-talk block.
+
 ## Virtual conference
 
 The virtual meeting is a separate, much smaller track: about 30–40 talks last year. It is sorted on its own and treated as its own area in review and in the chair handoff. The aim is modest: fit every talk within the timing constraints, with sessions that are plausibly coherent in topic.

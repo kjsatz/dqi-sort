@@ -17,6 +17,7 @@ def test_day_requests_are_read_from_card_constraints():
     assert Sc.day_request('prefers Monday to Thursday; travelling on Friday') == ({'Fri'}, {'Mon', 'Tue', 'Wed', 'Thu'})
     assert Sc.day_request('as early as possible') == (set(), {'Mon', 'Tue'})
     assert Sc.day_request('after the theory talk') == (set(), set())
+    assert Sc.day_request('Monday to Wednesday only (planned travel)') == ({'Thu', 'Fri'}, set())
 
 
 def test_grid_rows_rooms_as_columns_with_requests_and_green_slots():
