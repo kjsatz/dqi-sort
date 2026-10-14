@@ -315,6 +315,12 @@ def read_options(data_dir, sess):
 
 
 # ---------- sync ----------
+def held_back(todo, last, applied, status):
+    """Areas that get no new round: their current round is not read back yet and someone has given it a Status."""
+    return [a for a in todo if a in last and (a, last[a]['round']) not in applied and status.get(a, ('', ''))[1]]
+
+
+
 def sync(data_dir, areas=None, all_areas=False, attendance=True):
     cfg = S.load_config(data_dir)
     folder = (cfg.get('sheets') or {}).get('folder_id')
@@ -343,9 +349,9 @@ def sync(data_dir, areas=None, all_areas=False, attendance=True):
     rpath = os.path.join(data_dir, 'sorting', 'reviews.csv')
     applied = {(r['area'], r['round']) for r in S.read_csv(rpath)} if os.path.exists(rpath) else set()
     if not areas:                                # never replace a sheet someone is working on
-        out = [a for a in todo if a in last and (a, last[a]['round']) not in applied and any(status.get(a, ('', '')))]
+        out = held_back(todo, last, applied, status)
         for a in out:
-            print(f"{a}: round {last[a]['round']} is out ({' / '.join(x for x in status[a] if x)}); its changes wait for the next round")
+            print(f"{a}: round {last[a]['round']} is out (Status: {status[a][1]}); its changes wait for the next round")
         todo = [a for a in todo if a not in out]
     year_name = (cfg.get('sheets') or {}).get('folder_name', 'DQI sort')
     now = datetime.datetime.now().isoformat(timespec='minutes')
