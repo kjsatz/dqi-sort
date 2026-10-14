@@ -44,4 +44,17 @@ def test_checks_flag_a_chair_who_presents_then():
     sched = {'A1': {'day': 'Mon', 'start': '08:00'}}
     entries = {('A', 'Bo', 'bo@u'): {'area': 'A', 'name': 'Bo', 'email': 'bo@u', 'confirmed': 'TRUE', 'session': 'A1'}}
     C.checks(entries, [], sess, sched, {'bo@u': {('Mon', '08:00')}})
-    assert entries[('A', 'Bo', 'bo@u')]['check'] == 'presents at this time'
+    assert entries[('A', 'Bo', 'bo@u')]['check'] == 'A1: presents at this time'
+
+
+def test_a_chair_may_chair_two_sessions():
+    sess = {'A1': {'area': 'A'}, 'A2': {'area': 'A'}, 'A3': {'area': 'A'}}
+    sched = {'A1': {'day': 'Mon', 'start': '08:00'}, 'A2': {'day': 'Mon', 'start': '08:00'}, 'A3': {'day': 'Tue', 'start': '08:00'}}
+    e = {'area': 'A', 'name': 'Cy', 'email': 'cy@u', 'confirmed': 'TRUE', 'session': 'a1; A3'}
+    assert C.codes(e) == ['A1', 'A3']
+    entries = {('A', 'Cy', 'cy@u'): e, ('A', 'Di', 'di@u'): {'area': 'A', 'name': 'Di', 'email': 'di@u', 'confirmed': 'TRUE', 'session': ''}}
+    C.place(entries, [], sess, sched, {}, {}, {}, '.')
+    assert entries[('A', 'Di', 'di@u')]['session'] == 'A2'          # A1 and A3 are taken by Cy
+    e['session'] = 'A1; A2'
+    C.checks(entries, [], sess, sched, {})
+    assert 'chairs two sessions at this time' in e['check']
