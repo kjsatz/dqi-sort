@@ -25,7 +25,7 @@ Principles:
 | 7. Sort review | Generates the shared sheet and one area sheet per area; checks each returned sheet against the version sent, opens a pull request with the changes; finally places any remaining lonely abstracts | **Checkpoint:** reviewers edit their area sheet; lead merges the pull requests (see [Sort review](#sort-review)) |
 | 8. Schedule | Estimates attendance for every session; proposes room trades with symposia; then a solver assigns sessions to room-time slots (see [Scheduling](#scheduling)) | **Checkpoint:** decide the trades; approve or adjust the schedule |
 | 9. Talk order | Sets each room's invited-talk position and re-orders every session around it (see [Talk order](#talk-order)) | Spot-check |
-| 10. Chairs (starts after stage 6, runs in parallel) | Links volunteers to their abstracts, builds the chairs sheet (a tab per review area), keeps it in step with git, places confirmed volunteers on sessions without clashes and checks every chair | An expert per area recruits chairs, from the volunteers and their own network; lead approves (see [Chairs](#chairs)) |
+| 10. Chairs (starts with stage 7, runs in parallel) | Links volunteers to their abstracts and lists them in a Chairs tab of each area's review sheet; once the schedule is set, places the confirmed chairs on sessions without clashes and checks every chair | The area's expert recruits the chairs it needs, from the volunteers and their own network, during review; lead approves (see [Chairs](#chairs)) |
 | 11. Deliver | Writes session names, order and chairs into the APS sheet; handles late adds, withdrawals and moves | Approve each late change |
 
 After the meeting, we keep the final sort and the edits people made to Claude's drafts. They are the best input for improving the process next year.
@@ -122,6 +122,7 @@ Reviewers get two kinds of Google Sheet, both generated from the CSVs in git.
 
 - **Session summary:** one row per session, with session ID, title, type (contributed, mini-symposium or symposium), length, minutes filled (computed), estimated peak attendance and suggested room size (both from the model), a room size override (blank keeps the suggestion) and human notes.
 - **Sessions:** one row per talk, with session ID, order, talk ID, title, speaker, institution, one-line summary, a **Move to lonely abstracts** checkbox and human notes.
+- **Chairs:** the area's chair recruiting (see [Chairs](#chairs)); unlike the other tabs, it is updated in place and carried into each new round.
 
 What reviewers do:
 
@@ -222,8 +223,7 @@ The data repo holds one set of files per year:
 | `history/attendance.csv` | past session | year, session_code, title, type (contributed / mini-symposium / symposium), primary_unit, day, start, end, minutes, room, capacity, peak (most people inside at once), entries, avg_visit_min, peak_share, full, note; source links in a comment header |
 | `history/attendance_model.npz` | — | The fitted attendance model; see `docs/attendance.md` |
 | `chairs/volunteers.csv` | volunteer | volunteer_id, name, email, affiliation, chair_mode (in_person / virtual / both), presenting_mode, talk_ids (semicolon-separated), match_note |
-| `chairs/chairs.csv` | chair slot | session_id, slot (1, or 1 and 2 for a virtual session), chair, email, status (invited / confirmed / declined), note, check (as saved from the chairs sheet) |
-| `chairs/area_status.csv` | review area | area, responsible, status (from the chairs sheet's Overview) |
+| `chairs/chairs.csv` | chair (person per area) | area, name, email, status (confirmed / declined / no reply), unavailable, note, session (once placed), check (as saved from the Chairs tabs) |
 
 Rules:
 
@@ -318,7 +318,7 @@ Commands: `python -m dqi_sort.order positions DATA_DIR` (each room's blocks, by 
 
 ## Virtual conference
 
-The virtual meeting is a separate, much smaller track: about 30–40 talks last year. It is sorted on its own and treated as its own area in review and in the chairs sheet. The aim is modest: fit every talk within the timing constraints, with sessions that are plausibly coherent in topic.
+The virtual meeting is a separate, much smaller track: about 30–40 talks last year. It is sorted on its own and treated as its own area in review and in chair recruiting. The aim is modest: fit every talk within the timing constraints, with sessions that are plausibly coherent in topic.
 
 - **A closed track.** Every virtual talk gets a virtual session. Virtual talks are not proposed for posters or other units, and nothing moves in or out of DQI unless it is absolutely necessary (the lead's call). No talk moves between the virtual and in-person tracks.
 - **Sessions** are 120 minutes: 10 contributed talks, or an invited talk in place of 3 of them (rare).
@@ -330,16 +330,13 @@ The virtual meeting is a separate, much smaller track: about 30–40 talks last 
 
 ## Chairs
 
-Chairs are recruited area by area, by the same review areas as the sort review, so a subject-matter expert handles the sessions in their field and can reach into their own network. One spreadsheet holds it all, with a tab per area. Each session needs exactly one confirmed chair (two for a virtual session); there are no backups.
+Chair recruiting starts with the sort review (stage 7): by then each area's sessions are known, so its expert knows how many chairs to find. It runs in a **Chairs** tab of each area's review sheet, so everything for an area is in one file, handled by someone who knows the field and can reach into their own network. Each session needs exactly one confirmed chair (two for a virtual session); there are no backups.
 
-1. **Link volunteers to abstracts.** APS sends one volunteer list for all of APS, with an in-person tab and a virtual tab. We keep the rows whose sub-category starts with our division number (17 in 2026; set as `division_code` in `config.yaml`). People are merged by email. Each row carries the volunteer's abstract ID, which links them to their talk; another talk under the same name is flagged for the lead to confirm. The rows also say how the volunteer wants to chair (in person, virtual or both) and how they are presenting their own talk.
-2. **The chairs sheet** (`python -m dqi_sort.chairs sync DATA_DIR`):
-   - **Overview:** one row per area, with **Responsible** (the expert recruiting for it; pre-filled with the area's reviewer) and **Status**, both editable, and the chairs needed and confirmed so far.
-   - **One tab per area:** its chair slots (one row per slot: session, title, time, room) with four editable columns, **Chair**, **Email**, **Status** (invited, confirmed, declined) and **Note**; then the volunteers whose own talk is in the area, with when they present, and editable **Status** and **Unavailable**; then blank rows for people from the expert's own network. A session moved after review is simply listed in its current area.
-   - **Other volunteers** (abstract not in our program) and **How to fill in.**
-3. **The experts recruit.** An expert either types a chair straight into a slot, or marks a volunteer (or someone they added) confirmed and leaves the placing to Claude. Nothing is sent automatically.
-4. **Sync** (run whenever useful) reads everything people typed, keeps it, and saves it to git (`chairs/chairs.csv`, `chairs/area_status.csv`). It places the confirmed volunteers who are not yet in a slot, all of an area at once: each on an open session in their area where they are not a speaker and that does not clash with any talk they give or their stated unavailability, matching each chair's own talk to a session on a related topic where it can (a soft preference: chairing is community service, and a close topic is a bonus, not a requirement); the slot's note says so. A **Check** column flags a chair who presents at the session's time, chairs two sessions at once, or (in a virtual session) does not present virtually.
-5. **The lead approves** the filled sheet, and the experts tell each chair their session.
+1. **Volunteers.** APS sends one volunteer list for all of APS, with an in-person tab and a virtual tab. We keep the rows whose sub-category starts with our division number (17 in 2026; `division_code` in `config.yaml`), merge people by email, and link each to their abstracts (by the row's abstract ID; another talk under the same name is flagged to confirm). A volunteer appears in the area of their own talk; volunteers whose abstract is not in our program are listed on the shared sheet (Other volunteers), for any area to draw on.
+2. **The Chairs tab** shows the chairs the area needs and how many are confirmed, then the area's volunteers (contact, how they can chair, whether they have chaired before, their talks and, once scheduled, when they present) with editable **Status** (confirmed, declined, no reply), **Unavailable** (e.g. `Mon AM; Thu`), **Note** and **Session**, then blank rows for people from the expert's own network. The shared sheet's Area assignments tab shows each area's chairs needed and confirmed.
+3. **Recruit early, place late.** During review the expert just collects confirmed chairs; sessions are not assigned until the schedule is set. Then `python -m dqi_sort.chairs sync DATA_DIR` places each area's confirmed chairs who have no session yet, all at once: never in a session where they speak, never at a time they present or are unavailable, and matching each chair's own talk to a related session where it can (a soft preference: chairing is community service, and a close topic is a bonus). An expert may also type a session in themselves. A **Check** column flags a chair who presents at their session's time, chairs two sessions at once, or (virtual) does not present virtually.
+4. **Kept in step.** The Chairs tab is updated in place, unlike the round's other tabs, and carried into each new round of the area's sheet; an older round's Chairs tab is replaced by a pointer to the current one. Every sync reads what people typed first (the tab is the whole truth for its area: rows deleted there go) and saves it to git (`chairs/chairs.csv`).
+5. **The lead approves** the placed chairs, and the experts tell each chair their session. Nothing is sent automatically.
 
 **In-person and virtual chairs.** In-person sessions get chairs who are presenting in person; virtual sessions get chairs who are presenting virtually, preferably people who submitted to the virtual conference. In-person attendees can chair virtual sessions, but we keep the two groups separate unless we run short.
 
@@ -363,7 +360,7 @@ Chairs are recruited area by area, by the same review areas as the sort review, 
 
 - **Lead:** runs the pipeline, decides flagged talks and routing, merges the global-pass pull request, approves the schedule.
 - **Area reviewers:** choose between options where the global pass kept them; reorder, retitle and annotate their area sheet; kick out talks or take in lonely ones or (by agreement) talks from other areas.
-- **Area chair recruiters:** one subject-matter expert per review area (often its reviewer) recruits chairs for that area's sessions in the chairs sheet, from the volunteers and their own network.
+- **Area chair recruiters:** one subject-matter expert per review area (often its reviewer) recruits the chairs the area needs in the Chairs tab of its review sheet, from the volunteers and their own network.
 
 ## Tools
 

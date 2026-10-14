@@ -23,11 +23,11 @@ Tools for sorting the APS Global Physics Summit DQI (Division of Quantum Informa
 - `config.example.yaml`: config template, including the list of other APS units.
 - `docs/`: how to run the embeddings, cards and attendance model, and how to set up Google Sheets access (`google_sheets.md`).
 - `dqi_sort/gsheets.py`: Google sign-in (OAuth as the lead) and Drive folder setup. `dqi_sort/sheets.py`: `sync` (sync-sheets) writes the shared sheet and new area sheets from the sort in git; reading returned sheets back is still to do.
-- `chairs.py` (stage 10: volunteers linked to their abstracts; the chairs sheet with a tab per review area, kept in step with git; confirmed volunteers placed without clashes). `order.py` (stage 9: invited-talk positions per room, sessions re-ordered around their invited talk, the check). `schedule.py` (stage 8: room sizes against the grid, then the solver that puts sessions into room-time slots). `review.py` (stage 7: read a returned area sheet, apply the reviewer's changes three-way, move talks while acting on notes). `decide.py`: the lead's decisions on a talk's status (offer to another unit, exchanged, returned, received, poster, keep), logged with date and unit in `sorting/status_log.csv`.
+- `chairs.py` (stage 10: volunteers linked to their abstracts; a Chairs tab in each area's review sheet from round 1, kept in step with git and carried into new rounds; confirmed chairs placed on sessions without clashes once scheduled). `order.py` (stage 9: invited-talk positions per room, sessions re-ordered around their invited talk, the check). `schedule.py` (stage 8: room sizes against the grid, then the solver that puts sessions into room-time slots). `review.py` (stage 7: read a returned area sheet, apply the reviewer's changes three-way, move talks while acting on notes). `decide.py`: the lead's decisions on a talk's status (offer to another unit, exchanged, returned, received, poster, keep), logged with date and unit in `sorting/status_log.csv`.
 - `workbook.py`, `mockgrid.py`, `score.py`: past-year dry runs (read old sorting workbooks, make a 2027-format grid, score against the human sort with a blind judge; `docs/dry_runs.md`).
 - `prototype/`: scripts and prompts from the first test on the 2026 superconducting sheet. Reference only; hard-coded paths.
 
-## Status (Oct 12, 2026)
+## Status (Oct 13, 2026)
 
 Done: the 2026 superconducting test (see `prototype/README.md`), the process design, the card spec, the APS parser, the attendance model (fitted on 2025 and 2026; data, model and report in `history/` of the private `../dqi-2027` repo), review sheets (`sync-sheets`, writing only). On the dry run: stages 1-4 including the lead's checkpoint (cards and embeddings for all talks; 82 series; 10 areas + virtual), and a first stage 5 run with the old design (one agent per area with a fixed share of the grid; 201 sessions, 39 lonely talks). That run showed fixed shares leave no room to combine lonely talks, so stages 4-6 were redesigned (`PROCESS.md`, Drafting and the global pass).
 
@@ -38,11 +38,13 @@ Settled choices (keep it simple; pick one good approach rather than comparing op
 
 Second dry-run sort (Oct 12) with the new design, then (Oct 13) dry runs on 2023, 2024 and 2025 and a 2026 rerun: each year's sort fits its grid, and a blind Claude judge rates Claude's sessions about 1 point higher (1-5) than the human sorts, with a third as many out-of-place talks (2025, 2026; 2023 in `views/scores.md` of its repo). Improvements tested there and adopted: swap partners for the critics, review areas by content, the drafts' length mix, keep-apart requests, near-duplicate sessions across areas, the duplicate-invited flag. Summary: `../dqi-2027/reports/dry_runs_2023-2026.md` (private).
 
-Next, on the dry run before abstracts arrive on about Nov 9:
+Dry run 2 (Oct 13) rehearsed stages 1-10 on the 2026 abstracts with every checkpoint; the lead's decisions are in `checkpoints.md` of `../dqi-2026-dryrun`. Built on the way: the lead's decisions on talks (`decide.py`), the review read-back (`review.py`), room sizes and the scheduling solver with the session grid sheet (`schedule.py`), talk order (`order.py`), and chair recruiting in the area review sheets (`chairs.py`).
 
+Next, before abstracts arrive on about Nov 9:
+
+- Stage 11: write session titles, talk order and chairs into the final APS sheet; late adds, withdrawals and moves.
 - Validators (the checks listed in `PROCESS.md`) as one command.
-- Stage 7: read returned area sheets back into git. Stages 8-11: scheduling solver, talk order, chair handoff, reverse writer for the final APS sheet.
 
 Dry-run inputs are ready in `../dqi-2026-dryrun/input/` (see its `CLAUDE.md`), including the virtual track and the session-chair volunteer lists.
 
-Still needed from Kevin: how invited-talk topics reach the pipeline (they arrive with no abstract); this year's division number (24?); the real 2027 room grid and room distances; the chair invitation template and the return format agreed with the coordinator; reviewers for each area.
+Still needed from Kevin: how invited-talk topics reach the pipeline (they arrive with no abstract); this year's division number (24?); the real 2027 room grid and room distances; reviewers (who also recruit chairs) for each area.

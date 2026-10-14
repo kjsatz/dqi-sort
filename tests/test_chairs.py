@@ -28,10 +28,18 @@ def test_place_avoids_own_session_and_talk_time():
     sess = {'A1': {'area': 'A'}, 'A2': {'area': 'A'}, 'A3': {'area': 'A'}}
     sched = {'A1': {'day': 'Mon', 'start': '08:00'}, 'A2': {'day': 'Mon', 'start': '08:00'}, 'A3': {'day': 'Tue', 'start': '08:00'}}
     vols = [{'name': 'Ada', 'email': 'ada@u', 'talk_ids': ''}]
-    entries = {}
-    people = {('A', 'Ada', 'ada@u'): ('confirmed', 'Tue')}
-    C.place(people, entries, vols, sess, sched, {}, {}, {'ada@u': {('Mon', '08:00')}}, '.')
-    assert entries == {}                                    # presents Monday 08:00, unavailable Tuesday: nowhere to go
-    people = {('A', 'Ada', 'ada@u'): ('confirmed', '')}
-    C.place(people, entries, vols, sess, sched, {}, {}, {'ada@u': {('Mon', '08:00')}}, '.')
-    assert list(entries) == [('A3', '1')] and entries[('A3', '1')][2] == 'confirmed'
+    busy = {'ada@u': {('Mon', '08:00')}}
+    entries = {('A', 'Ada', 'ada@u'): {'area': 'A', 'name': 'Ada', 'email': 'ada@u', 'status': 'confirmed', 'unavailable': 'Tue', 'session': ''}}
+    C.place(entries, vols, sess, sched, {}, {}, busy, '.')
+    assert entries[('A', 'Ada', 'ada@u')]['session'] == ''      # presents Monday 08:00, unavailable Tuesday: nowhere to go
+    entries[('A', 'Ada', 'ada@u')]['unavailable'] = ''
+    C.place(entries, vols, sess, sched, {}, {}, busy, '.')
+    assert entries[('A', 'Ada', 'ada@u')]['session'] == 'A3'
+
+
+def test_checks_flag_a_chair_who_presents_then():
+    sess = {'A1': {'area': 'A'}}
+    sched = {'A1': {'day': 'Mon', 'start': '08:00'}}
+    entries = {('A', 'Bo', 'bo@u'): {'area': 'A', 'name': 'Bo', 'email': 'bo@u', 'status': 'confirmed', 'session': 'A1'}}
+    C.checks(entries, [], sess, sched, {'bo@u': {('Mon', '08:00')}})
+    assert entries[('A', 'Bo', 'bo@u')]['check'] == 'presents at this time'
