@@ -29,5 +29,5 @@ def test_grid_rows_rooms_as_columns_with_requests_and_green_slots():
     header, rows, green = Sc.grid_rows({'QEC01': 'Mon-0800-L1', 'SPIN02': 'Tue-0800-L1'}, slots, rooms, sess,
                                        {'QEC01': ['t1', 't2'], 'SPIN02': ['t2']}, cards)
     assert header == ['Room', 'Ballroom 1', 'Hall A 1'] and rows[0] == ['Capacity', '500 (large)', '144 (small)']
-    assert rows[1] == ['Mon 08:00–10:24', 'QEC01\nSuperconducting QEC\nRequests: not Fri', '(open)']
+    assert rows[1] == ['Mon 08:00–10:24', 'QEC01\nSuperconducting QEC\n\nRequests: not Fri', '(open)']
     assert rows[2] == ['Tue 08:00–10:24', 'SPIN02\nShuttling', ''] and sorted(green) == [(1, 1), (1, 2), (2, 1)]

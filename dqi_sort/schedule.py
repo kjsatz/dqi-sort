@@ -22,8 +22,8 @@ solve   assigns every session to a room-time slot (schedule/slots.csv) and write
         very closely related sessions (the top 2% of pairs) on the same day, and each room kept to one topic family
         (the area's `modality` in config.yaml, e.g. superconducting, else the area).
 grid    writes the schedule as a session grid in Google Sheets (the APS layout), in the review folder: rooms as
-        columns, with name and capacity; one row per time block; each cell holds the session code and title and, on
-        another line, the session's day requests. DQI's room slots are light green. Locked (a view of git); updated
+        columns, with name and capacity; one row per time block; each cell holds the session code and title and, after a
+        blank line, the session's day requests. DQI's room slots are light green. Locked (a view of git); updated
         in place on each run and recorded in sorting/sheets.csv. Virtual sessions are on a second tab.
 """
 import argparse, collections, json, math, os, random, re, sys
@@ -401,7 +401,7 @@ def grid_rows(sched, slots, rooms, sess, members, cards):
             if not i:
                 row.append('(open)'); continue
             note = request_note(members[i], cards)
-            row.append(f"{i}\n{sess[i]['title']}" + (f'\n{note}' if note else ''))
+            row.append(f"{i}\n{sess[i]['title']}" + (f'\n\n{note}' if note else ''))      # a blank line before the requests
         rows.append(row)
     return header, rows, green
 
