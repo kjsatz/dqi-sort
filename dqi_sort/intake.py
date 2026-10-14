@@ -60,6 +60,16 @@ def find_header(rows, colmap):
     sys.exit(f'no header row with columns {sorted(keys)}')
 
 
+def raw_rows(data_dir, spec, colmap):
+    """One APS table as received: (header, data rows as lists of strings, the talk ID column), skipping blank rows."""
+    rows = read_table(os.path.join(data_dir, spec['file']), spec.get('sheet'))
+    h = find_header(rows, colmap)
+    header = [c.strip() for c in rows[h]]
+    k = next(n for n, c in enumerate(header) if colmap.get(c) == 'talk_id')
+    data = [r + [''] * (len(header) - len(r)) for r in rows[h + 1:] if len(r) > k and r[k].strip()]
+    return header, data, k
+
+
 def read_track(data_dir, track, spec, colmap):
     path = os.path.join(data_dir, spec['file'])
     rows = read_table(path, spec.get('sheet'))
