@@ -7,6 +7,7 @@
     python -m dqi_sort.decide poster    DATA_DIR TALK [TALK ...] [--note TEXT]
     python -m dqi_sort.decide keep      DATA_DIR TALK [TALK ...] [--note TEXT]
     python -m dqi_sort.decide duplicate DATA_DIR KEEP TALK [TALK ...] [--note TEXT]
+    python -m dqi_sort.decide withdraw  DATA_DIR TALK [TALK ...] [--note TEXT]
     python -m dqi_sort.decide reinstate DATA_DIR TALK [TALK ...] [--note TEXT]
 
 offer      we are trying to exchange the talk to another unit: status exchange_pending. It is set aside: out of its
@@ -23,6 +24,8 @@ keep       the talk stays in DQI's oral program: its row in sorting/held.csv is 
 duplicate  the talks are another entry of the same talk as KEEP (an invited talk entered twice, for example a
            placeholder and the real entry): status duplicate, out of their sessions. Keep the entry with more
            information. An invited talk and a contributed talk by the same speaker are two talks, not duplicates.
+withdraw   the speaker withdrew the talk: status withdrawn, out of its session (the session's other talks keep their
+           order; `python -m dqi_sort.late withdraw` also checks what the gap breaks).
 reinstate  undo duplicate, poster or withdrawn: status active, back in the session the talk left (at its end), or in
            the pool if that session is gone.
 
@@ -41,7 +44,8 @@ MOVE_COLS = ['when', 'commit', 'talk_id', 'from', 'to', 'by', 'reason']
 RULES = {'offer': ({'active'}, 'exchange_pending'), 'exchanged': ({'exchange_pending'}, 'other_unit'),
          'returned': ({'exchange_pending'}, 'active'), 'received': ({'active'}, 'active'),
          'poster': ({'active', 'exchange_pending'}, 'poster'), 'keep': ({'active'}, 'active'),
-         'duplicate': ({'active', 'exchange_pending'}, 'duplicate'), 'reinstate': ({'duplicate', 'poster', 'withdrawn'}, 'active')}
+         'duplicate': ({'active', 'exchange_pending'}, 'duplicate'), 'withdraw': ({'active', 'exchange_pending'}, 'withdrawn'),
+         'reinstate': ({'duplicate', 'poster', 'withdrawn'}, 'active')}
 
 
 def write_csv(path, cols, rows):
@@ -108,12 +112,13 @@ def decide(data_dir, action, ids, unit='', note='', by='lead', do_commit=True):
         u = unit or last_unit(log, i)
         a = assign.setdefault(i, {'talk_id': i, 'session_id': '', 'order': '', 'locked': 'false', 'note': ''})
         where = a['session_id'] or 'lonely'
-        if action in ('offer', 'exchanged', 'poster', 'duplicate'):
-            to = {'offer': f'{u} (offered)', 'exchanged': u, 'poster': 'poster', 'duplicate': f'duplicate of {keep_id}'}[action]
+        if action in ('offer', 'exchanged', 'poster', 'duplicate', 'withdraw'):
+            to = {'offer': f'{u} (offered)', 'exchanged': u, 'poster': 'poster', 'duplicate': f'duplicate of {keep_id}', 'withdraw': 'withdrawn'}[action]
             if a['session_id']:
                 short.append(a['session_id'])
             a.update(session_id='', order='', note={'offer': f'offered to {u} ({now[:10]})', 'exchanged': f'exchanged to {u} ({now[:10]})',
-                                                    'poster': f'poster ({now[:10]})', 'duplicate': f'duplicate of {keep_id}'}[action])
+                                                    'poster': f'poster ({now[:10]})', 'duplicate': f'duplicate of {keep_id}',
+                                                    'withdraw': f'withdrawn ({now[:10]})'}[action])
             moves.append((where if action != 'exchanged' else f'{u} (offered)', to))
         elif action == 'returned':
             a.update(session_id='', order='', note=f'returned by {u} ({now[:10]}): lonely')

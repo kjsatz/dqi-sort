@@ -26,7 +26,7 @@ Principles:
 | 8. Schedule | Estimates attendance for every session; proposes room trades with symposia; then a solver assigns sessions to room-time slots (see [Scheduling](#scheduling)) | **Checkpoint:** decide the trades; approve or adjust the schedule |
 | 9. Talk order | Sets each room's invited-talk position and re-orders every session around it (see [Talk order](#talk-order)) | Spot-check |
 | 10. Chairs (starts with stage 7, runs in parallel) | Links volunteers to their abstracts and lists them in the recruiting spreadsheet, a tab per review area; once the schedule is set, reads the notes, places the confirmed chairs on sessions without clashes and checks every chair | The area's expert recruits the chairs it needs, from the volunteers and their own network, during review; lead approves (see [Chairs](#chairs)) |
-| 11. Deliver | Writes session names, order and chairs into the APS sheet; handles late adds, withdrawals and moves | Approve each late change |
+| 11. Deliver | Runs the validator; writes the sort into a copy of APS's sorting page (sessions, talk order, chairs, rooms); reconciles APS's abstract list with the delivered one; handles late adds, withdrawals and moves (see [Delivery](#delivery)) | Approve each late change and the reconciliation |
 
 After the meeting, we keep the final sort and the edits people made to Claude's drafts. They are the best input for improving the process next year.
 
@@ -157,7 +157,7 @@ Simple and readable:
 
 ### New talks
 
-The lead adds a new talk (a late submission, or one transferred from another unit) with one command (`add-talk`). A talk brought in from another unit is also recorded with `python -m dqi_sort.decide received UNIT TALK`, which dates it and marks where it came from. It goes into the lonely pool or straight into a named session. A card is built for it, the ledger records it, and it appears on the next generated sheets. To put it into an area sheet that is already out, the lead can paste the row in; intake recognizes it as a new talk.
+The lead adds a late submission with one command (`python -m dqi_sort.late add`, see [Delivery](#delivery)). A talk brought in from another unit is recorded with `python -m dqi_sort.decide received UNIT TALK` instead, which dates it and marks where it came from. It goes into the lonely pool or straight into a named session. A card is built for it, the ledger records it, and it appears on the next generated sheets. To put it into an area sheet that is already out, the lead can paste the row in; intake recognizes it as a new talk.
 
 ### Intake
 
@@ -166,7 +166,7 @@ When an area sheet comes back, Claude compares it with the version that was sent
 Checks before anything is applied:
 
 - **Nothing missing.** Every talk that was sent is still in a session or checked for the lonely pool.
-- **Every added talk is accounted for.** A talk copied in from the lonely pool is removed from the pool. A talk copied in from another area is removed from that area, and the pull request says where it came from. A brand-new talk must already be in `talks.csv` (via `add-talk`).
+- **Every added talk is accounted for.** A talk copied in from the lonely pool is removed from the pool. A talk copied in from another area is removed from that area, and the pull request says where it came from. A brand-new talk must already be in `talks.csv` (via `late add` or `decide received`).
 - **Conflicts are flagged, not guessed.** Two cases count as conflicts. One is when a talk this reviewer changed was also moved by someone else since the sheet was made. The other is when two areas both copied in the same talk. Either way, the first merged change stands and the pull request lists the conflict for the lead.
 - **Knock-on gaps are reported.** If a talk was taken from an area, that area's next sheet shows the gap. Its review pull request also notes the gap, in case the session needs topping up.
 
@@ -212,7 +212,7 @@ The data repo holds one set of files per year:
 | `sorting/sessions.csv` | session | session_id, title, kind (contributed / mini-symposium / symposium), minutes (144 or 108), size (small / medium / large: the room size class people decided), area, locked, scope (one sentence: what belongs here), notes |
 | `sorting/assignments.csv` | talk | talk_id, session_id (blank for lonely abstracts), order, locked, note |
 | `sorting/moves.csv` | move | when, commit, talk_id, from (session, area, lonely, new, or another unit), to, by, reason |
-| `sorting/sheets.csv` | review sheet made | kind (shared / area), area, round, commit, content (hash of the area's sessions when sent), sheet_id, url, made |
+| `sorting/sheets.csv` | sheet made | kind (shared / area / grid / recruiting / delivery), area, round, commit, content (hash of the area's sessions when sent), sheet_id, url, made |
 | `sorting/area_status.csv` | review area | area, responsible, status (as typed in the shared sheet; saved at each sync) |
 | `sorting/notes.csv` | human note | round, area, reviewer, talk_id or session_id, note, resolution |
 | `venue/rooms.csv` | room | room_id, name, capacity, size (small / medium / large), zone, invited_block_144, invited_block_108 |
@@ -222,8 +222,11 @@ The data repo holds one set of files per year:
 | `history/attendance.csv` | past session | year, session_code, title, type (contributed / mini-symposium / symposium), primary_unit, day, start, end, minutes, room, capacity, peak (most people inside at once), entries, avg_visit_min, peak_share, full, note; source links in a comment header |
 | `history/attendance_model.npz` | — | The fitted attendance model; see `docs/attendance.md` |
 | `chairs/volunteers.csv` | volunteer | volunteer_id, name, email, affiliation, chair_mode (in_person / virtual / both), presenting_mode, talk_ids (semicolon-separated), match_note |
-| `chairs/chairs.csv` | chair (person per area) | area, name, email, abstract_id, emailed, confirmed, availability, notes, session (once placed), check (as saved from the recruiting spreadsheet) |
+| `chairs/chairs.csv` | chair (person per area) | area, name, email, affiliation, abstract_id, emailed, confirmed, availability, notes, session (once placed), check (as saved from the recruiting spreadsheet) |
 | `chairs/area_status.csv` | review area | area, responsible, status (from the recruiting spreadsheet's Overview) |
+| `delivery/in_person.csv`, `delivery/virtual.csv` | abstract | the abstract lists as sent to APS: APS's columns as received, with session, speaking order and sorter note filled in |
+| `delivery/sessions.csv` | session | track, session code, oral and invited counts, date and time, title, chairs (name, email, affiliation, status; two for virtual), room |
+| `views/reconciliation.md` | — | APS's input list against the delivered list: every omission and addition with the decision behind it |
 
 Rules:
 
@@ -231,14 +234,20 @@ Rules:
 2. Files are sorted by their stable ID, so moving a talk changes one line.
 3. Talks are never deleted. A talk's status is `active` (in the sort), `exchange_pending` (offered to another unit and set aside while it decides), `other_unit` (exchanged away), `poster`, `duplicate` (another entry of the same talk, such as an invited placeholder next to the real submission; the entry with more information is kept) or `withdrawn`. Every change of status goes through `python -m dqi_sort.decide` and is recorded with its date, time and unit in `sorting/status_log.csv`. A talk brought in from another unit is `active` and marked `from_unit:UNIT` in its flags.
 4. `locked=true` means automation will not move it. Reviewers lock what they have decided.
-5. A check runs on every commit:
-   - every active talk is in exactly one session or in the lonely pool (the pool must be empty at delivery)
-   - sessions are within capacity
-   - multi-part talks are consecutive
-   - each session fits the length of its slot
-   - invited talks start on a 36-minute boundary
-   - no speaker is double-booked
+5. The validator (`python -m dqi_sort.validate DATA_DIR`) checks whatever exists so far, and runs after every late change:
+   - every active talk is in exactly one session or in the lonely pool (the pool must be empty at delivery), and no other talk is in a session
+   - no session mixes the in-person and virtual tracks
+   - each session fits its length, at most one 12-minute slot short
+   - multi-part talks are consecutive, in part order, in one session
+   - invited talks start on a 36-minute boundary (at the room's block once scheduled)
+   - at most `max_same_institution` talks from one institution per session (a warning)
    - the session count is within budget
+   - every session is in one slot of its track and length, and no slot holds two sessions
+   - no speaker is double-booked
+   - one confirmed chair per session (two per virtual session); no chair speaks in their session, presents at the same time or chairs two sessions at once
+   - the reconciliation: every talk in APS's list that is in no session, and every talk in a session that is not in APS's list, is a logged decision (see [Delivery](#delivery))
+
+   With `--delivery`, what must hold before the APS sheet is written becomes an error rather than a warning: an empty pool, no talk still offered to another unit, every session scheduled and chaired.
 6. Alternative splits are files under `sorting/options/<area>/`. Picking one is a single commit.
 7. Generated views (`views/sessions.md`, `views/schedule.md`, an interactive topic map) are for reading only. Nobody edits them.
 
@@ -356,6 +365,31 @@ Chair recruiting starts with the sort review (stage 7): by then each area's sess
 
 **Timing.** Ideally chairs are known before scheduling (stage 8), so their unavailability goes into the solver as a hard rule. If they come later, we schedule anyway, since collisions are rare; the sync places each chair where they have no clash, and the Check column catches the rest.
 
+## Delivery
+
+What APS wants back is its own sorting page, filled in. `python -m dqi_sort.deliver DATA_DIR` runs the validator with the delivery checks first and stops on any error (`--force` writes a draft, marked as such, for a look). It writes one Google Sheet in the review folder, made once and then rewritten in place, with a page per track (In person, Virtual). Each page is one long page, not split by area as APS's 2026 input was, in the layout of the 2026 page:
+
+- top left, the sorting categories with their counts of abstracts;
+- next to it, the session slots per time block: allocated (our room slots), created, remaining;
+- to the right, **Created Sessions**: session code, oral and invited counts, date and time, title, the chair (name, email, affiliation, status; two chairs for a virtual session) and the room;
+- below the categories, every abstract in APS's own columns, as received, with **Session Abbreviation**, **Speaking Order** and **Sorter Notes** filled in. The sessions come in area order, as in the review, each talk in speaking order. The talks in no session follow, with the reason as the sorter note (exchanged to another unit, poster, duplicate, withdrawn). A talk added late or received from another unit, not in APS's list, gets a row built from `talks.csv`.
+
+The format may change in 2027; the writer follows APS's columns as they arrive, adding the three columns if they are missing.
+
+**Reconciliation.** Before sending, we compare APS's abstract list (the input) with the delivered list (the talks in a session): input − omitted + added = delivered. Every omission must be a logged decision (exchanged, poster, duplicate, withdrawn) and every addition too (received from another unit, a late addition); anything else is an error. The list, with each decision's date and note, is on the sheet's Reconciliation page and in `views/reconciliation.md`, for the lead to read before sending. The sheet, the files in `delivery/` and the reconciliation are committed to the data repo.
+
+**Late changes** are small, local edits, each committed at once and followed by the validator, which prints the problems in what changed:
+
+- `python -m dqi_sort.late add DATA_DIR TALK [--to SESSION --position N]`: a late submission (give its title, speaker, type, track, category and abstract if it is not already in `talks.csv`). It goes into the pool or straight into a session, and is logged as a late addition. Then its card and embedding are built so `review homes` can suggest a home.
+- `python -m dqi_sort.late withdraw DATA_DIR TALK`: status `withdrawn`, out of its session. A gap before an invited talk moves it off its block; the check says so, and the lead fills the gap from the pool or another session, or re-orders.
+- `python -m dqi_sort.late move DATA_DIR TALK SESSION --reason TEXT [--position N]`: one move. It refuses to overfill a session or cross the tracks. A change of time is a same-room swap (`schedule swap`), so each session keeps its invited-talk block.
+
+After delivery, changes go to APS directly; we record them the same way so the data repo stays the record of what was sent.
+
+## When the abstracts arrive
+
+The first step, before the cards: **reconcile the invited speakers.** The lead has a list of the invited speakers we expect, with their topics. Compare it with the invited talks that land in APS's sheet: who is missing, who is there but not expected, who appears twice (a placeholder next to the real entry), and whose entry has no abstract. Missing and unexpected speakers go to the lead to chase with APS; the expected topics give the cards of invited talks that arrive with only a name. Log the outcome as a checkpoint.
+
 ## Before abstracts arrive
 
 - [x] Process the past two years' RFID counts into `history/attendance.csv`
@@ -367,8 +401,7 @@ Chair recruiting starts with the sort review (stage 7): by then each area's sess
 - [ ] Reviewers for each area (areas are drawn in stage 4)
 - [ ] Last year's full workbook with the final sort, for a dry run
 - [ ] Chair volunteer list format from APS (last year's as an example)
-- [ ] Chair return format agreed with the coordinator
-- [ ] Optional chair invitation template (`chairs/invite_template.md`)
+- [ ] The list of expected invited speakers and their topics, for the reconciliation on arrival
 
 ## Roles
 
