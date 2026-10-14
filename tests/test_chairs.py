@@ -31,7 +31,7 @@ def test_place_avoids_own_session_and_talk_time():
     sched = {'A1': {'day': 'Mon', 'start': '08:00'}, 'A2': {'day': 'Mon', 'start': '08:00'}, 'A3': {'day': 'Tue', 'start': '08:00'}}
     vols = [{'name': 'Ada', 'email': 'ada@u', 'talk_ids': ''}]
     busy = {'ada@u': {('Mon', '08:00')}}
-    entries = {('A', 'Ada', 'ada@u'): {'area': 'A', 'name': 'Ada', 'email': 'ada@u', 'status': 'confirmed', 'availability': 'Tue', 'session': ''}}
+    entries = {('A', 'Ada', 'ada@u'): {'area': 'A', 'name': 'Ada', 'email': 'ada@u', 'confirmed': 'TRUE', 'availability': 'Tue', 'session': ''}}
     C.place(entries, vols, sess, sched, {}, {}, busy, '.')
     assert entries[('A', 'Ada', 'ada@u')]['session'] == ''      # presents Monday 08:00, unavailable Tuesday: nowhere to go
     entries[('A', 'Ada', 'ada@u')]['availability'] = ''
@@ -42,6 +42,6 @@ def test_place_avoids_own_session_and_talk_time():
 def test_checks_flag_a_chair_who_presents_then():
     sess = {'A1': {'area': 'A'}}
     sched = {'A1': {'day': 'Mon', 'start': '08:00'}}
-    entries = {('A', 'Bo', 'bo@u'): {'area': 'A', 'name': 'Bo', 'email': 'bo@u', 'status': 'confirmed', 'session': 'A1'}}
+    entries = {('A', 'Bo', 'bo@u'): {'area': 'A', 'name': 'Bo', 'email': 'bo@u', 'confirmed': 'TRUE', 'session': 'A1'}}
     C.checks(entries, [], sess, sched, {'bo@u': {('Mon', '08:00')}})
     assert entries[('A', 'Bo', 'bo@u')]['check'] == 'presents at this time'

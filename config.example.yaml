@@ -1,5 +1,6 @@
 # Example config; copy into the year's data repo as config.yaml and fill in.
 division_code: "17"           # DQI's sorting-category prefix (17 in 2026; check each year)
+meeting_dates: "April 11-16, 2027"   # the meeting, as written in the chair invitation
 virtual_session_min: 120
 session_lengths_min: [144, 108]
 talk_lengths_min: {oral: 12, invited: 36}
@@ -61,3 +62,6 @@ symposium_min_seats: 200      # symposia never get a smaller room
 size_cutoffs: {small: 0, medium: 90, large: 140}   # suggested room size by estimated peak attendance (a low starting point; people adjust)
 areas: {}                     # stage 4: code: {name: ..., categories: [DQI category codes]}; see dqi_sort/areas.py
 scheduling_weights: {}        # set after the scheduling interview
+
+# Session-chair volunteer lists from APS (stage 10, dqi_sort.chairs)
+chair_volunteers: {in_person: input/volunteer_chairs_in_person.csv, virtual: input/volunteer_chairs_virtual.csv}
