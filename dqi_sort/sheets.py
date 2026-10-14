@@ -8,7 +8,8 @@ Run after every merge to the data repo, from the lead's computer (sign-in: docs/
   An area whose current round is out (it has a Status and is not yet read back with `dqi_sort.review apply`) gets no
   new round: the reviewer keeps the sheet they started, and changes from elsewhere wait for the next round.
 - then updates the shared sheet in place. Its first tab, Area assignments, links each area's current sheet and has
-  two columns people fill in, Responsible and Status; sync reads them first and keeps them, and saves them to
+  two columns people fill in, Responsible and Status; sync reads them first and keeps them (Status is cleared when
+  the area gets a new round), and saves them to
   sorting/area_status.csv. Its other tabs (session summary, sessions, lonely abstracts, moves) and the rest of the
   first tab are locked to the owner (the lead).
 
@@ -371,6 +372,8 @@ def sync(data_dir, areas=None, all_areas=False, attendance=True):
         r = latest.get(area)
         mine = [x for x in sess if x['area'] == area]
         resp, stat = status.get(area, ('', ''))
+        if area in todo:                         # a new round starts with no status (the old one is in git)
+            stat = ''
         link = f'=HYPERLINK("{r["url"]}", "{area} round {r["round"]}")' if r else ''
         rows.append([area, names.get(area, ''), link, r['round'] if r else '', len(mine), sum(len(x['talks']) for x in mine),
                      resp, stat, r['made'].replace('T', ' ') if r else ''])
