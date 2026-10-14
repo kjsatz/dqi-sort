@@ -11,13 +11,13 @@ topics-prepare  writes work/chairs/sessions.md (every in-person session: ID, are
 handoff         reads the APS volunteer lists (config.yaml `chair_volunteers`: in_person and virtual files), keeps
                 the rows whose sub-category starts with the division code, merges people by email, and links each to
                 their abstracts: the row's abstract ID, plus any other talk by the same name (flagged for the lead).
-                Writes chairs/topics.csv (topic, area, sessions, when they run, chairs needed: sessions plus a few
-                backups; the virtual conference is one topic needing two chairs per session) and chairs/volunteers.csv,
+                Writes chairs/topics.csv (topic, area, sessions, when they run, chairs needed: one per in-person
+                session, two per virtual session, no backups; the virtual conference is one topic) and chairs/volunteers.csv,
                 and the handoff Google Sheet in the review folder: Topics, Volunteers (with empty return columns
                 status, topics, unavailable, note, the only cells the coordinator edits) and How to fill in.
                 Suggested topic: the topic of the volunteer's own session, or Virtual for virtual chairs.
 """
-import argparse, collections, json, math, os, re, sys
+import argparse, collections, json, os, re, sys
 from dqi_sort import sessions as S
 
 DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri']
@@ -143,7 +143,7 @@ def handoff(data_dir):
     trows = []
     for t in topics:
         n = len(t['sessions'])
-        need = 2 * n + 1 if t['area'] == 'VIRTUAL' else n + max(1, math.ceil(n / 4))
+        need = 2 * n if t['area'] == 'VIRTUAL' else n          # one confirmed chair per session, two per virtual session; no backups
         days = sorted({sched[x]['day'] for x in t['sessions'] if x in sched}, key=DAYS.index)
         trows.append({'topic': t['topic'], 'area': t['area'], 'sessions': ';'.join(t['sessions']), 'n_sessions': n, 'chairs_needed': need,
                       'days': ' '.join(days), 'titles': '; '.join(f"{x} {sess[x]['title']} ({when(x)})" for x in t['sessions'])})
