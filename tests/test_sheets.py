@@ -22,6 +22,8 @@ def test_area_book_rows_and_fill_formula():
     assert summary_rows[0][4].startswith('=SUMIFS(Sessions!$H$3:$H$4')               # minutes in H, checkbox in J
     assert [r[3] for r in session_rows] == ['1', '2'] and session_rows[0][9] is False
     assert session_rows[1][1].startswith("=IFERROR(VLOOKUP(A4,'Session summary'")     # the session title, following edits
+    assert b.top['Session summary'][Sh.COMMENTS_COL - 2] == Sh.COMMENTS_LABEL           # the label in F1, the box in G1
+    assert 'Sessions' not in b.top
 
 
 def test_assignments_tab_first_and_only_two_columns_open():

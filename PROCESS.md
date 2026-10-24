@@ -120,6 +120,7 @@ Reviewers get two kinds of Google Sheet, both generated from the CSVs in git.
 
 **Area sheet (editable, one per area).** Just that area's part:
 
+- **Freeform comments for Claude:** a highlighted box at the top of the first tab (Session summary), for anything that is not about one talk or session: "merge the two fluxonium sessions", "the readout talks feel scattered", "I'll finish this tomorrow". Claude reads it first when the sheet comes back, acts on it, and says in the pull request what it did with each comment.
 - **Session summary:** one row per session, with session ID, title, type (contributed, mini-symposium or symposium), length, minutes filled (computed), estimated peak attendance and suggested room size (both from the model), a room size override (blank keeps the suggestion) and human notes.
 - **Sessions:** one row per talk, with session ID, order, talk ID, title, speaker, institution, one-line summary, a **Move to lonely abstracts** checkbox and human notes.
 
@@ -131,7 +132,7 @@ What reviewers do:
 - copy in talks from the shared Lonely abstracts tab
 - copy in a talk from another area, after agreeing it with that area (on Slack)
 
-Anything else goes in the human notes, such as "this should follow talk 1234".
+Anything about one talk or session goes in the human notes, such as "this should follow talk 1234"; anything broader goes in the freeform comments box.
 
 ### How sheets and git stay in step
 

@@ -26,6 +26,9 @@ BAND = {'red': 0.94, 'green': 0.96, 'blue': 0.99}
 NOTES = {'red': 1.0, 'green': 0.97, 'blue': 0.88}
 SHORT = {'red': 0.98, 'green': 0.85, 'blue': 0.85}
 SIZES = ['small', 'medium', 'large']
+COMMENTS_LABEL = 'Freeform comments for Claude →'
+COMMENTS_COL = 6                       # the comment box: G1:I1 of an area sheet's Session summary, its label in F1
+HIGHLIGHT = {'red': 1.0, 'green': 0.89, 'blue': 0.6}
 LOG_COLS = ['kind', 'area', 'round', 'commit', 'content', 'sheet_id', 'url', 'made']
 
 
@@ -163,11 +166,13 @@ class Book:
     """One spreadsheet: tabs of rows, written in three calls (structure, values, formatting)."""
 
     def __init__(self, title_line):
-        self.title_line, self.tabs = title_line, []
+        self.title_line, self.tabs, self.top = title_line, [], {}
 
-    def tab(self, name, header, rows, fmt):
-        """fmt(sheet_id, n_rows) -> formatting requests."""
+    def tab(self, name, header, rows, fmt, top=None):
+        """fmt(sheet_id, n_rows) -> formatting requests; top: more cells for row 1, after the title in A1."""
         self.tabs.append((name, header, rows, fmt))
+        if top:
+            self.top[name] = top
 
     def write(self, sheets, spreadsheet_id, fresh):
         meta = sheets.spreadsheets().get(spreadsheetId=spreadsheet_id,
@@ -189,7 +194,7 @@ class Book:
                 reqs.append({'addSheet': {'properties': {'sheetId': sid, 'title': name, 'index': k}}})
             ids[name] = sid
         sheets.spreadsheets().batchUpdate(spreadsheetId=spreadsheet_id, body={'requests': reqs}).execute(num_retries=5)
-        data = [{'range': f"'{name}'!A1", 'values': [[f'{self.title_line}']] + [header] + rows}
+        data = [{'range': f"'{name}'!A1", 'values': [[f'{self.title_line}'] + self.top.get(name, [])] + [header] + rows}
                 for name, header, rows, _ in self.tabs]
         sheets.spreadsheets().values().batchUpdate(spreadsheetId=spreadsheet_id,
                                                    body={'valueInputOption': 'USER_ENTERED', 'data': data}).execute(num_retries=5)
@@ -203,6 +208,21 @@ def estimate_cells(est, s):
     if not e:
         return ['', '']
     return [e['interest'], e['size'] + (f" ({e['size_note']})" if e.get('size_note') else '')]
+
+
+def comments_requests(sid):
+    """Row 1 of an area sheet's Session summary: the title over A-E, a highlighted label in F, the comment box over G-I."""
+    rng = lambda c0, c1: {'sheetId': sid, 'startRowIndex': 0, 'endRowIndex': 1, 'startColumnIndex': c0, 'endColumnIndex': c1}
+    fmt = lambda c0, c1, f, fields: {'repeatCell': {'range': rng(c0, c1), 'cell': {'userEnteredFormat': f}, 'fields': f'userEnteredFormat({fields})'}}
+    box = {'style': 'SOLID_MEDIUM', 'color': {'red': 0.8, 'green': 0.55, 'blue': 0.0}}
+    return [{'mergeCells': {'range': rng(0, COMMENTS_COL - 1), 'mergeType': 'MERGE_ALL'}},
+            {'mergeCells': {'range': rng(COMMENTS_COL, COMMENTS_COL + 3), 'mergeType': 'MERGE_ALL'}},
+            {'updateDimensionProperties': {'range': {'sheetId': sid, 'dimension': 'ROWS', 'startIndex': 0, 'endIndex': 1},
+                                           'properties': {'pixelSize': 120}, 'fields': 'pixelSize'}},
+            fmt(0, COMMENTS_COL + 3, {'wrapStrategy': 'WRAP', 'verticalAlignment': 'TOP'}, 'wrapStrategy,verticalAlignment'),
+            fmt(COMMENTS_COL - 1, COMMENTS_COL, {'backgroundColor': HIGHLIGHT, 'textFormat': {'bold': True}}, 'backgroundColor,textFormat'),
+            fmt(COMMENTS_COL, COMMENTS_COL + 3, {'backgroundColor': NOTES, 'textFormat': {'bold': False}}, 'backgroundColor,textFormat'),
+            {'updateBorders': {'range': rng(COMMENTS_COL, COMMENTS_COL + 3), 'top': box, 'bottom': box, 'left': box, 'right': box}}]
 
 
 def area_book(area, name, rnd, stamp_text, sess, talks, cards, est, options):
@@ -227,7 +247,8 @@ def area_book(area, name, rnd, stamp_text, sess, talks, cards, est, options):
     b.tab('Session summary',
           ['Session', 'Title', 'Type', 'Length (min)', 'Filled (min)', 'Est. peak attendance', 'Suggested room', 'Room size override', 'Notes'],
           rows, lambda sid, n: tab_requests(sid, n, [80, 340, 110, 90, 90, 100, 150, 120, 320], wrap_cols=[1, 8], notes_cols=[7, 8])
-          + [short_rule(sid, n, 3, 4), list_req(sid, 7, n, SIZES)])
+          + [short_rule(sid, n, 3, 4), list_req(sid, 7, n, SIZES)] + comments_requests(sid),
+          top=[''] * (COMMENTS_COL - 2) + [COMMENTS_LABEL, ''])
     b.tab('Sessions',
           ['Session', 'Session title', 'Order', 'Talk ID', 'Title', 'Speaker', 'Institution', 'Minutes', 'Summary', 'Move to lonely abstracts', 'Notes'],
           srows, lambda sid, n: tab_requests(sid, n, [80, 200, 50, 75, 330, 150, 180, 65, 380, 100, 260], wrap_cols=[1, 4, 6, 8, 10], notes_cols=[10])
