@@ -47,3 +47,10 @@ def test_move_refuses_a_full_session(tmp_path):
         R.move_one(str(d), '11', 'V', 'x')                 # an in-person talk never goes to a virtual session
     R.move_one(str(d), '11', 'B', 'x')
     assert any(r['talk_id'] == '11' and r['session_id'] == 'B' for r in csv.DictReader(open(d / 'sorting' / 'assignments.csv')))
+
+
+def test_freeform_comments_are_read_after_the_label():
+    from dqi_sort.sheets import COMMENTS_LABEL
+    assert R.comments(['X: Area. Round 1', '', '', '', '', COMMENTS_LABEL, 'Merge X03 and X07, please']) == 'Merge X03 and X07, please'
+    assert R.comments(['X: Area. Round 1', '', '', '', '', COMMENTS_LABEL]) == ''
+    assert R.comments(['an old sheet with no box']) == ''

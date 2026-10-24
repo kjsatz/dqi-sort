@@ -8,11 +8,12 @@
 read   fetches the area's current round (sorting/sheets.csv) and compares it with the version that was sent: the sort
        at the commit stamped on the sheet. It writes work/review/AREA-rN/changes.json and report.md: talks moved
        between sessions, reordered, ticked for the lonely pool, added (from the pool or another area) or missing;
-       session titles, room size overrides, and every note. Columns are found by their header names.
+       session titles, room size overrides, every note, and the sheet's freeform comments for Claude (the box at the
+       top of the Session summary), which Claude reads and acts on first. Columns are found by their header names.
 apply  applies those changes to the current sort (a three-way merge): a change is applied only if the talk is still
        where the sheet found it (otherwise it is a conflict, listed and skipped). It updates sorting/assignments.csv
-       and sorting/sessions.csv, appends to sorting/moves.csv (by the reviewer) and sorting/notes.csv (every note,
-       resolution blank), records the round in sorting/reviews.csv, and reports sessions that no longer fit their
+       and sorting/sessions.csv, appends to sorting/moves.csv (by the reviewer) and sorting/notes.csv (every note and
+       the freeform comments, resolution blank), records the round in sorting/reviews.csv, and reports sessions that no longer fit their
        length. Claude then acts on the notes with `move` and opens one pull request for the area.
 move   moves one talk to a session (at a position, default the end) or to "lonely", with a reason, during review.
 homes  for each talk named (default: every lonely abstract), the sessions closest to it by content (card embeddings),
@@ -53,6 +54,15 @@ def table(sheets, sid, tab):
     vals = sheets.spreadsheets().values().get(spreadsheetId=sid, range=f"'{tab}'!A2:Z2000").execute(num_retries=5).get('values', [])
     header = [h.strip() for h in vals[0]] if vals else []
     return [dict(zip(header, r + [''] * (len(header) - len(r)))) for r in vals[1:]]
+
+
+def comments(row1):
+    """The reviewer's freeform comments for Claude: the text after the label in row 1 of the Session summary."""
+    from dqi_sort.sheets import COMMENTS_LABEL
+    cells = [str(c).strip() for c in row1]
+    if COMMENTS_LABEL not in cells:
+        return ''
+    return '\n'.join(c for c in cells[cells.index(COMMENTS_LABEL) + 1:] if c)
 
 
 def wdir(data_dir, area, rnd):
@@ -128,6 +138,9 @@ def report_text(area, rnd, commit, ch, talks):
             out += ['', f'## {title}', ''] + [f'- {fmt(c)}' for c in ch[key]]
     if ch['orders']:
         out += ['', '## Reordered', ''] + [f'- {s}: ' + ', '.join(v) for s, v in ch['orders'].items()]
+    if ch.get('comments'):
+        out += ['', '## Freeform comments for Claude', '', 'Read and act on these before applying; say in the pull request what was done with each.',
+                ''] + ['> ' + line for line in ch['comments'].split('\n')]
     return '\n'.join(out) + '\n'
 
 
@@ -136,9 +149,11 @@ def read(data_dir, area):
     r = current_round(data_dir, area)
     _, sheets = gsheets.services()
     rows, summary = table(sheets, r['sheet_id'], 'Sessions'), table(sheets, r['sheet_id'], 'Session summary')
+    row1 = sheets.spreadsheets().values().get(spreadsheetId=r['sheet_id'], range="'Session summary'!A1:Z1").execute(num_retries=5).get('values', [[]])
     sent_assign = git_csv(data_dir, r['commit'], 'sorting/assignments.csv')
     sent_sess = git_csv(data_dir, r['commit'], 'sorting/sessions.csv')
     ch = diff(sent_assign, sent_sess, area, rows, summary)
+    ch['comments'] = comments(row1[0] if row1 else [])
     from dqi_sort.sheets import read_assignments
     shared = next((x for x in reversed(S.read_csv(os.path.join(data_dir, 'sorting', 'sheets.csv'))) if x['kind'] == 'shared'), None)
     who, status = (read_assignments(sheets, shared['sheet_id']) if shared else {}).get(area, ('', ''))
@@ -260,6 +275,9 @@ def apply(data_dir, area):
         append(os.path.join(data_dir, 'sorting', 'moves.csv'), MOVE_COLS, moves)
     notes = [{'round': ch['round'], 'area': area, 'reviewer': who, 'talk_id': c['talk'], 'session_id': c['session'],
               'note': c['note'], 'resolution': ''} for c in ch['notes']]
+    if ch.get('comments'):                       # the sheet-wide comments, kept with the notes (no talk or session)
+        notes.append({'round': ch['round'], 'area': area, 'reviewer': who, 'talk_id': '', 'session_id': '',
+                      'note': 'Freeform comments for Claude: ' + ch['comments'], 'resolution': ''})
     if notes:
         append(os.path.join(data_dir, 'sorting', 'notes.csv'), NOTE_COLS, notes)
     n = len(moves) + len(ch['orders']) + len(ch['titles']) + len(ch['sizes']) + len(notes)
