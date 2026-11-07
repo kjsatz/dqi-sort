@@ -132,8 +132,11 @@ def _words(s):
 
 def title_is_name(title, speaker):
     """True when a title is empty or just the speaker's name (APS's placeholder for an invited talk not yet submitted)."""
-    words = [w for w in _words(title) if w not in NAME_TITLES]
-    return not words or set(words) <= set(_words(speaker))
+    fold = lambda w: w.replace('ae', 'a').replace('oe', 'o').replace('ue', 'u')    # Groeblacher = Gröblacher
+    words = [fold(w) for w in _words(title) if w not in NAME_TITLES]
+    names = [fold(n) for n in _words(speaker)]
+    same = lambda w, n: w == n or (min(len(w), len(n)) >= 3 and (n.startswith(w) or w.startswith(n)))   # Thom = Thomas
+    return not words or all(any(same(w, n) for n in names) for w in words)
 
 
 def read_extras(data_dir, cfg):

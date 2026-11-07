@@ -99,6 +99,16 @@ def test_title_and_zero_width_rules():
     assert textfix.clean('Title: of a talk', 'body')[0] == 'Title: of a talk'          # title rules only for titles
 
 
+def test_title_is_name():
+    from dqi_sort.intake import title_is_name
+    assert title_is_name('', 'Ann Example')
+    assert title_is_name('Dr. Ann Example', 'Ann Example')
+    assert title_is_name('Ann Exampleoe', 'Ann Exampleö')
+    assert title_is_name('Ann Exampel', 'Ann Exampel') and title_is_name('Annie Example', 'Ann Example')
+    assert not title_is_name('Example qubits', 'Ann Example')
+    assert not title_is_name('Imaginary qubits in fictional materials', 'Fay Imaginary')
+
+
 def test_invited_topics_overrides_and_boilerplate(data):
     p = data / 'input' / 'in_person.csv'
     rows = list(csv.reader(open(p, encoding='utf-8', newline='')))
