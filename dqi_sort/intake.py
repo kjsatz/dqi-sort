@@ -7,6 +7,15 @@ Reads DATA_DIR/config.yaml:
     aps_columns:  {APS header: field}, fields from FIELDS below
     aps_types:    {APS type: oral | invited}
     talk_lengths_min, dqi_categories (optional: flags talks submitted to other categories)
+    invited_topics (optional): a CSV with talk_id and topic: the expected topic of invited talks that arrive with no
+                  abstract (from the lead's list of invited speakers). Used only while APS's body is missing or
+                  shorter than 50 characters: the body becomes "No abstract submitted yet. Expected topic: ...", and a
+                  title that is just the speaker's name becomes the topic. Flag `expected_topic`. Once the speaker
+                  submits, the real abstract wins and the topic is reported as no longer needed.
+    overrides (optional): a CSV with talk_id, field, value, note: the lead's corrections to APS's data, applied on
+                  every intake (fields: speaker, affiliation, submitted_category). Flag `override`.
+    aps_boilerplate_notes (optional): regular expressions; a submitter note that matches one is APS's own text
+                  (e.g. "NOT YET SUBMITTED ... Please contact ...") and is dropped (kept in `raw`).
 
 Writes, sorted by talk ID:
     talks.csv          intake columns updated; columns owned by later stages (institution, area, series,
@@ -18,7 +27,7 @@ Writes, sorted by talk ID:
                        any session assignments already in the input (session, order, sorter note). Sorting never
                        reads this; only scoring does.
 """
-import argparse, collections, csv, json, os, re, sys
+import argparse, collections, csv, json, os, re, sys, unicodedata
 import yaml
 from dqi_sort import textfix
 
@@ -30,8 +39,11 @@ TALK_COLS = ['talk_id', 'track', 'type', 'minutes', 'title', 'speaker', 'affilia
              'submitted_category', 'area', 'series', 'series_part', 'time_windows', 'status', 'flags', 'notes']
 INTAKE_COLS = ['track', 'type', 'minutes', 'title', 'speaker', 'affiliation', 'submitted_category', 'time_windows']
 INTAKE_FLAGS = ('no_abstract', 'text_repaired', 'still_garbled', 'same_abstract', 'same_title',
-                'category_not_dqi', 'no_time_window', 'not_in_aps_input')
+                'category_not_dqi', 'no_time_window', 'not_in_aps_input', 'expected_topic', 'override')
 REF_COLS = ['talk_id', 'session_id', 'order', 'locked', 'note']
+OVERRIDE_FIELDS = {'speaker', 'affiliation', 'submitted_category'}
+MIN_BODY = 50          # an invited talk's body shorter than this is a placeholder: the expected topic is used instead
+NAME_TITLES = {'dr', 'prof', 'professor', 'mr', 'ms', 'mrs'}
 
 
 def id_key(i):
@@ -113,7 +125,39 @@ def normalize_windows(s):
     return ';'.join(out)
 
 
-def process(rec, cfg):
+def _words(s):
+    s = ''.join(c for c in unicodedata.normalize('NFKD', s or '') if not unicodedata.combining(c))
+    return re.findall(r'[a-z0-9]+', s.lower())
+
+
+def title_is_name(title, speaker):
+    """True when a title is empty or just the speaker's name (APS's placeholder for an invited talk not yet submitted)."""
+    fold = lambda w: w.replace('ae', 'a').replace('oe', 'o').replace('ue', 'u')    # Groeblacher = Gröblacher
+    words = [fold(w) for w in _words(title) if w not in NAME_TITLES]
+    names = [fold(n) for n in _words(speaker)]
+    same = lambda w, n: w == n or (min(len(w), len(n)) >= 3 and (n.startswith(w) or w.startswith(n)))   # Thom = Thomas
+    return not words or all(any(same(w, n) for n in names) for w in words)
+
+
+def read_extras(data_dir, cfg):
+    """The lead's additions to APS's data: expected invited topics, field overrides, APS boilerplate note patterns."""
+    topics, overrides = {}, collections.defaultdict(dict)
+    if cfg.get('invited_topics'):
+        for r in read_csv(os.path.join(data_dir, cfg['invited_topics'])):
+            if (r.get('topic') or '').strip():
+                topics[r['talk_id'].strip()] = r['topic'].strip()
+    if cfg.get('overrides'):
+        for r in read_csv(os.path.join(data_dir, cfg['overrides'])):
+            f = r['field'].strip()
+            if f not in OVERRIDE_FIELDS:
+                sys.exit(f"overrides: talk {r['talk_id']}: field {f!r} cannot be overridden; allowed: {sorted(OVERRIDE_FIELDS)}")
+            overrides[r['talk_id'].strip()][f] = r['value'].strip()
+    notes = [re.compile(p) for p in cfg.get('aps_boilerplate_notes') or []]
+    return {'topics': topics, 'overrides': overrides, 'notes': notes}
+
+
+def process(rec, cfg, extras=None):
+    extras = extras or {'topics': {}, 'overrides': {}, 'notes': []}
     types = cfg.get('aps_types') or {'Oral': 'oral', 'Invited': 'invited'}
     raw_type = rec.get('type', '').strip()
     typ = types.get(raw_type)
@@ -121,7 +165,12 @@ def process(rec, cfg):
         sys.exit(f"talk {rec['talk_id']}: unknown type {raw_type!r}; add it to aps_types in config.yaml")
     if 'speaker' not in rec:
         rec['speaker'] = f"{rec.get('first_name', '').strip()} {rec.get('last_name', '').strip()}".strip()
+    aps_speaker = rec['speaker']
+    override = extras['overrides'].get(rec['talk_id'], {})
+    rec.update(override)
     text, raw, fixes, flags = {}, {}, [], []
+    if override:
+        flags.append('override')
     for f in TEXT_FIELDS:
         orig = rec.get(f, '') or ''
         new, what = textfix.clean(orig, f)
@@ -133,6 +182,21 @@ def process(rec, cfg):
             flags.append('still_garbled')
     if fixes:
         flags.append('text_repaired')
+    note = text['submitter_notes']
+    if note and any(p.search(note) for p in extras['notes']):
+        raw.setdefault('submitter_notes', rec.get('submitter_notes', ''))
+        text['submitter_notes'] = ''
+        fixes.append({'field': 'submitter_notes', 'fix': 'removed APS boilerplate note', 'by': 'intake'})
+    topic = extras['topics'].get(rec['talk_id'])
+    if typ == 'invited' and topic and len(text['body']) < MIN_BODY:
+        raw.setdefault('body', rec.get('body', ''))
+        text['body'] = f'No abstract submitted yet. Expected topic: {topic}'
+        fixes.append({'field': 'body', 'fix': 'expected topic from invited_topics', 'by': 'intake'})
+        if title_is_name(text['title'], aps_speaker):
+            raw.setdefault('title', rec.get('title', ''))
+            text['title'] = topic
+            fixes.append({'field': 'title', 'fix': 'expected topic from invited_topics', 'by': 'intake'})
+        flags.append('expected_topic')
     if not text['body']:
         flags.append('no_abstract')
     cat = rec.get('submitted_category', '').strip()
@@ -244,9 +308,10 @@ def main():
     if dup:
         sys.exit(f'talk IDs appear more than once: {dup[:20]}')
 
+    extras = read_extras(d, cfg)
     talks, abstracts, refs = {}, {}, []
     for r in recs:
-        t, ab, ref = process(r, cfg)
+        t, ab, ref = process(r, cfg, extras)
         talks[t['talk_id']], abstracts[t['talk_id']] = t, ab
         if ref['session_id'] or ref['order'] or ref['note']:
             refs.append(ref)
@@ -274,6 +339,18 @@ def main():
         print(f'  {w}: {f} x{n}')
     if kept:
         print(f'Kept {len(kept)} hand-fixed abstracts unchanged: {kept[:10]}')
+    if extras['topics']:
+        used = [i for i in extras['topics'] if 'expected_topic' in talks.get(i, {}).get('flags', [])]
+        absent = sorted((i for i in extras['topics'] if i not in talks), key=id_key)
+        done = sorted((i for i in extras['topics'] if i in talks and i not in used), key=id_key)
+        print(f'Expected topics used for {len(used)} invited talks with no abstract')
+        if done:
+            print(f'  no longer needed (APS has the abstract, or the talk is not invited): {done}')
+        if absent:
+            print(f'  for talks not in the APS input: {absent}')
+    if extras['overrides']:
+        absent = sorted((i for i in extras['overrides'] if i not in talks), key=id_key)
+        print(f"Overrides applied to {len(extras['overrides']) - len(absent)} talks" + (f'; not in the APS input: {absent}' if absent else ''))
     if refs:
         print(f'Session assignments found in input: {len(refs)} talks -> reference/aps_assignments.csv')
 

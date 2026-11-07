@@ -57,6 +57,10 @@ aps_columns:                  # APS header -> field (see FIELDS in dqi_sort/inta
   Speaking Order: order
   Sorter Notes: sorter_note
 aps_types: {Oral: oral, Invited: invited}
+# The lead's additions to APS's data, applied on every intake (see dqi_sort/intake.py):
+invited_topics: null          # CSV talk_id,topic: expected topics of invited talks that arrive without an abstract
+overrides: null               # CSV talk_id,field,value,note: corrections (speaker, affiliation, submitted_category)
+aps_boilerplate_notes: []     # regexes for APS's own text in the notes column, e.g. "^NOT YET SUBMITTED"
 room_sizes: {small: 144, medium: 288, large: 500}   # seats per room size class (from venue/rooms.csv)
 symposium_min_seats: 200      # symposia never get a smaller room
 size_cutoffs: {small: 0, medium: 90, large: 140}   # suggested room size by estimated peak attendance (a low starting point; people adjust)

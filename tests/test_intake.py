@@ -97,3 +97,61 @@ def test_title_and_zero_width_rules():
     assert textfix.clean('New Submission', 'title')[0] == 'New Submission'          # nothing left: keep for the cards to flag
     assert textfix.clean('systems\u200b\u200b', 'body')[0] == 'systems'
     assert textfix.clean('Title: of a talk', 'body')[0] == 'Title: of a talk'          # title rules only for titles
+
+
+def test_title_is_name():
+    from dqi_sort.intake import title_is_name
+    assert title_is_name('', 'Ann Example')
+    assert title_is_name('Dr. Ann Example', 'Ann Example')
+    assert title_is_name('Ann Exampleoe', 'Ann Exampleö')
+    assert title_is_name('Ann Exampel', 'Ann Exampel') and title_is_name('Annie Example', 'Ann Example')
+    assert not title_is_name('Example qubits', 'Ann Example')
+    assert not title_is_name('Imaginary qubits in fictional materials', 'Fay Imaginary')
+
+
+def test_invited_topics_overrides_and_boilerplate(data):
+    p = data / 'input' / 'in_person.csv'
+    rows = list(csv.reader(open(p, encoding='utf-8', newline='')))
+    rows = [r for r in rows if any(r)] + [['1000006', 'Fay', 'Imaginary', 'Nowhere Institute', '17.01.02', 'Invited',
+                                          'Dr. Fay Imaginary', '', 'NOT YET SUBMITTED (Work in Progress). Please contact nobody@example.org.',
+                                          '', '', '', '']]
+    with open(p, 'w', encoding='utf-8', newline='') as f:
+        csv.writer(f, lineterminator='\n').writerows(rows)
+    (data / 'input' / 'invited_topics.csv').write_text(
+        'talk_id,speaker,topic,source\n'
+        '1000006,Fay Imaginary,Imaginary qubits in fictional materials,made up\n'
+        '1000001,Bo Placeholder,Placeholder topic,made up\n'
+        '1000003,Ada Example,Not used for an oral talk,made up\n'
+        '9999999,Nobody,Not in the input,made up\n', encoding='utf-8')
+    (data / 'input' / 'overrides.csv').write_text(
+        'talk_id,field,value,note\n'
+        '1000006,speaker,Gus Replacement,replaces the invited speaker\n'
+        '1000002,affiliation,Elsewhere Lab,corrected\n', encoding='utf-8')
+    with open(data / 'config.yaml', 'a', encoding='utf-8') as f:
+        f.write('invited_topics: input/invited_topics.csv\noverrides: input/overrides.csv\n'
+                'aps_boilerplate_notes: ["^NOT YET SUBMITTED"]\n')
+
+    out = run_intake(data)
+    t, a = talks(data), abstracts(data)
+    assert t['1000006']['title'] == 'Imaginary qubits in fictional materials'      # a name-only title becomes the topic
+    assert t['1000006']['speaker'] == 'Gus Replacement'
+    assert {'expected_topic', 'override'} <= set(t['1000006']['flags'].split(';'))
+    assert 'no_abstract' not in t['1000006']['flags'] and 'text_repaired' not in t['1000006']['flags']
+    assert a['1000006']['body'] == 'No abstract submitted yet. Expected topic: Imaginary qubits in fictional materials'
+    assert a['1000006']['submitter_notes'] == '' and a['1000006']['raw']['submitter_notes'].startswith('NOT YET')
+    assert t['1000001']['title'] == 'An invited overview of nothing in particular'   # a real title is kept
+    assert a['1000001']['body'].endswith('Placeholder topic')
+    assert t['1000002']['affiliation'] == 'Elsewhere Lab' and 'override' in t['1000002']['flags']
+    assert "no longer needed (APS has the abstract, or the talk is not invited): ['1000003']" in out
+    assert "for talks not in the APS input: ['9999999']" in out
+
+    # the speaker submits: the real abstract wins and the topic is no longer used
+    rows[-1][6], rows[-1][7], rows[-1][8] = 'A real imaginary title', 'A real abstract about imaginary qubits, long enough to count.', ''
+    with open(p, 'w', encoding='utf-8', newline='') as f:
+        csv.writer(f, lineterminator='\n').writerows(rows)
+    out = run_intake(data)
+    t, a = talks(data), abstracts(data)
+    assert t['1000006']['title'] == 'A real imaginary title' and 'expected_topic' not in t['1000006']['flags']
+    assert a['1000006']['body'].startswith('A real abstract') and 'raw' not in a['1000006']
+    assert t['1000006']['speaker'] == 'Gus Replacement'
+    assert "['1000003', '1000006']" in out
