@@ -4,7 +4,7 @@ Stages 5 and 6 of `PROCESS.md` (Drafting and the global pass). Claude agents run
 
 ## Stage 5: drafts
 
-Drafting needs `schedule/slots.csv`. Before APS's real grid arrives, make a stand-in from APS's session counts: `python -m dqi_sort.mockgrid DATA_DIR --long N --short M` (only the slot counts are real; replace it with the real grid before scheduling).
+Drafting and the global pass need only the number of 144- and 108-minute slots. Before APS's grid arrives, put the counts APS allots in config.yaml as `session_slots: {144: N, 108: M}`; the virtual windows are the ones the speakers listed. Once the real grid is turned into `schedule/slots.csv` (stage 0, Venue intake), it is used instead. No made-up rooms or times are needed.
 
 1. `python -m dqi_sort.sessions prepare DATA_DIR` writes, per work area, `DATA_DIR/work/sessions/AREA/`: `cards.txt` (a compact card per talk; bridge talks marked "near OTHER" when at least 7 of their 10 nearest neighbours are in other areas), `brief.md`, `prompt.md` and `talks.json`.
 2. In Claude Code, launch one Opus subagent per area, in parallel: "Read `DATA_DIR/work/sessions/AREA/prompt.md` and do exactly what it says. Read only the files it names. Write only proposal.json in that folder." Each runs `python -m dqi_sort.sessions check` until it prints OK.

@@ -635,8 +635,8 @@ def write_views(srt, rows, est, c, log, released):
                     f"{sum(r['used'] for r in mine)} / {sum(r['minutes'] for r in mine)} | {np.mean([r['coherence'] for r in mine]):.3f} |")
     summ += ['', f"In person: {L[144]} x 144 and {L[108]} x 108 against {srt.n144} x 144 and {srt.n108} x 108 slots; "
              f"{len(srt.state['pool'])} talks held for the lead."]
-    if est:
-        budget = S.room_budget(data_dir)
+    budget = S.room_budget(data_dir) if est else None
+    if budget is not None:
         want = collections.Counter(est[r['session_id']]['size'] for r in inp if r['session_id'] in est)
         summ += ['', '| Suggested room size | Sessions | Slots |', '| --- | --- | --- |']
         for k in sorted(srt.cfg.get('room_sizes') or {}, key=lambda k: srt.cfg['room_sizes'][k]):

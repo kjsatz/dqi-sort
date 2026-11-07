@@ -6,6 +6,7 @@ time_zone: MDT                # the meeting's local time, as the virtual windows
 session_lengths_min: [144, 108]
 talk_lengths_min: {oral: 12, invited: 36}
 block_min: 36
+session_slots: null           # before the real grid: {144: N, 108: M}, the slot counts APS allots
 session_budget: null          # from APS: total sessions DQI may use
 max_same_institution: 4       # soft rule, per session
 dqi_categories:               # this year's DQI submission categories: code: name
