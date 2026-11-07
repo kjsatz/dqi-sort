@@ -37,3 +37,12 @@ def test_sized_to_talks_by_default(tmp_path):
     s = slots(d)
     assert sum(int(x['minutes']) for x in s if x['track'] == 'in_person') >= 30 * 12
     assert all(x['minutes'] == '120' for x in s if x['track'] == 'virtual')
+
+
+def test_virtual_windows_in_the_grid_match_the_speakers_format(tmp_path):
+    from dqi_sort import sessions
+    d = data(tmp_path)
+    mockgrid.make(str(d), n_long=23, n_short=15)
+    _, _, _, virtual = sessions.grid(str(d))
+    assert set(virtual) == {'06:30-07:54', '12:15-13:39'}
+    assert all(sessions.windows(w) == {w} for w in virtual)      # the check reads assumed windows in this form

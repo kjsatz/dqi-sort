@@ -70,7 +70,7 @@ def apart_pairs(data_dir):
 def grid(data_dir):
     slots = read_csv(os.path.join(data_dir, 'schedule', 'slots.csv'))
     c = collections.Counter((s['track'], int(s['minutes'])) for s in slots)
-    virtual = collections.Counter(s['start'] for s in slots if s['track'] == 'virtual')
+    virtual = collections.Counter(f"{s['start']}-{s['end']}" for s in slots if s['track'] == 'virtual')   # windows, as speakers give them
     return c[('in_person', 144)], c[('in_person', 108)], c, virtual
 
 
