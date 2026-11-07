@@ -69,6 +69,29 @@ def read_history(data_dir):
     return out
 
 
+def spread_match(results, data_dir, min_sessions=20):
+    """Give a set of estimates the spread of past years' peaks, keeping the model's ranking.
+
+    The model ranks sessions fairly well (rank correlation about 0.6) but, since each estimate averages similar past
+    sessions, its numbers bunch toward the middle: on 2027's sort none went above 189 while a tenth of past sessions
+    drew more. So each estimate is replaced by the past peak at the same rank (quantile) among past non-symposium
+    sessions, and its 68% range is scaled with it; the model's own number stays in `model`. Applied only to a whole
+    sort (at least `min_sessions` estimates): a rank means nothing for a handful of sessions. Modifies `results`."""
+    if len(results) < min_sessions:
+        return results
+    past = np.sort([r['peak'] for r in read_history(data_dir) if r['type'] != 'symposium'])
+    vals = np.array([r['interest'] for r in results], float)
+    order = np.argsort(vals, kind='stable')
+    rank = np.empty(len(vals)); rank[order] = np.arange(len(vals))
+    for v in np.unique(vals):                    # tied estimates share their average rank
+        rank[vals == v] = rank[vals == v].mean()
+    for r, k in zip(results, rank):
+        mapped = float(np.quantile(past, (k + 0.5) / len(vals)))
+        f = mapped / max(1, r['interest'])
+        r.update(model=r['interest'], interest=round(mapped), low=round(r['low'] * f), high=round(r['high'] * f))
+    return results
+
+
 # ---------- model ----------
 def _design(rows, years):
     """One-hot columns for type, year, day, time of day (intercept handled separately)."""

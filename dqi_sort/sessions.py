@@ -362,13 +362,15 @@ def kind(n_invited):
 
 
 def estimates(data_dir, sessions, cfg):
-    """{session_id: estimate dict with size and size_note}, or {} without the model or Ollama."""
+    """{session_id: estimate dict with size and size_note}, or {} without the model or Ollama. For a whole sort the
+    estimates are spread-matched to past years' peaks by rank (attendance.spread_match)."""
     from dqi_sort import attendance
     try:
         model = attendance.load(data_dir)
         titles = [s['title'] for s in sessions]
         types = [s['kind'] for s in sessions]
         res = model.interest(titles, types, attendance.ollama_embed([attendance.session_text(t, y) for t, y in zip(titles, types)]))
+        attendance.spread_match(res, data_dir)     # the model's ranking, past years' spread (docs/attendance.md)
     except Exception as e:           # no model file, or Ollama not running
         print(f'no attendance estimates ({e.__class__.__name__}: {e})')
         return {}

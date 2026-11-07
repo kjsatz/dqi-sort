@@ -80,3 +80,23 @@ def test_size_suggestion():
     assert m.size({'interest': 180, 'high': 250}, 'mini-symposium', cut, seats) == ('large', '')
     assert m.size({'interest': 60, 'high': 90}, 'symposium', cut, seats, symposium_min=200) == ('medium', '')
     assert m.size({'interest': 700, 'high': 900}, 'symposium', cut, seats) == ('large', 'may overflow')
+
+
+def test_spread_match_keeps_ranks_and_takes_the_past_spread(tmp_path):
+    from dqi_sort import attendance as A
+    (tmp_path / 'history').mkdir()
+    rows = ['year,session_code,title,type,type_as_given,primary_unit,day,start,end,minutes,room,capacity,peak,entries,avg_visit_min,peak_share,full,note']
+    rows += [f'2025,S{k},T{k},contributed,,,Mon,08:00,10:24,144,R,1000,{p},,,,,' for k, p in enumerate(range(10, 410, 10))]
+    rows += ['2025,Y1,Sym,symposium,,,Mon,08:00,10:24,144,R,1000,999,,,,,']                 # symposia are left out
+    (tmp_path / 'history' / 'attendance.csv').write_text('\n'.join(rows) + '\n')
+    res = [{'interest': v, 'low': v // 2, 'high': v * 2} for v in [80, 90, 100, 100, 85] * 5]
+    A.spread_match(res, str(tmp_path))
+    got = [r['interest'] for r in res]
+    assert max(got) <= 400 and min(got) >= 10 and max(got) - min(got) > 200            # past spread, not the model's
+    assert [r['model'] for r in res][:5] == [80, 90, 100, 100, 85]
+    first = res[:5]
+    assert first[2]['interest'] == first[3]['interest']                                  # ties share a rank
+    assert first[0]['interest'] < first[4]['interest'] < first[1]['interest'] < first[2]['interest']
+    assert all(r['low'] < r['interest'] < r['high'] for r in res)
+    few = [{'interest': 50, 'low': 30, 'high': 80}]
+    assert A.spread_match(few, str(tmp_path))[0]['interest'] == 50                        # too few to rank: unchanged
