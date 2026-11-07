@@ -17,7 +17,7 @@ merge checks every batch_NNN.out.json against its batch and adds the valid cards
 (sorted by talk ID; a talk's existing card is replaced). Batches with problems are listed and skipped,
 so they can be rerun on their own.
 """
-import argparse, glob, json, os, sys
+import argparse, glob, json, os, re, sys
 import yaml
 
 PROMPT = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'prompts', 'card_spec.md')
@@ -90,6 +90,8 @@ def prepare(data_dir, ids_file, batch_size):
         os.remove(old)
     with open(os.path.join(out, 'prompt.md'), 'w', encoding='utf-8') as f:
         f.write(prompt_text(cfg))
+    with open(os.path.join(out, 'agent_task.md'), 'w', encoding='utf-8') as f:
+        f.write(agent_task(out))
     n = 0
     for k in range(0, len(ids), batch_size):
         batch = [{'talk_id': i, 'type': talks[i]['type'], 'title': abstracts[i]['title'],
@@ -99,6 +101,31 @@ def prepare(data_dir, ids_file, batch_size):
             json.dump(batch, f, ensure_ascii=False, indent=1)
         n += 1
     print(f'{len(ids)} talks in {n} batches of up to {batch_size} in {out}')
+    print(f'Give each Haiku subagent agent_task.md with NNN replaced by its batch number (docs/cards.md).')
+
+
+AGENT_TASK = """You write presentation cards for conference talks. The talk data is private; do not copy it anywhere
+except the files named below.
+
+1. Read the card spec: {out}/prompt.md
+2. Read your batch (a JSON array of talks): {out}/batch_NNN.json
+3. Write the cards, exactly as the spec says (one object per talk, same order, exactly the spec's keys), to:
+   {out}/batch_NNN.out.json
+   If the output is too long to write in one go, write it in parts named {out}/batch_NNN.part1.json,
+   batch_NNN.part2.json, ... (other agents run in parallel: never use generic file names or a scratch folder),
+   join them into that one file with a short python3 command, then delete the parts.
+4. Check it by running, from {code}:
+   .venv/bin/python -m dqi_sort.cards check {out}/batch_NNN.out.json
+   Fix every problem it reports and rerun until it prints OK.
+
+Do not read or change any other files. Reply with one line: the check's final output.
+"""
+
+
+def agent_task(out):
+    """The task text for one card subagent; NNN stands for its batch number."""
+    code = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    return AGENT_TASK.format(out=os.path.abspath(out), code=code)
 
 
 # ---------- check ----------
@@ -167,6 +194,7 @@ def check_batch(out_path, cfg):
         errs.append(f'talk_ids differ from the batch: {len(got)} cards for {len(want)} talks; '
                     f'missing {[i for i in want if i not in got][:10]}, unexpected {[i for i in got if i not in want][:10]}')
     aff = {t['talk_id']: t['affiliation'] for t in talks}
+    text = {t['talk_id']: f"{t['title']} {t['body']}" for t in talks}
     for c in cards:
         if not isinstance(c, dict):
             errs.append('every card must be a JSON object')
@@ -175,7 +203,24 @@ def check_batch(out_path, cfg):
             errs.append(f"{c.get('talk_id')}: {e}")
         if c.get('talk_id') in aff and c.get('affiliation') != aff[c['talk_id']]:
             errs.append(f"{c['talk_id']}: affiliation must be copied exactly from the input")
+        if c.get('talk_id') in text and not problems(c, cfg) and overlap(c, text[c['talk_id']]) < MIN_OVERLAP:
+            errs.append(f"{c['talk_id']}: the card shares almost no words with this talk's title and abstract; "
+                        f"was it written for another talk? Rewrite it from this talk's own text")
     return cards, errs
+
+
+STOP = set('the a an of and in for to with on by from at as is are we our this that be using via its into or '
+           'quantum qubit qubits'.split())
+MIN_OVERLAP = 0.15     # on the 2027 run (1,929 cards) every card written for its own talk was above 0.2
+
+
+def overlap(card, text):
+    """Share of a card's content words that occur in the talk's title and abstract: a card written for another talk
+    (e.g. from a parallel agent's file) scores near zero."""
+    words = lambda s: {w for w in re.findall(r'[a-z][a-z0-9-]{2,}', (s or '').lower()) if w not in STOP}
+    mine = words(' '.join(str(card.get(k) or '') for k in ('platform', 'problem', 'key_claim', 'session_pitch'))
+                 + ' ' + ' '.join(card.get('keywords') or []))
+    return len(mine & words(text)) / max(1, len(mine))
 
 
 def find_data_dir(path):
