@@ -258,6 +258,8 @@ Room distances can be rough, and pairs may be left out. A missing pair counts as
 
 **The grid.** Each day has a fixed pattern of session times. This year, Monday to Thursday each have four sessions (144, 108, 144 and 108 minutes) and Friday has three (144, 108, 144). Most rooms are ours for every session time all week; a few rooms are available only for some. The invited symposium sessions arrive already scheduled; they are entered as locked sessions in their slots. `slots.csv` lists every room-time slot we have.
 
+**Talks elsewhere in the meeting.** Some DQI speakers also give a talk outside our sessions at a fixed time, most often an invited symposium talk. APS's sheet lists these per talk (in 2027, the "Also Presenting (auto)" column, with the session and its day and time). Intake does not read that column yet, so before the solver runs, check it and add each fixed time as a hard rule for that speaker's DQI talk.
+
 Hard rules:
 
 - every session gets exactly one slot, of its own length (the global pass builds as many 144- and 108-minute sessions as there are slots of each)
@@ -340,7 +342,7 @@ The virtual meeting is a separate, much smaller track: about 30–40 talks last 
 
 ## Chairs
 
-Chair recruiting starts with the sort review (stage 7): by then each area's sessions are known, so its expert knows how many chairs to find. It runs in one **recruiting spreadsheet**, separate from the review sheets because it is a living document: a week or more of back-and-forth, edited by several people. Each review area has a tab, handled by someone who knows the field and can reach into their own network. Each session needs exactly one confirmed chair (two for a virtual session); there are no backups.
+Chair recruiting starts with the sort review (stage 7): by then each area's sessions are known, so its expert knows how many chairs to find. It runs in one **recruiting spreadsheet**, separate from the review sheets because it is a living document: a week or more of back-and-forth, edited by several people. Each review area has a tab, handled by someone who knows the field and can reach into their own network. Each session needs exactly one confirmed chair (two for a virtual session); there are no backups. In 2027 APS sends the formal invitations to the chairs we name, and asks only for our best guess; the recruiters may still check with people first, from the volunteer list or their own network, before we name them.
 
 1. **Volunteers.** APS sends one volunteer list for all of APS, with an in-person tab and a virtual tab. We keep the rows whose sub-category starts with our division number (17 in 2026; `division_code` in `config.yaml`), merge people by email, and link each to their abstracts (by the row's abstract ID; another talk under the same name is flagged to confirm). A volunteer appears in the area of their own talk; volunteers whose abstract is not in our program have their own tab, for any area to draw on.
 2. **The recruiting spreadsheet** (`python -m dqi_sort.chairs sync DATA_DIR`, made once and then updated in place):
@@ -390,6 +392,8 @@ After delivery, changes go to APS directly; we record them the same way so the d
 ## When the abstracts arrive
 
 The first step, before the cards: **reconcile the invited speakers.** The lead has a list of the invited speakers we expect, with their topics. Compare it with the invited talks that land in APS's sheet: who is missing, who is there but not expected, who appears twice (a placeholder next to the real entry), and whose entry has no abstract. Missing and unexpected speakers go to the lead to chase with APS; the expected topics give the cards of invited talks that arrive with only a name. Log the outcome as a checkpoint.
+
+Two files in the data repo carry the outcome into intake, which applies them every time it runs: `invited_topics` (talk ID and expected topic; used only while APS has no abstract, so the speaker's own abstract wins once submitted) and `overrides` (the lead's corrections to APS's speaker, affiliation or category, e.g. a replacement speaker on the same abstract ID). A placeholder entered twice is dropped as a duplicate with `decide.py`.
 
 ## Before abstracts arrive
 
