@@ -9,7 +9,7 @@ prepare  writes, per work area, work/sessions/AREA/: cards.txt (one compact card
          One Claude agent per area then reads prompt.md and writes proposal.json there.
 check    validates one draft: every talk placed once or released with a reason; in-person sessions of
          MIN_UNITS to MAX_UNITS units (length is chosen later, by the global pass: dqi_sort.pack); at most 2 invited
-         talks; series together, consecutive and in order; virtual sessions of 120 minutes whose speakers share a
+         talks; series together, consecutive and in order; virtual sessions of virtual_session_min (config) whose speakers share a
          time window, with every virtual talk placed (the virtual track releases nothing). Prints ERROR and WARN
          lines, or OK.
 
@@ -68,9 +68,28 @@ def apart_pairs(data_dir):
 
 # ---------- the grid ----------
 def grid(data_dir):
-    slots = read_csv(os.path.join(data_dir, 'schedule', 'slots.csv'))
-    c = collections.Counter((s['track'], int(s['minutes'])) for s in slots)
-    virtual = collections.Counter(s['start'] for s in slots if s['track'] == 'virtual')
+    """(144-minute slots, 108-minute slots, Counter of (track, minutes), Counter of virtual windows "HH:MM-HH:MM").
+
+    From schedule/slots.csv once the real grid is in. Before that, from config.yaml `session_slots` ({144: N, 108: M},
+    the counts APS allots) and the windows the virtual speakers listed; virtual sessions are not pre-allocated, so
+    each window is open to as many sessions as the virtual talks could fill."""
+    path = os.path.join(data_dir, 'schedule', 'slots.csv')
+    if os.path.exists(path):
+        slots = read_csv(path)
+        c = collections.Counter((s['track'], int(s['minutes'])) for s in slots)
+        virtual = collections.Counter(f"{s['start']}-{s['end']}" for s in slots if s['track'] == 'virtual')   # windows, as speakers give them
+        return c[('in_person', 144)], c[('in_person', 108)], c, virtual
+    cfg = load_config(data_dir)
+    counts = {int(k): int(v) for k, v in (cfg.get('session_slots') or {}).items()}
+    if not counts:
+        sys.exit('no schedule/slots.csv and no session_slots in config.yaml: give the 144- and 108-minute slot counts')
+    c = collections.Counter({('in_person', m): n for m, n in counts.items()})
+    vt = [t for t in read_csv(os.path.join(data_dir, 'talks.csv')) if t['track'] == 'virtual' and t['status'] == 'active']
+    vmin = cfg.get('virtual_session_min') or 120
+    n_virtual = -(-sum(units(t) for t in vt) // (vmin // UNIT_MIN)) + 2 if vt else 0     # what the talks fill, plus spares
+    wins = sorted({w for t in vt for w in windows(t['time_windows'])})
+    virtual = collections.Counter({w: n_virtual for w in wins})
+    c[('virtual', vmin)] = n_virtual
     return c[('in_person', 144)], c[('in_person', 108)], c, virtual
 
 
@@ -117,13 +136,13 @@ RULES_IN_PERSON = """- **Sizes.** An oral talk is 1 unit (12 minutes); an invite
 
 RULES_VIRTUAL = """- **The virtual track is closed.** Place every virtual talk in a virtual session: release nothing. Talks never move
   between the virtual and in-person tracks, and nothing moves in or out of DQI from here.
-- **Lengths.** Every virtual session is 120 minutes: 10 units. An oral talk is 1 unit (12 minutes), an
+- **Lengths.** Every virtual session is {VMIN} minutes: {VUNITS} units. An oral talk is 1 unit (12 minutes), an
   invited talk 3.
-- **Time windows.** Each speaker lists the virtual time windows (Mountain Time) they can make. Every speaker in
+- **Time windows.** Each speaker lists the virtual time windows ({TZ}) they can make. Every speaker in
   a session must share at least one window. For a speaker with no window listed, choose the window that suits
-  their institution's location and record it in `assumed_windows` ({"id": "10:30-12:30"}), so the check uses it.
-  Windows and how many virtual slots each has: {WINDOWS}.
-- Give each session `"minutes": 120`. Use as few sessions as the windows allow (at most {NV}). Fitting every talk
+  their institution's location and record it in `assumed_windows` ({"id": "{WEX}"}), so the check uses it.
+  The windows the speakers listed: {WINDOWS}.
+- Give each session `"minutes": {VMIN}`. Use as few sessions as the windows allow (at most {NV}). Fitting every talk
   into the windows comes first; then make each session as coherent in topic as the windows allow.
 - **Non-scientific talks** (cards marked "non-scientific?") go at the end of a session, together where the windows
   allow, after the session's scientific talks. A promotional tone is fine and needs nothing."""
@@ -135,7 +154,7 @@ def brief_text(area, spec, talks, limits):
     lines = [f"# {area}: {spec.get('name', '')}", '',
              f"{len(talks)} talks ({len(talks) - inv} oral, {inv} invited): {u} units."]
     if limits['virtual']:
-        lines.append(f"Virtual track: at most {limits['max_sessions']} sessions of 120 minutes.")
+        lines.append(f"Virtual track: at most {limits['max_sessions']} sessions of {limits['minutes'][0]} minutes.")
     else:
         lines.append(f"Sessions of {MIN_UNITS} to {MAX_UNITS} units; about {limits['target_sessions']} sessions "
                      f"(the meeting averages {limits['avg_units']:.1f} units per session).")
@@ -160,7 +179,7 @@ def prepare(data_dir):
         if (t['track'] == 'virtual') != (t['area'] == 'VIRTUAL'):       # the tracks are a hard partition
             sys.exit(f"talk {t['talk_id']} is {t['track']} but in area {t['area']}; run areas propose again")
         by_area[t['area']].append(t)
-    n144, n108, _, virtual = grid(data_dir)
+    n144, n108, grid_counts, virtual = grid(data_dir)
     avg = (12 * n144 + 9 * n108) / max(1, n144 + n108)
     from dqi_sort.areas import neighbour_areas, bridge
     from dqi_sort.embed import load as load_embeddings
@@ -180,9 +199,14 @@ def prepare(data_dir):
         os.makedirs(d, exist_ok=True)
         ts.sort(key=lambda t: ((cards.get(t['talk_id']) or {}).get('best_category', ''), id_key(t['talk_id'])))
         if area == 'VIRTUAL':
-            limits = {'virtual': True, 'max_sessions': sum(virtual.values()), 'minutes': [cfg.get('virtual_session_min', 120)]}
-            rules = RULES_VIRTUAL.replace('{NV}', str(limits['max_sessions'])).replace(
-                '{WINDOWS}', ', '.join(f'{k} ({n})' for k, n in sorted(virtual.items())))
+            vmin = cfg.get('virtual_session_min', 120)
+            limits = {'virtual': True, 'max_sessions': grid_counts[('virtual', vmin)] or sum(virtual.values()), 'minutes': [vmin]}
+            vmin = limits['minutes'][0]
+            rules = (RULES_VIRTUAL.replace('{NV}', str(limits['max_sessions']))
+                     .replace('{WINDOWS}', ', '.join(sorted(virtual)))
+                     .replace('{VMIN}', str(vmin)).replace('{VUNITS}', str(vmin // UNIT_MIN))
+                     .replace('{TZ}', cfg.get('time_zone') or 'the time zone given with them')
+                     .replace('{WEX}', next(iter(sorted(virtual)), '10:30-11:54')))
         else:
             target = round(sum(units(t) for t in ts) / avg)
             limits = {'virtual': False, 'target_sessions': target, 'avg_units': avg}
@@ -359,6 +383,8 @@ def estimates(data_dir, sessions, cfg):
 
 def room_budget(data_dir):
     """{size class: number of in-person slots in rooms of that class}."""
+    if not os.path.exists(os.path.join(data_dir, 'venue', 'rooms.csv')):
+        return None                                           # no real rooms yet
     rooms = {r['room_id']: r['size'] for r in read_csv(os.path.join(data_dir, 'venue', 'rooms.csv'))}
     slots = read_csv(os.path.join(data_dir, 'schedule', 'slots.csv'))
     return collections.Counter(rooms.get(s['room_id'], '') for s in slots if s['track'] == 'in_person')
