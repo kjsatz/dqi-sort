@@ -199,7 +199,7 @@ The data repo holds one set of files per year:
 
 | File | One row per | Columns |
 | --- | --- | --- |
-| `config.yaml` | — | Division number, session lengths (144 and 108 minutes in person this year; 120 virtual), talk lengths (12 and 36), session budget, DQI submission categories, other APS units, APS column layout, scheduling weights |
+| `config.yaml` | — | Division number, session lengths (144 and 108 minutes in person this year; 84 virtual), time zone, talk lengths (12 and 36), session budget, DQI submission categories, other APS units, APS column layout, scheduling weights |
 | `talks.csv` | talk | talk_id, track (in_person / virtual), type, minutes, title, speaker, affiliation, institution, submitted_category, area, series, series_part, time_windows (virtual only), status, flags, notes |
 | `abstracts.jsonl` | talk | talk_id, title, body, submitter_notes (repaired text), raw (the text as received, when a repair was made), text_fix (what was changed and by whom) |
 | `cards.jsonl` | talk | Presentation card as JSON |
@@ -333,7 +333,7 @@ Commands: `python -m dqi_sort.order positions DATA_DIR` (each room's blocks, by 
 The virtual meeting is a separate, much smaller track: about 30–40 talks last year. It is sorted on its own and treated as its own area in review and in chair recruiting. The aim is modest: fit every talk within the timing constraints, with sessions that are plausibly coherent in topic.
 
 - **A closed track.** Every virtual talk gets a virtual session. Virtual talks are not proposed for posters or other units, and nothing moves in or out of DQI unless it is absolutely necessary (the lead's call). No talk moves between the virtual and in-person tracks.
-- **Sessions** are 120 minutes: 10 contributed talks, or an invited talk in place of 3 of them (rare).
+- **Sessions** are `virtual_session_min` long (84 minutes in 2027: 7 contributed talks, or an invited talk in place of 3 of them).
 - **Time zone comes first.** Submitters pick one or more of the virtual time windows that work for them (listed in Mountain Time). When a submitter gives none, we infer a window from their affiliation's location. Talks are grouped so that every speaker in a session can make the session's window, then by topic as far as the time zones allow.
 - **Non-scientific talks** (flagged by `leadership_review`) are placed at the end of a session, together where the windows allow. A promotional tone needs nothing.
 - **Drafted once.** The virtual draft (stage 5) is final for sorting; the global pass does not touch it.

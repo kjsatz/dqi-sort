@@ -4,10 +4,12 @@ Stages 5 and 6 of `PROCESS.md` (Drafting and the global pass). Claude agents run
 
 ## Stage 5: drafts
 
+Drafting needs `schedule/slots.csv`. Before APS's real grid arrives, make a stand-in from APS's session counts: `python -m dqi_sort.mockgrid DATA_DIR --long N --short M` (only the slot counts are real; replace it with the real grid before scheduling).
+
 1. `python -m dqi_sort.sessions prepare DATA_DIR` writes, per work area, `DATA_DIR/work/sessions/AREA/`: `cards.txt` (a compact card per talk; bridge talks marked "near OTHER" when at least 7 of their 10 nearest neighbours are in other areas), `brief.md`, `prompt.md` and `talks.json`.
 2. In Claude Code, launch one Opus subagent per area, in parallel: "Read `DATA_DIR/work/sessions/AREA/prompt.md` and do exactly what it says. Read only the files it names. Write only proposal.json in that folder." Each runs `python -m dqi_sort.sessions check` until it prints OK.
 
-A draft session holds 8 to 12 units (an oral talk is 1, an invited talk 3); its length is not chosen yet, but each area aims for the grid's mix of long (11-12 units) and short (8-9) sessions and avoids 10-unit ones. Talks with no good home in the area are released to the pool, bridge talks first. Virtual sessions are final at this stage (120 minutes; speakers share a time window): the virtual draft places every virtual talk, non-scientific ones at the end of a session, and no talk moves between the virtual and in-person tracks.
+A draft session holds 8 to 12 units (an oral talk is 1, an invited talk 3); its length is not chosen yet, but each area aims for the grid's mix of long (11-12 units) and short (8-9) sessions and avoids 10-unit ones. Talks with no good home in the area are released to the pool, bridge talks first. Virtual sessions are final at this stage (`virtual_session_min` in config.yaml, 84 minutes in 2027; speakers share a time window): the virtual draft places every virtual talk, non-scientific ones at the end of a session, and no talk moves between the virtual and in-person tracks.
 
 ## Stage 6: the global pass
 

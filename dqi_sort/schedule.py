@@ -469,7 +469,7 @@ def grid(data_dir):
     vrows = [[f"{slots[sched[i]]['day']} {slots[sched[i]]['start']}–{slots[sched[i]]['end']}", i, sess[i]['title'], request_note(members[i], cards)]
              for i in sorted((i for i in sched if sess.get(i, {}).get('area') == 'VIRTUAL'),
                              key=lambda i: (DAYS.index(slots[sched[i]]['day']), slots[sched[i]]['start']))]
-    b.tab('Virtual', ['Time (MDT)', 'Session', 'Title', 'Requests'], vrows,
+    b.tab('Virtual', [f"Time ({cfg.get('time_zone') or 'local'})", 'Session', 'Title', 'Requests'], vrows,
           lambda sid, n: tab_requests(sid, n, [150, 90, 420, 260], wrap_cols=[2, 3]) + [color_req(sid, HEADER_ROW, HEADER_ROW + n, 0, 4, GREEN)] + protect_req(sid))
     drive, sheets = gsheets.services()
     log_path = os.path.join(data_dir, 'sorting', 'sheets.csv')

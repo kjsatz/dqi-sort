@@ -363,7 +363,7 @@ def sync(data_dir, areas=None, all_areas=False, attendance=True):
         todo = in_sort
     else:
         todo = [a for a in in_sort if a not in last or last[a]['content'] != content_hash(a, sess, talks)]
-    est = S.estimates(data_dir, [s for s in sess if s['minutes'] != '120'], cfg) if attendance else {}
+    est = S.estimates(data_dir, [s for s in sess if s.get('area') != 'VIRTUAL'], cfg) if attendance else {}
     drive, sheets = gsheets.services()
     shared = next((r for r in reversed(log) if r['kind'] == 'shared'), None)
     status = read_assignments(sheets, shared['sheet_id']) if shared else {}      # what people typed: keep it across syncs
