@@ -45,3 +45,49 @@ def test_held_back_needs_a_status_not_just_a_name():
 
 def test_plain_abstract_text():
     assert Sh.plain('<p>We show &mu;s <em>coherence</em>.</p><p>Second.</p>') == 'We show μs coherence.\nSecond.'
+
+
+class FakeDrive:
+    """Just enough of the Drive v3 permissions API for the sharing helpers."""
+    def __init__(self, perms):
+        self.perms, self.created = perms, []
+
+    def permissions(self):
+        return self
+
+    def list(self, fileId, fields):
+        return _Run({'permissions': self.perms.get(fileId, [])})
+
+    def create(self, fileId, body, fields, **kw):
+        self.created.append((fileId, body, kw))
+        return _Run({'id': 'p'})
+
+
+class _Run:
+    def __init__(self, value):
+        self.value = value
+
+    def execute(self, num_retries=0):
+        return self.value
+
+
+def test_new_round_keeps_previous_access_and_adds_link_sharing():
+    from dqi_sort import gsheets
+    drive = FakeDrive({'old': [{'type': 'user', 'role': 'owner', 'emailAddress': 'lead@example.org'},
+                               {'type': 'user', 'role': 'writer', 'emailAddress': 'reviewer@example.org'},
+                               {'type': 'domain', 'role': 'commenter', 'domain': 'example.org', 'allowFileDiscovery': False}]})
+    gsheets.share(drive, 'new', gsheets.new_sheet_access(drive, 'old', 'reader'))
+    bodies = [(b['type'], b['role'], b.get('emailAddress') or b.get('domain')) for _, b, _ in drive.created]
+    assert bodies == [('user', 'writer', 'reviewer@example.org'), ('domain', 'commenter', 'example.org'), ('anyone', 'reader', None)]
+    assert drive.created[0][2] == {'sendNotificationEmail': False}               # reviewers are not emailed
+    assert all(f == 'new' for f, _, _ in drive.created)
+
+
+def test_link_sharing_only_when_set_and_not_doubled():
+    from dqi_sort import gsheets
+    drive = FakeDrive({'old': [{'type': 'anyone', 'role': 'commenter', 'allowFileDiscovery': False}]})
+    assert gsheets.new_sheet_access(drive, None, None) == []
+    assert gsheets.new_sheet_access(drive, 'old', 'reader') == [{'type': 'anyone', 'role': 'commenter', 'allowFileDiscovery': False}]
+    import pytest
+    with pytest.raises(ValueError):
+        gsheets.new_sheet_access(drive, None, 'owner')
