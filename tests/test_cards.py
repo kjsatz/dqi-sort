@@ -27,8 +27,9 @@ def test_bad_cards():
 
 
 def test_check_batch_matches_input(tmp_path):
-    batch = [{'talk_id': '1000001', 'type': 'oral', 'title': 'T', 'body': 'B', 'submitter_notes': '', 'affiliation': 'Nowhere Institute'},
-             {'talk_id': '1000002', 'type': 'oral', 'title': 'T2', 'body': 'B2', 'submitter_notes': '', 'affiliation': 'Elsewhere'}]
+    text = {'title': 'Imaginary devices', 'body': 'We did a made-up thing with a made-up qubit to study imaginary loss: alpha, beta, gamma.'}
+    batch = [dict(text, talk_id='1000001', type='oral', submitter_notes='', affiliation='Nowhere Institute'),
+             dict(text, talk_id='1000002', type='oral', submitter_notes='', affiliation='Elsewhere')]
     (tmp_path / 'batch_000.json').write_text(json.dumps(batch))
     out = tmp_path / 'batch_000.out.json'
     out.write_text(json.dumps([card()]))                                        # one card missing
@@ -49,3 +50,26 @@ def test_prepare_refuses_with_unmerged_outputs(tmp_path):
     with pytest.raises(SystemExit):
         cards.prepare(str(tmp_path), None, 100)
     assert (w / 'batch_000.out.json').exists()
+
+
+def test_check_batch_catches_a_card_written_for_another_talk(tmp_path):
+    batch = [{'talk_id': '1000001', 'type': 'oral', 'title': 'Fictional phonons in a pretend crystal',
+              'body': 'Pretend phonon lifetimes in a fictional lattice are measured.', 'submitter_notes': '',
+              'affiliation': 'Nowhere Institute'}]
+    (tmp_path / 'batch_000.json').write_text(json.dumps(batch))
+    out = tmp_path / 'batch_000.out.json'
+    out.write_text(json.dumps([card()]))                     # a card about a made-up qubit, not this talk
+    assert any('another talk' in e for e in cards.check_batch(str(out), CFG)[1])
+    out.write_text(json.dumps([card(platform='fictional lattice', problem='pretend phonon lifetimes',
+                                    key_claim='Phonon lifetimes in a pretend crystal are measured.',
+                                    keywords=['phonon', 'fictional lattice', 'pretend crystal'], session_pitch='Fictional phonons')]))
+    assert cards.check_batch(str(out), CFG)[1] == []
+
+
+def test_prepare_writes_the_agent_task(tmp_path):
+    (tmp_path / 'config.yaml').write_text('dqi_categories: {}\n')
+    (tmp_path / 'abstracts.jsonl').write_text(json.dumps({'talk_id': '1000001', 'title': 'T', 'body': 'B', 'submitter_notes': ''}) + '\n')
+    (tmp_path / 'talks.csv').write_text('talk_id,type,affiliation,status,submitted_category\n1000001,oral,Nowhere,active,17.01.01\n')
+    cards.prepare(str(tmp_path), None, 50)
+    task = (tmp_path / 'work' / 'cards' / 'agent_task.md').read_text()
+    assert 'batch_NNN.part1.json' in task and 'batch_NNN.out.json' in task and str(tmp_path) in task
