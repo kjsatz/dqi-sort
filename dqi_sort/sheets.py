@@ -13,6 +13,10 @@ Run after every merge to the data repo, from the lead's computer (sign-in: docs/
   sorting/area_status.csv. Its other tabs (session summary, sessions, lonely abstracts, moves) and the rest of the
   first tab are locked to the owner (the lead).
 
+Access: a new round's area sheet gets the access of the area's previous sheet (people keep what they had; Drive
+sends them no email), and every new sheet is open to anyone with the link at `sheets.link_sharing` in config.yaml
+(reader, commenter or writer; unset: private). The shared sheet is updated in place, so its access stays as set.
+
 Every sheet is stamped with the data repo's commit, so the sorting files must be committed first. The sheets made
 are recorded in sorting/sheets.csv (kind, area, round, commit, content hash, sheet ID, link, time); the
 assignments in sorting/area_status.csv (area, responsible, status), so git keeps a dated record of each.
@@ -395,6 +399,7 @@ def sync(data_dir, areas=None, all_areas=False, attendance=True):
             print(f"{a}: round {last[a]['round']} is out (Status: {status[a][1]}); its changes wait for the next round")
         todo = [a for a in todo if a not in out]
     year_name = (cfg.get('sheets') or {}).get('folder_name', 'DQI sort')
+    link_role = (cfg.get('sheets') or {}).get('link_sharing')      # e.g. reader: anyone with the link can view
     now = datetime.datetime.now().isoformat(timespec='minutes')
 
     options = read_options(data_dir, sess)
@@ -402,6 +407,12 @@ def sync(data_dir, areas=None, all_areas=False, attendance=True):
         rnd = 1 + sum(1 for r in log if r['kind'] == 'area' and r['area'] == area)
         title = f'{area} round {rnd} ({commit})'
         aid = gsheets.create_sheet(drive, title, folder)
+        prev = last.get(area)                    # a new round keeps the access of the area's previous sheet
+        try:
+            gsheets.share(drive, aid, gsheets.new_sheet_access(drive, prev['sheet_id'] if prev else None, link_role))
+        except Exception as e:                   # the previous sheet trashed or unreachable: link sharing only
+            print(f'{area}: could not copy access from round {prev["round"] if prev else "?"} ({e.__class__.__name__}); link sharing only')
+            gsheets.share(drive, aid, gsheets.new_sheet_access(drive, None, link_role))
         area_book(area, names.get(area, ''), rnd, stamp_text, sess, talks, cards, est, options.get(area)).write(sheets, aid, True)
         drive.files().update(fileId=aid, body={'description': stamp_text}).execute(num_retries=5)
         log.append({'kind': 'area', 'area': area, 'round': rnd, 'commit': commit, 'content': content_hash(area, sess, talks),
@@ -410,6 +421,8 @@ def sync(data_dir, areas=None, all_areas=False, attendance=True):
 
     fresh = shared is None
     sid = gsheets.create_sheet(drive, f'{year_name}: shared sort', folder) if fresh else shared['sheet_id']
+    if fresh:                                    # the shared sheet is updated in place after this, so its access stays
+        gsheets.share(drive, sid, gsheets.new_sheet_access(drive, None, link_role))
     latest = {}
     for r in log:
         if r['kind'] == 'area':

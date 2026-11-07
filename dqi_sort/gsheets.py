@@ -59,6 +59,46 @@ def create_sheet(drive, title, folder_id):
     return f['id']
 
 
+ROLES = ('reader', 'commenter', 'writer')
+
+
+def access(drive, file_id):
+    """Who can open a file, besides its owner: a list of permission bodies that `share` can apply to another file."""
+    perms = drive.permissions().list(fileId=file_id, fields='permissions(type,role,emailAddress,domain,allowFileDiscovery)'
+                                     ).execute(num_retries=5).get('permissions', [])
+    out = []
+    for p in perms:
+        if p.get('role') not in ROLES:                  # the owner, or anything we cannot hand on
+            continue
+        body = {'type': p['type'], 'role': p['role']}
+        if p['type'] in ('user', 'group'):
+            body['emailAddress'] = p['emailAddress']
+        elif p['type'] == 'domain':
+            body['domain'] = p['domain']
+        if p['type'] in ('anyone', 'domain'):
+            body['allowFileDiscovery'] = bool(p.get('allowFileDiscovery'))
+        out.append(body)
+    return out
+
+
+def share(drive, file_id, bodies):
+    """Give each permission body access to the file. People are added quietly: Drive sends them no email."""
+    for b in bodies:
+        kw = {'sendNotificationEmail': False} if b['type'] in ('user', 'group') else {}
+        drive.permissions().create(fileId=file_id, body=b, fields='id', **kw).execute(num_retries=5)
+
+
+def new_sheet_access(drive, previous_id, link_role):
+    """Access for a new round's sheet: the previous round's (people keep what they had), plus anyone with the link
+    at `link_role` (config sheets.link_sharing) if that is set and not already covered."""
+    bodies = access(drive, previous_id) if previous_id else []
+    if link_role and not any(b['type'] == 'anyone' for b in bodies):
+        if link_role not in ROLES:
+            raise ValueError(f'sheets.link_sharing must be one of {ROLES}, not {link_role!r}')
+        bodies.append({'type': 'anyone', 'role': link_role, 'allowFileDiscovery': False})
+    return bodies
+
+
 def url(file_id, kind='spreadsheets'):
     return f'https://docs.google.com/{kind}/d/{file_id}/edit' if kind == 'spreadsheets' else f'https://drive.google.com/drive/folders/{file_id}'
 
