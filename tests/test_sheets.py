@@ -11,7 +11,7 @@ def test_bands_alternate_by_session_and_skip_notes():
 
 
 def test_area_book_rows_and_fill_formula():
-    talks = {'1': {'title': 'T1', 'speaker': 'P', 'institution': 'U', 'affiliation': 'U', 'minutes': '36', 'type': 'invited'},
+    talks = {'1': {'title': 'T1', 'speaker': 'P', 'institution': 'U', 'affiliation': 'U', 'minutes': '36', 'type': 'invited', 'abstract': 'An abstract.'},
              '2': {'title': 'T2', 'speaker': 'Q', 'institution': 'V', 'affiliation': 'V', 'minutes': '12', 'type': 'oral'}}
     sess = [{'session_id': 'X01', 'title': 'Topic', 'kind': 'mini-symposium', 'minutes': '108', 'size': '', 'notes': '',
              'area': 'X', 'talks': ['1', '2'], 'used': 48}]
@@ -19,8 +19,9 @@ def test_area_book_rows_and_fill_formula():
     names = [t[0] for t in b.tabs]
     assert names == ['Session summary', 'Sessions']
     summary_rows, session_rows = b.tabs[0][2], b.tabs[1][2]
-    assert summary_rows[0][4].startswith('=SUMIFS(Sessions!$H$3:$H$4')               # minutes in H, checkbox in J
-    assert [r[3] for r in session_rows] == ['1', '2'] and session_rows[0][9] is False
+    assert summary_rows[0][4].startswith('=SUMIFS(Sessions!$H$3:$H$4') and '$K$3:$K$4' in summary_rows[0][4]   # minutes in H, checkbox in K
+    assert [r[3] for r in session_rows] == ['1', '2'] and session_rows[0][10] is False           # checkbox in K
+    assert session_rows[0][9] == 'An abstract.'                                                  # abstract in J
     assert session_rows[1][1].startswith("=IFERROR(VLOOKUP(A4,'Session summary'")     # the session title, following edits
     assert b.top['Session summary'][Sh.COMMENTS_COL - 2] == Sh.COMMENTS_LABEL           # the label in F1, the box in G1
     assert 'Sessions' not in b.top
@@ -40,3 +41,7 @@ def test_held_back_needs_a_status_not_just_a_name():
     last = {'A': {'round': '2'}, 'B': {'round': '2'}, 'C': {'round': '1'}}
     status = {'A': ('Ann', ''), 'B': ('Bob', 'in progress'), 'C': ('Cy', 'Done')}
     assert Sh.held_back(['A', 'B', 'C'], last, {('C', '1')}, status) == ['B']    # A not started; C read back
+
+
+def test_plain_abstract_text():
+    assert Sh.plain('<p>We show &mu;s <em>coherence</em>.</p><p>Second.</p>') == 'We show μs coherence.\nSecond.'

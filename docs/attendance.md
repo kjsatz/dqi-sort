@@ -18,6 +18,7 @@ interest  = session-type effect + title term
 - **Full rooms** are censored: the fit only requires their demand to be at least the observed peak.
 - Type, slot and year effects are shrunk toward "no effect" (worth 10 sessions of evidence), because with two years of data they are partly confounded with past scheduling choices: if weaker sessions tended to land on Friday, some of that shows up as a Friday effect.
 - A new year's overall level is unknown; predictions use the average of the past years.
+- **Spread-matched for a whole sort.** Because each estimate averages similar past sessions, the model's numbers bunch toward the middle (on the 2027 sort none went above 189, while a tenth of past sessions drew more than 190). When a whole sort is estimated (the review sheets, the packing report, the schedule), each session gets the past peak at its rank among past non-symposium sessions instead, with its range scaled to match; the model's own number is kept as `model`. The ranking is the model's, so individual numbers at the top can run high. Room sizes then follow from the cutoffs below, and are reallocated once the real rooms are known.
 
 ## Commands
 

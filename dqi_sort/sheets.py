@@ -18,7 +18,7 @@ are recorded in sorting/sheets.csv (kind, area, round, commit, content hash, she
 assignments in sorting/area_status.csv (area, responsible, status), so git keeps a dated record of each.
 Attendance estimates and suggested room sizes come from the attendance model (needs Ollama running).
 """
-import argparse, collections, datetime, glob, hashlib, json, os, subprocess, sys
+import argparse, collections, datetime, glob, hashlib, html, json, os, re, subprocess, sys
 from dqi_sort import gsheets, sessions as S
 
 HEADER_ROW = 2                         # row 1: title and stamp; row 2: column names; data from row 3
@@ -50,6 +50,12 @@ def load(data_dir):
     talks = {t['talk_id']: t for t in S.read_csv(os.path.join(data_dir, 'talks.csv'))}
     with open(os.path.join(data_dir, 'cards.jsonl'), encoding='utf-8') as f:
         cards = {c['talk_id']: c for c in map(json.loads, f) if c}
+    apath = os.path.join(data_dir, 'abstracts.jsonl')
+    if os.path.exists(apath):                 # each talk's abstract as submitted, for reviewers to refer to
+        with open(apath, encoding='utf-8') as f:
+            for a in map(json.loads, filter(str.strip, f)):
+                if a['talk_id'] in talks:
+                    talks[a['talk_id']]['abstract'] = plain(a.get('body', ''))
     sdir = os.path.join(data_dir, 'sorting')
     sess = S.read_csv(os.path.join(sdir, 'sessions.csv'))
     assign = S.read_csv(os.path.join(sdir, 'assignments.csv'))
@@ -74,6 +80,18 @@ def content_hash(area, sess, talks):
 
 def summary(cards, i):
     return (cards.get(i) or {}).get('key_claim', '')
+
+
+def plain(text):
+    """An abstract as readable text in a cell: HTML tags dropped, entities decoded, at most a cell's 50,000 characters."""
+    t = html.unescape(re.sub(r'<br\s*/?>|</p>', '\n', text or '', flags=re.I))
+    return re.sub(r'<[^>]+>', '', t).strip()[:50000]
+
+
+def clip_req(sheet_id, col):
+    """Show only the start of a long cell (no wrapping, no spill); the full text is there when the cell is opened."""
+    return {'repeatCell': {'range': {'sheetId': sheet_id, 'startRowIndex': HEADER_ROW, 'startColumnIndex': col, 'endColumnIndex': col + 1},
+                           'cell': {'userEnteredFormat': {'wrapStrategy': 'CLIP'}}, 'fields': 'userEnteredFormat.wrapStrategy'}}
 
 
 # ---------- sheet building ----------
@@ -207,7 +225,7 @@ def estimate_cells(est, s):
     e = est.get(s['session_id'])
     if not e:
         return ['', '']
-    return [e['interest'], e['size'] + (f" ({e['size_note']})" if e.get('size_note') else '')]
+    return [f"{e['interest']} ({e['low']}-{e['high']})", e['size'] + (f" ({e['size_note']})" if e.get('size_note') else '')]
 
 
 def comments_requests(sid):
@@ -234,7 +252,8 @@ def area_book(area, name, rnd, stamp_text, sess, talks, cards, est, options):
             t = talks[i]
             r = HEADER_ROW + 1 + len(srows)
             srows.append([s['session_id'], f"=IFERROR(VLOOKUP(A{r},'Session summary'!$A:$B,2,FALSE),\"\")", k, i, t['title'],
-                          t['speaker'], t['institution'] or t['affiliation'], int(t['minutes']), summary(cards, i), False, ''])
+                          t['speaker'], t['institution'] or t['affiliation'], int(t['minutes']), summary(cards, i),
+                          t.get('abstract', ''), False, ''])
             groups.append(s['session_id'])
             if t['type'] == 'invited':
                 bold.append(len(srows) - 1)
@@ -242,7 +261,7 @@ def area_book(area, name, rnd, stamp_text, sess, talks, cards, est, options):
     rows = []
     for n, s in enumerate(mine):
         r = HEADER_ROW + 1 + n
-        filled = f"=SUMIFS(Sessions!$H${first}:$H${last},Sessions!$A${first}:$A${last},A{r},Sessions!$J${first}:$J${last},FALSE)"
+        filled = f"=SUMIFS(Sessions!$H${first}:$H${last},Sessions!$A${first}:$A${last},A{r},Sessions!$K${first}:$K${last},FALSE)"
         rows.append([s['session_id'], s['title'], s['kind'], int(s['minutes']), filled, *estimate_cells(est, s), s['size'], s['notes']])
     b.tab('Session summary',
           ['Session', 'Title', 'Type', 'Length (min)', 'Filled (min)', 'Est. peak attendance', 'Suggested room', 'Room size override', 'Notes'],
@@ -250,9 +269,10 @@ def area_book(area, name, rnd, stamp_text, sess, talks, cards, est, options):
           + [short_rule(sid, n, 3, 4), list_req(sid, 7, n, SIZES)] + comments_requests(sid),
           top=[''] * (COMMENTS_COL - 2) + [COMMENTS_LABEL, ''])
     b.tab('Sessions',
-          ['Session', 'Session title', 'Order', 'Talk ID', 'Title', 'Speaker', 'Institution', 'Minutes', 'Summary', 'Move to lonely abstracts', 'Notes'],
-          srows, lambda sid, n: tab_requests(sid, n, [80, 200, 50, 75, 330, 150, 180, 65, 380, 100, 260], wrap_cols=[1, 4, 6, 8, 10], notes_cols=[10])
-          + band_requests(sid, groups, 11, bold, skip_cols=[10]) + [checkbox_req(sid, 9, n)])
+          ['Session', 'Session title', 'Order', 'Talk ID', 'Title', 'Speaker', 'Institution', 'Minutes', 'Summary', 'Abstract',
+           'Move to lonely abstracts', 'Notes'],
+          srows, lambda sid, n: tab_requests(sid, n, [80, 200, 50, 75, 330, 150, 180, 65, 380, 380, 100, 260], wrap_cols=[1, 4, 6, 8, 11], notes_cols=[11])
+          + [clip_req(sid, 9)] + band_requests(sid, groups, 12, bold, skip_cols=[11]) + [checkbox_req(sid, 10, n)])
     if options:
         orows, og = [], []
         for o in options:
@@ -302,13 +322,13 @@ def shared_book(year_name, stamp_text, sess, talks, cards, est, lonely, moves, a
         for k, i in enumerate(s['talks'], 1):
             t = talks[i]
             srows.append([s['session_id'], s['title'], k, i, t['title'], t['speaker'], t['institution'] or t['affiliation'],
-                          int(t['minutes']), summary(cards, i)])
+                          int(t['minutes']), summary(cards, i), t.get('abstract', '')])
             groups.append(s['session_id'])
             if t['type'] == 'invited':
                 bold.append(len(srows) - 1)
-    b.tab('Sessions', ['Session', 'Session title', 'Order', 'Talk ID', 'Title', 'Speaker', 'Institution', 'Minutes', 'Summary'],
-          srows, lambda sid, n: tab_requests(sid, n, [80, 200, 50, 75, 330, 150, 180, 65, 380], wrap_cols=[1, 4, 6, 8]) + protect_req(sid)
-          + band_requests(sid, groups, 9, bold))
+    b.tab('Sessions', ['Session', 'Session title', 'Order', 'Talk ID', 'Title', 'Speaker', 'Institution', 'Minutes', 'Summary', 'Abstract'],
+          srows, lambda sid, n: tab_requests(sid, n, [80, 200, 50, 75, 330, 150, 180, 65, 380, 380], wrap_cols=[1, 4, 6, 8]) + [clip_req(sid, 9)]
+          + protect_req(sid) + band_requests(sid, groups, 10, bold))
     lrows = [[a['talk_id'], talks[a['talk_id']]['area'], talks[a['talk_id']]['type'], talks[a['talk_id']]['title'],
               talks[a['talk_id']]['speaker'], talks[a['talk_id']]['institution'], summary(cards, a['talk_id']), a['note']]
              for a in sorted(lonely, key=lambda a: (talks[a['talk_id']]['area'], S.id_key(a['talk_id'])))]
