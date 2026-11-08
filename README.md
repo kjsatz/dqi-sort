@@ -43,7 +43,7 @@ Every command takes the private data folder as its argument (`DATA_DIR`, one rep
 | 4 | `areas propose / flags / endgame`; the lead's decisions with `decide offer / exchanged / poster / keep / duplicate …` |
 | 5–6 | `sessions prepare / check`, `pack start / ops / status / critique / finish` ([docs/sessions.md](docs/sessions.md)) |
 | 7 | `sheets sync`, `review read / apply / move / homes` ([docs/google_sheets.md](docs/google_sheets.md)) |
-| 8 | `schedule budget / solve / check / swap / grid` |
+| 8 | `schedule budget / solve / check / swap / grid`; `schedule_page` (the schedule as a page; `--dry-run` on a copy) |
 | 9 | `order positions / prepare / apply / check` |
 | 10 | `chairs sync` |
 | 11 | `validate [--delivery]`, `deliver`, `late add / withdraw / move` |
