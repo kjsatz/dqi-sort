@@ -12,7 +12,7 @@ the minutes still free. Hover a talk (or tap it) for its details and abstract; c
 
 - Fit (the talk's colour): cosine similarity of the talk's card embedding to the centroid of the rest of its session
   (leave-one-out), the per-talk value behind the packing report's coherence. About 0.85 is unrelated, 0.95 very
-  close (docs/sessions.md). Coloured on matplotlib's Spectral map over FIT_RANGE: red a poor fit, blue a good one. The popup also gives the closest other session of the same track.
+  close (docs/sessions.md). Coloured on matplotlib's Spectral map over pack.FIT_RANGE: red a poor fit, blue a good one. The popup also gives the closest other session of the same track.
 - Dial: the session's rank by the attendance model's estimate among the in-person sessions, from 0 (lowest) to 1
   (highest), with the spread-matched estimate in the popup (docs/attendance.md). Needs Ollama; virtual sessions have
   none.
@@ -25,8 +25,6 @@ from dqi_sort import sessions as S, pack, sheets
 HERE = os.path.dirname(os.path.abspath(__file__))
 TEMPLATE = os.path.join(HERE, 'overview_page.html')
 PATHS = ['config.yaml', 'talks.csv', 'cards.jsonl', 'abstracts.jsonl', 'embeddings', 'sorting', 'history']
-FIT_RANGE = (0.73, 0.99)     # the fit colour scale (matplotlib's Spectral, red to blue); the lead's choice, Nov 7 2026:
-                             # sort v1's fits ran from 0.731 to 0.986. Fits outside take the end colour.
 
 
 def git(data_dir, *args):
@@ -114,7 +112,7 @@ def payload(data_dir, info, attendance=True):
                          'dial': dial.get(s['session_id']), 'talks': [talk(i) for i in s['talks']]})
         areas.append({'code': a, 'name': names.get(a, ''), 'sessions': rows})
     year = re.search(r'\b(20\d\d)\b', str(cfg.get('meeting_dates', '')))
-    return {'year': year.group(1) if year else '', 'commit': info, 'fit_range': FIT_RANGE,
+    return {'year': year.group(1) if year else '', 'commit': info, 'fit_range': pack.FIT_RANGE,
             'categories': cfg.get('dqi_categories') or {}, 'areas': areas,
             'unplaced': [talk(a['talk_id']) for a in lonely], 'n_estimated': len(dial)}
 
