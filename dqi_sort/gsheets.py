@@ -10,16 +10,18 @@ Files, outside every repo:
     ~/.config/dqi-sort/oauth_client.json   the OAuth client, downloaded from the Google Cloud console
     ~/.config/dqi-sort/token.json          the saved sign-in; deleting it forces a fresh sign-in
 
-The only permission requested is drive.file: the code can see and edit only files it created itself (and any
-folder it created, wherever you later move it), nothing else in your Drive. While the Cloud app is in "Testing"
+Two permissions are requested. drive.file: in Drive the code can see and edit only files it created itself (and any
+folder it created, wherever you later move it). spreadsheets: it can read and edit any Google Sheet you can edit,
+which lets it write into APS's sorting sheet (e.g. the Virtual Sorting tab) instead of only into sheets it made.
+A saved sign-in missing a permission is renewed in the browser. While the Cloud app is in "Testing"
 status, Google expires the sign-in after 7 days; the next run then opens a browser tab to approve again.
 """
-import argparse, os, sys
+import argparse, json, os, sys
 
 CONFIG_DIR = os.path.expanduser('~/.config/dqi-sort')
 CLIENT = os.path.join(CONFIG_DIR, 'oauth_client.json')
 TOKEN = os.path.join(CONFIG_DIR, 'token.json')
-SCOPES = ['https://www.googleapis.com/auth/drive.file']
+SCOPES = ['https://www.googleapis.com/auth/drive.file', 'https://www.googleapis.com/auth/spreadsheets']
 FOLDER_MIME = 'application/vnd.google-apps.folder'
 SHEET_MIME = 'application/vnd.google-apps.spreadsheet'
 
@@ -29,7 +31,12 @@ def credentials():
     from google.auth.transport.requests import Request
     from google.oauth2.credentials import Credentials
     from google_auth_oauthlib.flow import InstalledAppFlow
-    creds = Credentials.from_authorized_user_file(TOKEN, SCOPES) if os.path.exists(TOKEN) else None
+    creds = None
+    if os.path.exists(TOKEN):
+        with open(TOKEN) as f:
+            granted = set(json.load(f).get('scopes') or [])
+        if granted >= set(SCOPES):             # else signed in before a permission was added: sign in again
+            creds = Credentials.from_authorized_user_file(TOKEN, SCOPES)
     if creds and creds.expired and creds.refresh_token:
         try:
             creds.refresh(Request())
