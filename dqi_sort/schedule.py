@@ -372,12 +372,7 @@ def swap(data_dir, a, b):
 
 def virtual_slots(data_dir, rows, members, talks, slots):
     win = lambda txt: {m.group(0)[:5] for m in re.finditer(r'\d\d:\d\d-\d\d:\d\d', txt or '')}
-    assumed = {}
-    p = os.path.join(data_dir, 'work', 'sessions', 'VIRTUAL', 'proposal.json')
-    if os.path.exists(p):
-        with open(p, encoding='utf-8') as f:
-            assumed = {i: {w[:5] for w in re.findall(r'\d\d:\d\d-\d\d:\d\d', v if isinstance(v, str) else ' '.join(v))}
-                       for i, v in (json.load(f).get('assumed_windows') or {}).items()}
+    assumed = {i: {w[:5] for w in ws} for i, ws in S.assumed_windows(data_dir).items()}
     free = sorted((s for s in slots.values() if s['track'] == 'virtual'), key=lambda s: (s['start'], DAYS.index(s['day'])))
     used_days, out = collections.Counter(), {}
     for s in sorted((s for s in rows if s['area'] == 'VIRTUAL'), key=lambda s: s['session_id']):
@@ -388,8 +383,9 @@ def virtual_slots(data_dir, rows, members, talks, slots):
         cands = [x for x in free if x['slot_id'] not in out.values() and (not ok or x['start'] in ok)]
         if not cands:
             print(f"no virtual slot in a shared window for {s['session_id']}"); continue
-        best = min(cands, key=lambda x: (used_days[x['day']], DAYS.index(x['day'])))
-        out[s['session_id']] = best['slot_id']; used_days[best['day']] += 1
+        in_block = collections.Counter((slots[v]['day'], slots[v]['start']) for v in out.values())
+        best = min(cands, key=lambda x: (in_block[(x['day'], x['start'])], used_days[x['day']], DAYS.index(x['day'])))
+        out[s['session_id']] = best['slot_id']; used_days[best['day']] += 1      # not in parallel where avoidable
     return out
 
 

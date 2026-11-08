@@ -21,7 +21,8 @@ critique  writes one folder per review area (work/pack/critique/AREA/) for an in
           then weighs them in a second round of ops.
 finish    requires the sort to fit, picks each session's length, assigns review areas (by content: the area that
           most of a session's talks' card categories belong to), and writes sorting/sessions.csv, sorting/assignments.csv, sorting/moves.csv,
-          views/sessions.md, views/sessions/AREA.md and views/packing_report.md (the pull request description). Talks
+          views/sessions.md, views/sessions/AREA.md and views/packing_report.md (the pull request description), and
+          sorting/assumed_windows.csv (the virtual draft's assumed speaker windows, which scheduling needs). Talks
           held for the lead go to sorting/held.csv and views/flags.md (dqi_sort.areas), the one list of talks the
           lead must decide.
 views     after finish, rewrites views/sessions.md and views/sessions/AREA.md from sorting/ once the sort has changed
@@ -604,6 +605,10 @@ def finish(data_dir, replace=False, attendance=True):
     moves += [{'when': today, 'commit': '', 'talk_id': e['talk'], 'from': e['from'], 'to': e['to'] if e['to'] != 'pool' else 'lonely',
                'by': 'claude', 'reason': e['reason']} for e in log if e['op'] == 'move']
     S.write_csv(os.path.join(sort_dir, 'moves.csv'), ['when', 'commit', 'talk_id', 'from', 'to', 'by', 'reason'], moves)
+    for p in sorted(glob.glob(os.path.join(data_dir, 'work', 'sessions', '*', 'proposal.json'))):
+        prop, data = S.load_area(p)                 # the virtual draft's assumed windows: kept in git, for scheduling
+        if data['limits']['virtual'] and prop.get('assumed_windows'):
+            S.write_assumed_windows(data_dir, prop['assumed_windows'])
     write_views(srt, rows, est, c, log, first)
     held = A.read_held(data_dir)
     keep = [r for r in held if r['stage'] != '6']

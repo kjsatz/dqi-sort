@@ -55,3 +55,13 @@ def test_recording_problems_count_spare_long_slots_for_short_sessions():
     assert S.recording_problems(C({144: 50, 108: 48}), C({144: 54, 108: 46})) == []      # two 108s in spare 144s
     assert len(S.recording_problems(C({144: 64, 108: 33}), C({144: 54, 108: 46}))) == 1
     assert S.is_recorded({'recorded': 'no'}) is False and S.is_recorded({}) is True
+
+
+def test_assumed_windows_from_the_committed_file(tmp_path):
+    import os
+    from dqi_sort import sessions as S
+    d = str(tmp_path)
+    assert S.assumed_windows(d) == {}
+    S.write_assumed_windows(d, {'12': '06:30-07:54', '3': ['09:30-10:54', '12:15-13:39']})
+    assert S.assumed_windows(d) == {'3': {'09:30-10:54', '12:15-13:39'}, '12': {'06:30-07:54'}}
+    assert open(os.path.join(d, 'sorting', 'assumed_windows.csv')).read().splitlines()[1].startswith('3,')   # sorted by ID

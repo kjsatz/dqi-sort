@@ -212,6 +212,7 @@ The data repo holds one set of files per year:
 | `embeddings/cards.npz` | talk | Card embeddings (EmbeddingGemma; NumPy, float16); see `docs/embeddings.md` |
 | `sorting/sessions.csv` | session | session_id, title, kind (contributed / mini-symposium / symposium), minutes (144 or 108), size (small / medium / large: the room size class people decided), area, locked, scope (one sentence: what belongs here), notes |
 | `sorting/assignments.csv` | talk | talk_id, session_id (blank for lonely abstracts), order, locked, note |
+| `sorting/assumed_windows.csv` | virtual talk with no window given | talk_id, windows (HH:MM-HH:MM, `;`-separated), note (e.g. inferred from the affiliation); written by `pack finish` from the virtual draft, read by scheduling and the validator |
 | `sorting/moves.csv` | move | when, commit, talk_id, from (session, area, lonely, new, or another unit), to, by, reason |
 | `sorting/sheets.csv` | sheet made | kind (shared / area / grid / recruiting / delivery), area, round, commit, content (hash of the area's sessions when sent), sheet_id, url, made |
 | `sorting/area_status.csv` | review area | area, responsible, status (as typed in the shared sheet; saved at each sync) |
