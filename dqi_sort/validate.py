@@ -55,7 +55,7 @@ def load(data_dir):
     rooms = {r['room_id']: r for r in read(data_dir, 'venue', 'rooms.csv')}
     chairs = [c for c in read(data_dir, 'chairs', 'chairs.csv') if str(c.get('confirmed', '')).strip().upper() == 'TRUE']
     log = read(data_dir, 'sorting', 'status_log.csv')
-    return dict(cfg=cfg, talks=talks, sess=sess, assign=assign, members=members, slots=slots, schedule=schedule,
+    return dict(cfg=cfg, talks=talks, sess=sess, assign=assign, members=members, slots=slots, schedule=schedule, assumed=S.assumed_windows(data_dir),
                 sched=sched, rooms=rooms, chairs=chairs, log=log, aps=aps_lists(data_dir, cfg))
 
 
@@ -157,6 +157,7 @@ def check_schedule(d, delivery):
     if not d['schedule']:
         return [('ERROR', 'no schedule (schedule/schedule.csv)')] if delivery else []
     talks, sess, sched, rooms, members = d['talks'], d['sess'], d['sched'], d['rooms'], d['members']
+    assumed = d.get('assumed', {})
     out = []
     count = collections.Counter(r['session_id'] for r in d['schedule'])
     out += [('ERROR', f'{sid}: scheduled {n} times') for sid, n in count.items() if n > 1]
@@ -171,6 +172,12 @@ def check_schedule(d, delivery):
         slot = sched[sid]
         if (slot['track'] == 'virtual') != is_virtual(s):
             out.append(('ERROR', f"{sid}: in a {slot['track']} slot ({slot['slot_id']})"))
+        if slot['track'] == 'virtual':           # every speaker's window (given, or assumed in sorting/assumed_windows.csv)
+            for i in members.get(sid, []):
+                w = S.windows(talks[i]['time_windows']) if i in talks else set()
+                w = w or assumed.get(i, set())
+                if w and f"{slot['start']}-{slot['end']}" not in w:
+                    out.append(('ERROR', f"{sid}: at {slot['day']} {slot['start']}, outside {i}'s window ({', '.join(sorted(w))})"))
         if int(slot['minutes']) != int(s['minutes']):
             out.append(('ERROR', f"{sid}: a {s['minutes']}-minute session in a {slot['minutes']}-minute slot ({slot['slot_id']})"))
         room = rooms.get(slot.get('room_id') or '')

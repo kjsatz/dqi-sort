@@ -69,6 +69,26 @@ def apart_pairs(data_dir):
 
 
 # ---------- the grid ----------
+def assumed_windows(data_dir):
+    """{talk_id: set of "HH:MM-HH:MM"}: virtual speakers' windows the sort assumed (no window given; inferred from the
+    affiliation). From sorting/assumed_windows.csv (talk_id, windows, note), written by `pack finish`; before that,
+    from the virtual draft (work/sessions/VIRTUAL/proposal.json)."""
+    path = os.path.join(data_dir, 'sorting', 'assumed_windows.csv')
+    if os.path.exists(path):
+        return {r['talk_id']: windows(r['windows']) for r in read_csv(path)}
+    p = os.path.join(data_dir, 'work', 'sessions', 'VIRTUAL', 'proposal.json')
+    if os.path.exists(p):
+        with open(p, encoding='utf-8') as f:
+            raw = json.load(f).get('assumed_windows') or {}
+        return {i: windows(v if isinstance(v, str) else ' '.join(v)) for i, v in raw.items()}
+    return {}
+
+
+def write_assumed_windows(data_dir, raw, note='assumed from the affiliation (virtual draft)'):
+    rows = [{'talk_id': i, 'windows': v if isinstance(v, str) else ';'.join(v), 'note': note} for i, v in sorted(raw.items(), key=lambda kv: id_key(kv[0]))]
+    write_csv(os.path.join(data_dir, 'sorting', 'assumed_windows.csv'), ['talk_id', 'windows', 'note'], rows)
+
+
 def is_recorded(room):
     """A room of venue/rooms.csv is recorded unless its `recorded` column says no (a file without it: all recorded)."""
     return str(room.get('recorded') or 'yes').strip().lower() not in ('no', 'false', '0')
