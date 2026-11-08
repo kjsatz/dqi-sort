@@ -10,8 +10,7 @@
   color-scheme: light;
   --surface: #fcfcfb; --raised: #ffffff; --line: #e4e3df; --track: #e4e3df;
   --text: #0b0b0b; --text-2: #52514e; --text-3: #7a7974;
-  --fit-0: #86b6ef; --fit-1: #3987e5; --fit-2: #256abf; --fit-3: #184f95; --fit-4: #0d366b;
-  --heat: #eb6834; --free: #c9c8c2; --focus: #eb6834;
+  --heat: #eb6834; --free: #c9c8c2; --focus: #0b0b0b; --edge: rgba(0,0,0,.18);
   --shadow: 0 6px 24px rgba(0,0,0,.14);
 }
 @media (prefers-color-scheme: dark) {
@@ -19,8 +18,7 @@
     color-scheme: dark;
     --surface: #1a1a19; --raised: #252523; --line: #383835; --track: #42423e;
     --text: #f0efec; --text-2: #c3c2b7; --text-3: #8f8e86;
-    --fit-0: #184f95; --fit-1: #2a78d6; --fit-2: #5598e7; --fit-3: #86b6ef; --fit-4: #cde2fb;
-    --heat: #d95926; --free: #55554f; --focus: #d95926;
+    --heat: #d95926; --free: #55554f; --focus: #f0efec; --edge: rgba(0,0,0,.35);
     --shadow: 0 6px 24px rgba(0,0,0,.5);
   }
 }
@@ -28,8 +26,7 @@
   color-scheme: dark;
   --surface: #1a1a19; --raised: #252523; --line: #383835; --track: #42423e;
   --text: #f0efec; --text-2: #c3c2b7; --text-3: #8f8e86;
-  --fit-0: #184f95; --fit-1: #2a78d6; --fit-2: #5598e7; --fit-3: #86b6ef; --fit-4: #cde2fb;
-  --heat: #d95926; --free: #55554f; --focus: #d95926;
+  --heat: #d95926; --free: #55554f; --focus: #f0efec; --edge: rgba(0,0,0,.35);
   --shadow: 0 6px 24px rgba(0,0,0,.5);
 }
 * { box-sizing: border-box; }
@@ -48,7 +45,7 @@ h1 { font-size: 18px; margin: 0 0 2px; font-weight: 600; }
 .area h2 { font-size: 13px; margin: 0; font-weight: 650; }
 .area .aname { font-size: 10.5px; color: var(--text-2); line-height: 1.25; margin: 1px 0 2px; }
 .area .acount { font-size: 10.5px; color: var(--text-3); margin-bottom: 8px; padding-bottom: 6px; border-bottom: 1px solid var(--line); }
-.sess { margin: 0 0 9px; }
+.sess { margin: 0 0 15px; }
 .sh { display: flex; gap: 4px; align-items: flex-start; cursor: default; border-radius: 3px; }
 .sh:hover .st, .sh:focus .st { color: var(--text); }
 .sh:focus { outline: 2px solid var(--focus); outline-offset: 1px; }
@@ -61,8 +58,11 @@ h1 { font-size: 18px; margin: 0 0 2px; font-weight: 600; }
 .t.inv { width: 34px; }
 .t:hover, .t:focus-visible, .t.on { outline: 2px solid var(--focus); outline-offset: 1px; }
 .e { border: 1px solid var(--free); background: transparent; }
-.f0 { background: var(--fit-0); } .f1 { background: var(--fit-1); } .f2 { background: var(--fit-2); }
-.f3 { background: var(--fit-3); } .f4 { background: var(--fit-4); } .fn { background: var(--free); }
+.t, .chip { box-shadow: inset 0 0 0 1px var(--edge); }
+.fn { background: var(--free); }
+.ramp { display: inline-block; position: relative; width: 220px; height: 10px; border-radius: 2px; margin: 0 4px 12px; vertical-align: -2px; }
+.ramp .tick { position: absolute; top: 12px; transform: translateX(-50%); font-size: 10.5px; color: var(--text-2); }
+.ramp .tick::before { content: ''; position: absolute; left: 50%; top: -3px; width: 1px; height: 3px; background: var(--text-2); }
 #pop { position: fixed; z-index: 10; display: none; width: min(440px, calc(100vw - 32px)); max-height: min(560px, calc(100vh - 32px));
   overflow: auto; background: var(--raised); color: var(--text); border: 1px solid var(--line); border-radius: 8px;
   box-shadow: var(--shadow); padding: 12px 14px; font-size: 12.5px; }
@@ -98,9 +98,18 @@ h1 { font-size: 18px; margin: 0 0 2px; font-weight: 600; }
 <script>
 (function () {
   const D = JSON.parse(document.getElementById('data').textContent);
-  const B = D.fit_bins;
+  const [LO, HI] = D.fit_range;
+  // matplotlib's Spectral colormap (its 11 ColorBrewer anchors, interpolated linearly): red = poor fit, blue = good
+  const SPECTRAL = ['#9e0142', '#d53e4f', '#f46d43', '#fdae61', '#fee08b', '#ffffbf', '#e6f598', '#abdda4', '#66c2a5', '#3288bd', '#5e4fa2']
+    .map(h => [1, 3, 5].map(k => parseInt(h.slice(k, k + 2), 16)));
+  function spectral(u) {
+    u = Math.max(0, Math.min(1, u)) * (SPECTRAL.length - 1);
+    const k = Math.min(SPECTRAL.length - 2, Math.floor(u)), w = u - k;
+    return 'rgb(' + SPECTRAL[k].map((c, j) => Math.round(c + (SPECTRAL[k + 1][j] - c) * w)).join(',') + ')';
+  }
+  const fitColor = f => spectral((f - LO) / (HI - LO));
+  const fitStyle = f => f == null ? '' : ` style="background:${fitColor(f)}"`;
   const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'}[c]));
-  const bin = f => { if (f == null) return 'fn'; let k = 0; while (k < B.length && f >= B[k]) k++; return 'f' + k; };
   const f3 = x => x == null ? '–' : x.toFixed(3);
 
   function dial(v, size) {
@@ -125,10 +134,13 @@ h1 { font-size: 18px; margin: 0 0 2px; font-weight: 600; }
   D.areas.forEach(a => a.sessions.forEach(s => { nS++; s.talks.forEach(t => { nT++; if (t.type === 'invited') nI++; }); }));
   document.getElementById('totals').textContent = `${D.areas.length} review areas · ${nS} sessions · ${nT} talks (${nI} invited)` +
     (D.unplaced.length ? ` · ${D.unplaced.length} not in a session` : '');
-  const labels = ['< ' + B[0].toFixed(2)].concat(B.slice(0, -1).map((b, k) => `${b.toFixed(2)}–${B[k + 1].toFixed(2)}`), ['≥ ' + B[B.length - 1].toFixed(2)]);
+  const stops = Array.from({length: 21}, (_, k) => `${spectral(k / 20)} ${k * 5}%`).join(',');
+  const ticks = [];
+  for (let v = Math.ceil(LO * 20) / 20; v <= HI + 1e-9; v += 0.05) ticks.push(v);
+  const tickHtml = ticks.map(v => `<span class="tick" style="left:${(100 * (v - LO) / (HI - LO)).toFixed(1)}%">${v.toFixed(2)}</span>`).join('');
   document.getElementById('legend').innerHTML =
     `<div class="row"><span class="lab">Fit to the rest of its session (embedding similarity):</span>` +
-    labels.map((l, k) => `<span class="sw"><span class="chip f${k}"></span>${l}</span>`).join('') + `</div>` +
+    `<span class="sw">${LO.toFixed(2)} poor<span class="ramp" style="background:linear-gradient(to right,${stops})">${tickHtml}</span>good ${HI.toFixed(2)}</span></div>` +
     `<div class="row"><span class="lab">Square: contributed talk · wide box: invited · outline: free 12 min</span></div>` +
     `<div class="row">${dial(0.15, 22)}${dial(0.85, 22)}<span class="lab">Expected attendance, ranked among ${D.n_estimated} in-person sessions: 0 lowest, 1 highest</span></div>`;
 
@@ -147,7 +159,7 @@ h1 { font-size: 18px; margin: 0 0 2px; font-weight: 600; }
       s.talks.forEach(t => {
         const ti = talks.push(Object.assign({session: s.id, session_title: s.title}, t)) - 1;
         used += t.units;
-        bar += `<button class="t ${t.type === 'invited' ? 'inv' : ''} ${bin(t.fit)}" data-t="${ti}" aria-label="${esc(t.title)}, fit ${f3(t.fit)}"></button>`;
+        bar += `<button class="t ${t.type === 'invited' ? 'inv' : ''} ${t.fit == null ? 'fn' : ''}"${fitStyle(t.fit)} data-t="${ti}" aria-label="${esc(t.title)}, fit ${f3(t.fit)}"></button>`;
       });
       for (let k = used; k < s.units; k++) bar += '<span class="e" aria-hidden="true"></span>';
       html += `<div class="sess"><div class="sh" tabindex="0" data-s="${si}">${dial(s.dial)}<span class="st"><b>${esc(s.id)}</b>${esc(s.title)}</span></div>` +
@@ -166,7 +178,7 @@ h1 { font-size: 18px; margin: 0 0 2px; font-weight: 600; }
   function talkHtml(t) {
     const kind = t.type === 'invited' ? 'Invited' : 'Contributed';
     const fitLine = t.fit == null ? 'no embedding' :
-      `<span class="chip ${bin(t.fit)}"></span><span class="num">${f3(t.fit)}</span> to the rest of ${esc(t.session || 'its session')}`;
+      `<span class="chip"${fitStyle(t.fit)}></span><span class="num">${f3(t.fit)}</span> to the rest of ${esc(t.session || 'its session')}`;
     let facts = `<dt>Fit</dt><dd>${fitLine}</dd>`;
     if (t.other) facts += `<dt>Next best</dt><dd><span class="num">${f3(t.other_fit)}</span> to ${esc(t.other)} ${esc(t.other_title)}</dd>`;
     facts += `<dt>Category</dt><dd>${catName(t.cat)}${t.best && t.best !== t.cat ? `<br>card: ${catName(t.best)}` : ''}</dd>`;
