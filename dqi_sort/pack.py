@@ -337,6 +337,19 @@ class Space:
         return c / (np.linalg.norm(c) or 1)
 
 
+FIT_RANGE = (0.73, 0.99)     # colour scale for a talk's fit, red to blue (overview page, review sheets); the lead's
+                             # choice, Nov 7 2026: sort v1's fits ran from 0.731 to 0.986. Values outside take the end colour.
+
+
+def talk_fits(data_dir, sessions):
+    """{talk_id: fit} for the talks of `sessions` (dicts with 'talks'): each talk's similarity to the rest of its
+    session, as in coherence(). {} without embeddings."""
+    if not os.path.exists(os.path.join(data_dir, 'embeddings', 'cards.npz')):
+        return {}
+    space = Space(data_dir, None)
+    return {i: round(f, 3) for s in sessions for i, f in coherence(space, s['talks'])[1].items()}
+
+
 def coherence(space, ids):
     """Mean similarity of each talk to the rest of its session (leave-one-out centroid); and per-talk values."""
     per = {}

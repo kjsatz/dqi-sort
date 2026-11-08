@@ -21,7 +21,7 @@ change it shows. The attendance dials need Ollama running; `--no-attendance` lea
   rest of its session, the per-talk value behind the packing report's coherence (`docs/sessions.md`). About 0.85 is
   unrelated and 0.95 very close. Colours follow matplotlib's Spectral map from 0.73 (red, poor fit) through pale
   yellow to 0.99 (blue, good fit), the full range of sort v1 (0.731 to 0.986); values outside take the end colour.
-  Change `FIT_RANGE` in `overview.py` to rescale.
+  Change `FIT_RANGE` in `pack.py` to rescale (it sets the review sheets' Fit colours too).
 - **Dial: expected attendance.** This is the session's rank by the attendance model among all in-person sessions,
   from 0 (lowest) to 1 (highest). Ties share their rank. Virtual sessions have no estimate (`docs/attendance.md`).
 - **Popups.** Hover over a talk, or focus it with the keyboard, to see:

@@ -23,7 +23,7 @@ assignments in sorting/area_status.csv (area, responsible, status), so git keeps
 Attendance estimates and suggested room sizes come from the attendance model (needs Ollama running).
 """
 import argparse, collections, datetime, glob, hashlib, html, json, os, re, subprocess, sys
-from dqi_sort import gsheets, sessions as S
+from dqi_sort import gsheets, pack, sessions as S
 
 HEADER_ROW = 2                         # row 1: title and stamp; row 2: column names; data from row 3
 BAND = {'red': 0.94, 'green': 0.96, 'blue': 0.99}
@@ -96,6 +96,21 @@ def clip_req(sheet_id, col):
     """Show only the start of a long cell (no wrapping, no spill); the full text is there when the cell is opened."""
     return {'repeatCell': {'range': {'sheetId': sheet_id, 'startRowIndex': HEADER_ROW, 'startColumnIndex': col, 'endColumnIndex': col + 1},
                            'cell': {'userEnteredFormat': {'wrapStrategy': 'CLIP'}}, 'fields': 'userEnteredFormat.wrapStrategy'}}
+
+
+FIT_COLORS = ({'red': 0.97, 'green': 0.41, 'blue': 0.42}, {'red': 1.0, 'green': 0.92, 'blue': 0.52},
+              {'red': 0.45, 'green': 0.62, 'blue': 0.85})     # red, yellow, blue: low, middle and top of pack.FIT_RANGE
+
+
+def fit_rule(sheet_id, col):
+    """The Fit column: three decimals, coloured red (poor fit) through yellow to blue (good fit) over pack.FIT_RANGE."""
+    lo, hi = pack.FIT_RANGE
+    point = lambda c, v: {'color': c, 'type': 'NUMBER', 'value': str(round(v, 3))}
+    rng = {'sheetId': sheet_id, 'startRowIndex': HEADER_ROW, 'startColumnIndex': col, 'endColumnIndex': col + 1}
+    return [{'repeatCell': {'range': rng, 'cell': {'userEnteredFormat': {'numberFormat': {'type': 'NUMBER', 'pattern': '0.000'}}},
+                            'fields': 'userEnteredFormat.numberFormat'}},
+            {'addConditionalFormatRule': {'index': 0, 'rule': {'ranges': [rng], 'gradientRule': {
+                'minpoint': point(FIT_COLORS[0], lo), 'midpoint': point(FIT_COLORS[1], (lo + hi) / 2), 'maxpoint': point(FIT_COLORS[2], hi)}}}}]
 
 
 # ---------- sheet building ----------
@@ -247,7 +262,8 @@ def comments_requests(sid):
             {'updateBorders': {'range': rng(COMMENTS_COL, COMMENTS_COL + 3), 'top': box, 'bottom': box, 'left': box, 'right': box}}]
 
 
-def area_book(area, name, rnd, stamp_text, sess, talks, cards, est, options):
+def area_book(area, name, rnd, stamp_text, sess, talks, cards, est, options, fit=None):
+    fit = fit or {}
     b = Book(f'{area}: {name}. Round {rnd}. {stamp_text}')
     mine = [s for s in sess if s['area'] == area]
     srows, groups, bold = [], [], []
@@ -256,7 +272,7 @@ def area_book(area, name, rnd, stamp_text, sess, talks, cards, est, options):
             t = talks[i]
             r = HEADER_ROW + 1 + len(srows)
             srows.append([s['session_id'], f"=IFERROR(VLOOKUP(A{r},'Session summary'!$A:$B,2,FALSE),\"\")", k, i, t['title'],
-                          t['speaker'], t['institution'] or t['affiliation'], int(t['minutes']), summary(cards, i),
+                          t['speaker'], t['institution'] or t['affiliation'], int(t['minutes']), fit.get(i, ''), summary(cards, i),
                           t.get('abstract', ''), False, ''])
             groups.append(s['session_id'])
             if t['type'] == 'invited':
@@ -265,7 +281,7 @@ def area_book(area, name, rnd, stamp_text, sess, talks, cards, est, options):
     rows = []
     for n, s in enumerate(mine):
         r = HEADER_ROW + 1 + n
-        filled = f"=SUMIFS(Sessions!$H${first}:$H${last},Sessions!$A${first}:$A${last},A{r},Sessions!$K${first}:$K${last},FALSE)"
+        filled = f"=SUMIFS(Sessions!$H${first}:$H${last},Sessions!$A${first}:$A${last},A{r},Sessions!$L${first}:$L${last},FALSE)"
         rows.append([s['session_id'], s['title'], s['kind'], int(s['minutes']), filled, *estimate_cells(est, s), s['size'], s['notes']])
     b.tab('Session summary',
           ['Session', 'Title', 'Type', 'Length (min)', 'Filled (min)', 'Est. peak attendance', 'Suggested room', 'Room size override', 'Notes'],
@@ -273,10 +289,10 @@ def area_book(area, name, rnd, stamp_text, sess, talks, cards, est, options):
           + [short_rule(sid, n, 3, 4), list_req(sid, 7, n, SIZES)] + comments_requests(sid),
           top=[''] * (COMMENTS_COL - 2) + [COMMENTS_LABEL, ''])
     b.tab('Sessions',
-          ['Session', 'Session title', 'Order', 'Talk ID', 'Title', 'Speaker', 'Institution', 'Minutes', 'Summary', 'Abstract',
+          ['Session', 'Session title', 'Order', 'Talk ID', 'Title', 'Speaker', 'Institution', 'Minutes', 'Fit', 'Summary', 'Abstract',
            'Move to lonely abstracts', 'Notes'],
-          srows, lambda sid, n: tab_requests(sid, n, [80, 200, 50, 75, 330, 150, 180, 65, 380, 380, 100, 260], wrap_cols=[1, 4, 6, 8, 11], notes_cols=[11])
-          + [clip_req(sid, 9)] + band_requests(sid, groups, 12, bold, skip_cols=[11]) + [checkbox_req(sid, 10, n)])
+          srows, lambda sid, n: tab_requests(sid, n, [80, 200, 50, 75, 330, 150, 180, 65, 55, 380, 380, 100, 260], wrap_cols=[1, 4, 6, 9, 12], notes_cols=[12])
+          + [clip_req(sid, 10)] + band_requests(sid, groups, 13, bold, skip_cols=[12]) + [checkbox_req(sid, 11, n)] + fit_rule(sid, 8))
     if options:
         orows, og = [], []
         for o in options:
@@ -310,7 +326,8 @@ def read_assignments(sheets, spreadsheet_id):
     return out
 
 
-def shared_book(year_name, stamp_text, sess, talks, cards, est, lonely, moves, area_rows=()):
+def shared_book(year_name, stamp_text, sess, talks, cards, est, lonely, moves, area_rows=(), fit=None):
+    fit = fit or {}
     b = Book(f'{year_name}: the whole sort. {stamp_text}')
     b.tab(ASSIGN_TAB, ASSIGN_COLS, [list(r) for r in area_rows],
           lambda sid, n: tab_requests(sid, n, [70, 300, 170, 60, 70, 60, 180, 360, 130], wrap_cols=[1, 7], notes_cols=EDITABLE)
@@ -326,13 +343,13 @@ def shared_book(year_name, stamp_text, sess, talks, cards, est, lonely, moves, a
         for k, i in enumerate(s['talks'], 1):
             t = talks[i]
             srows.append([s['session_id'], s['title'], k, i, t['title'], t['speaker'], t['institution'] or t['affiliation'],
-                          int(t['minutes']), summary(cards, i), t.get('abstract', '')])
+                          int(t['minutes']), fit.get(i, ''), summary(cards, i), t.get('abstract', '')])
             groups.append(s['session_id'])
             if t['type'] == 'invited':
                 bold.append(len(srows) - 1)
-    b.tab('Sessions', ['Session', 'Session title', 'Order', 'Talk ID', 'Title', 'Speaker', 'Institution', 'Minutes', 'Summary', 'Abstract'],
-          srows, lambda sid, n: tab_requests(sid, n, [80, 200, 50, 75, 330, 150, 180, 65, 380, 380], wrap_cols=[1, 4, 6, 8]) + [clip_req(sid, 9)]
-          + protect_req(sid) + band_requests(sid, groups, 10, bold))
+    b.tab('Sessions', ['Session', 'Session title', 'Order', 'Talk ID', 'Title', 'Speaker', 'Institution', 'Minutes', 'Fit', 'Summary', 'Abstract'],
+          srows, lambda sid, n: tab_requests(sid, n, [80, 200, 50, 75, 330, 150, 180, 65, 55, 380, 380], wrap_cols=[1, 4, 6, 9]) + [clip_req(sid, 10)]
+          + protect_req(sid) + band_requests(sid, groups, 11, bold) + fit_rule(sid, 8))
     lrows = [[a['talk_id'], talks[a['talk_id']]['area'], talks[a['talk_id']]['type'], talks[a['talk_id']]['title'],
               talks[a['talk_id']]['speaker'], talks[a['talk_id']]['institution'], summary(cards, a['talk_id']), a['note']]
              for a in sorted(lonely, key=lambda a: (talks[a['talk_id']]['area'], S.id_key(a['talk_id'])))]
@@ -373,6 +390,7 @@ def sync(data_dir, areas=None, all_areas=False, attendance=True):
         sys.exit('no sheets.folder_id in config.yaml; run `python -m dqi_sort.gsheets setup` first (docs/google_sheets.md)')
     commit, stamp_text = stamp(data_dir)
     talks, cards, sess, assign, lonely, moves = load(data_dir)
+    fit = pack.talk_fits(data_dir, sess)          # each talk's similarity to the rest of its session
     log_path = os.path.join(data_dir, 'sorting', 'sheets.csv')
     log = S.read_csv(log_path) if os.path.exists(log_path) else []
     names = {a: v.get('name', '') for a, v in (cfg.get('areas') or {}).items()}
@@ -413,7 +431,7 @@ def sync(data_dir, areas=None, all_areas=False, attendance=True):
         except Exception as e:                   # the previous sheet trashed or unreachable: link sharing only
             print(f'{area}: could not copy access from round {prev["round"] if prev else "?"} ({e.__class__.__name__}); link sharing only')
             gsheets.share(drive, aid, gsheets.new_sheet_access(drive, None, link_role))
-        area_book(area, names.get(area, ''), rnd, stamp_text, sess, talks, cards, est, options.get(area)).write(sheets, aid, True)
+        area_book(area, names.get(area, ''), rnd, stamp_text, sess, talks, cards, est, options.get(area), fit).write(sheets, aid, True)
         drive.files().update(fileId=aid, body={'description': stamp_text}).execute(num_retries=5)
         log.append({'kind': 'area', 'area': area, 'round': rnd, 'commit': commit, 'content': content_hash(area, sess, talks),
                     'sheet_id': aid, 'url': gsheets.url(aid), 'made': now})
@@ -438,7 +456,7 @@ def sync(data_dir, areas=None, all_areas=False, attendance=True):
         rows.append([area, names.get(area, ''), link, r['round'] if r else '', len(mine), sum(len(x['talks']) for x in mine),
                      resp, stat, r['made'].replace('T', ' ') if r else ''])
         saved.append({'area': area, 'responsible': resp, 'status': stat})
-    shared_book(year_name, stamp_text, sess, talks, cards, est, lonely, moves, rows).write(sheets, sid, fresh)
+    shared_book(year_name, stamp_text, sess, talks, cards, est, lonely, moves, rows, fit).write(sheets, sid, fresh)
     drive.files().update(fileId=sid, body={'description': stamp_text}).execute(num_retries=5)
     print('shared sheet:', gsheets.url(sid))
     if fresh:

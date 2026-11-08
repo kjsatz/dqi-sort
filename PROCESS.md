@@ -122,7 +122,7 @@ Reviewers get two kinds of Google Sheet, both generated from the CSVs in git.
 
 - **Freeform comments for Claude:** a highlighted box at the top of the first tab (Session summary), for anything that is not about one talk or session: "merge the two fluxonium sessions", "the readout talks feel scattered", "I'll finish this tomorrow". Claude reads it first when the sheet comes back, acts on it, and says in the pull request what it did with each comment.
 - **Session summary:** one row per session, with session ID, title, type (contributed, mini-symposium or symposium), length, minutes filled (computed), estimated peak attendance and suggested room size (both from the model), a room size override (blank keeps the suggestion) and human notes.
-- **Sessions:** one row per talk, with session ID, order, talk ID, title, speaker, institution, one-line summary, a **Move to lonely abstracts** checkbox and human notes.
+- **Sessions:** one row per talk, with session ID, order, talk ID, title, speaker, institution, minutes, **Fit** (the talk's embedding similarity to the rest of its session as sent, coloured red for a poor fit through yellow to blue for a good one; `docs/overview.md`), one-line summary, abstract, a **Move to lonely abstracts** checkbox and human notes.
 
 What reviewers do:
 

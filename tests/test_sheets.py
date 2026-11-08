@@ -15,13 +15,18 @@ def test_area_book_rows_and_fill_formula():
              '2': {'title': 'T2', 'speaker': 'Q', 'institution': 'V', 'affiliation': 'V', 'minutes': '12', 'type': 'oral'}}
     sess = [{'session_id': 'X01', 'title': 'Topic', 'kind': 'mini-symposium', 'minutes': '108', 'size': '', 'notes': '',
              'area': 'X', 'talks': ['1', '2'], 'used': 48}]
-    b = Sh.area_book('X', 'Area X', 1, 'Generated from git abc1234', sess, talks, {}, {}, [])
+    b = Sh.area_book('X', 'Area X', 1, 'Generated from git abc1234', sess, talks, {}, {}, [], {'1': 0.912})
     names = [t[0] for t in b.tabs]
     assert names == ['Session summary', 'Sessions']
     summary_rows, session_rows = b.tabs[0][2], b.tabs[1][2]
-    assert summary_rows[0][4].startswith('=SUMIFS(Sessions!$H$3:$H$4') and '$K$3:$K$4' in summary_rows[0][4]   # minutes in H, checkbox in K
-    assert [r[3] for r in session_rows] == ['1', '2'] and session_rows[0][10] is False           # checkbox in K
-    assert session_rows[0][9] == 'An abstract.'                                                  # abstract in J
+    assert summary_rows[0][4].startswith('=SUMIFS(Sessions!$H$3:$H$4') and '$L$3:$L$4' in summary_rows[0][4]   # minutes in H, checkbox in L
+    assert [r[3] for r in session_rows] == ['1', '2'] and session_rows[0][11] is False           # checkbox in L
+    assert session_rows[0][10] == 'An abstract.'                                                 # abstract in K
+    assert [r[8] for r in session_rows] == [0.912, '']                                          # fit in I; none without an embedding
+    fmt = b.tabs[1][3](5, 2)
+    grad = [r['addConditionalFormatRule']['rule'] for r in fmt if 'addConditionalFormatRule' in r]
+    assert len(grad) == 1 and grad[0]['ranges'][0]['startColumnIndex'] == 8
+    assert [grad[0]['gradientRule'][k]['value'] for k in ('minpoint', 'midpoint', 'maxpoint')] == ['0.73', '0.86', '0.99']
     assert session_rows[1][1].startswith("=IFERROR(VLOOKUP(A4,'Session summary'")     # the session title, following edits
     assert b.top['Session summary'][Sh.COMMENTS_COL - 2] == Sh.COMMENTS_LABEL           # the label in F1, the box in G1
     assert 'Sessions' not in b.top
