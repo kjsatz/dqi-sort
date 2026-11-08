@@ -105,3 +105,9 @@ def test_protected_ranges_are_owner_only():
     prot = [r['addProtectedRange']['protectedRange'] for r in reqs if 'addProtectedRange' in r]
     assert prot and all(p['editors'] == {'users': ['lead@example.com']} for p in prot)
     assert all('editors' not in r.get('addProtectedRange', {}).get('protectedRange', {}) for r in Sh.owner_only(b.tabs[0][3](7, 1), None))
+
+
+def test_reissuable_only_rounds_nobody_started():
+    last = {'A': {'round': '1'}, 'B': {'round': '1'}, 'C': {'round': '2'}}
+    status = {'A': ('Ann', ''), 'B': ('Bob', 'in progress'), 'C': ('Cy', '')}
+    assert Sh.reissuable(['A', 'B', 'C', 'D'], last, {('C', '2')}, status) == ['A']   # B started, C read back, D new

@@ -1,12 +1,15 @@
 """Review sheets (sync-sheets): write the sort in git to Google Sheets.
 
-    python -m dqi_sort.sheets sync DATA_DIR [--areas SCDEV,QEC | --all] [--no-attendance]
+    python -m dqi_sort.sheets sync DATA_DIR [--areas SCDEV,QEC | --all] [--reissue] [--no-attendance]
 
 Run after every merge to the data repo, from the lead's computer (sign-in: docs/google_sheets.md). It
 - makes a fresh area sheet for each area whose part of the sort changed since that area's last sheet (or the
   areas named). Area sheets are never rewritten: each round is a new file, named with the area, round and commit.
   An area whose current round is out (it has a Status and is not yet read back with `dqi_sort.review apply`) gets no
   new round: the reviewer keeps the sheet they started, and changes from elsewhere wait for the next round.
+  With --reissue, an area whose current round nobody has started (no Status, not read back) is rewritten in place
+  instead: same file, link and access, same round number, stamped with the new commit. For a change that lands before
+  reviewers begin, so nobody has to switch links (and nobody without a Google account gets another invitation).
 - then updates the shared sheet in place. Its first tab, Area assignments, links each area's current sheet and has
   two columns people fill in, Responsible and Status; sync reads them first and keeps them (Status is cleared when
   the area gets a new round), and saves them to
@@ -230,6 +233,7 @@ class Book:
             if name in have:
                 sid = have[name]['properties']['sheetId']
                 reqs.append({'updateCells': {'range': {'sheetId': sid}, 'fields': '*'}})
+                reqs.append({'unmergeCells': {'range': {'sheetId': sid}}})          # the area sheets' comment box
                 reqs += [{'deleteConditionalFormatRule': {'sheetId': sid, 'index': 0}} for _ in have[name].get('conditionalFormats', [])]
                 reqs += [{'deleteProtectedRange': {'protectedRangeId': p['protectedRangeId']}} for p in have[name].get('protectedRanges', [])]
             elif fresh and k == 0:
@@ -370,6 +374,11 @@ def shared_book(year_name, stamp_text, sess, talks, cards, est, lonely, moves, a
     return b
 
 
+def reissuable(todo, last, applied, status):
+    """Areas of todo whose current round can be rewritten in place: it exists, is not read back, and has no Status."""
+    return [a for a in todo if a in last and (a, last[a]['round']) not in applied and not status.get(a, ('', ''))[1]]
+
+
 def read_options(data_dir, sess):
     out = collections.defaultdict(list)
     for path in sorted(glob.glob(os.path.join(data_dir, 'sorting', 'options', '*', 'option*.csv'))):
@@ -392,7 +401,7 @@ def held_back(todo, last, applied, status):
 
 
 
-def sync(data_dir, areas=None, all_areas=False, attendance=True):
+def sync(data_dir, areas=None, all_areas=False, attendance=True, reissue=False):
     cfg = S.load_config(data_dir)
     folder = (cfg.get('sheets') or {}).get('folder_id')
     if not folder:
@@ -430,7 +439,16 @@ def sync(data_dir, areas=None, all_areas=False, attendance=True):
     now = datetime.datetime.now().isoformat(timespec='minutes')
 
     options = read_options(data_dir, sess)
+    again = set(reissuable(todo, last, applied, status)) if reissue else set()
     for area in todo:                            # area sheets first: the shared sheet links to them
+        if area in again:                        # nobody has started: rewrite the current round in place
+            r = last[area]
+            title = f"{area} round {r['round']} ({commit})"
+            area_book(area, names.get(area, ''), r['round'], stamp_text, sess, talks, cards, est, options.get(area), fit).write(sheets, r['sheet_id'], False)
+            drive.files().update(fileId=r['sheet_id'], body={'name': title, 'description': stamp_text}).execute(num_retries=5)
+            r.update(commit=commit, content=content_hash(area, sess, talks), made=now)
+            print(f"{area} round {r['round']} rewritten in place:", r['url'])
+            continue
         rnd = 1 + sum(1 for r in log if r['kind'] == 'area' and r['area'] == area)
         title = f'{area} round {rnd} ({commit})'
         aid = gsheets.create_sheet(drive, title, folder)
@@ -486,9 +504,10 @@ def main():
     ap.add_argument('data_dir')
     ap.add_argument('--areas', help='comma-separated areas to make new sheets for (default: those that changed)')
     ap.add_argument('--all', action='store_true', help='make new sheets for every area')
+    ap.add_argument('--reissue', action='store_true', help='rewrite in place the current round of areas nobody has started')
     ap.add_argument('--no-attendance', action='store_true')
     a = ap.parse_args()
-    sync(a.data_dir, a.areas.split(',') if a.areas else None, a.all, not a.no_attendance)
+    sync(a.data_dir, a.areas.split(',') if a.areas else None, a.all, not a.no_attendance, a.reissue)
 
 
 if __name__ == '__main__':
