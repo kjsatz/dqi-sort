@@ -1,0 +1,249 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>__TITLE__</title>
+<!-- Template for dqi_sort/overview.py, which fills in the title and the data. Keep it free of conference data. -->
+<style>
+:root {
+  color-scheme: light;
+  --surface: #fcfcfb; --raised: #ffffff; --line: #e4e3df; --track: #e4e3df;
+  --text: #0b0b0b; --text-2: #52514e; --text-3: #7a7974;
+  --fit-0: #86b6ef; --fit-1: #3987e5; --fit-2: #256abf; --fit-3: #184f95; --fit-4: #0d366b;
+  --heat: #eb6834; --free: #c9c8c2; --focus: #eb6834;
+  --shadow: 0 6px 24px rgba(0,0,0,.14);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --surface: #1a1a19; --raised: #252523; --line: #383835; --track: #42423e;
+    --text: #f0efec; --text-2: #c3c2b7; --text-3: #8f8e86;
+    --fit-0: #184f95; --fit-1: #2a78d6; --fit-2: #5598e7; --fit-3: #86b6ef; --fit-4: #cde2fb;
+    --heat: #d95926; --free: #55554f; --focus: #d95926;
+    --shadow: 0 6px 24px rgba(0,0,0,.5);
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --surface: #1a1a19; --raised: #252523; --line: #383835; --track: #42423e;
+  --text: #f0efec; --text-2: #c3c2b7; --text-3: #8f8e86;
+  --fit-0: #184f95; --fit-1: #2a78d6; --fit-2: #5598e7; --fit-3: #86b6ef; --fit-4: #cde2fb;
+  --heat: #d95926; --free: #55554f; --focus: #d95926;
+  --shadow: 0 6px 24px rgba(0,0,0,.5);
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--surface); color: var(--text);
+  font: 13px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+header { padding: 16px 16px 8px; display: flex; flex-wrap: wrap; gap: 8px 32px; align-items: flex-end; }
+h1 { font-size: 18px; margin: 0 0 2px; font-weight: 600; }
+.stamp { color: var(--text-2); font-size: 12px; }
+.stamp code { font-size: 11.5px; }
+.totals { color: var(--text-2); font-size: 12px; margin-top: 2px; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 28px; font-size: 11.5px; color: var(--text-2); }
+.legend .row { display: flex; align-items: center; gap: 6px; }
+.legend .sw { display: inline-flex; align-items: center; gap: 3px; }
+.legend .lab { color: var(--text-2); }
+.grid { display: grid; grid-template-columns: repeat(var(--ncol, 11), minmax(146px, 1fr)); gap: 18px 12px; padding: 8px 16px 32px; overflow-x: auto; }
+.area h2 { font-size: 13px; margin: 0; font-weight: 650; }
+.area .aname { font-size: 10.5px; color: var(--text-2); line-height: 1.25; margin: 1px 0 2px; }
+.area .acount { font-size: 10.5px; color: var(--text-3); margin-bottom: 8px; padding-bottom: 6px; border-bottom: 1px solid var(--line); }
+.sess { margin: 0 0 9px; }
+.sh { display: flex; gap: 4px; align-items: flex-start; cursor: default; border-radius: 3px; }
+.sh:hover .st, .sh:focus .st { color: var(--text); }
+.sh:focus { outline: 2px solid var(--focus); outline-offset: 1px; }
+.dial { flex: none; margin-top: 1px; }
+.st { font-size: 10.5px; line-height: 1.22; color: var(--text-2); }
+.st b { font-weight: 600; color: var(--text-3); margin-right: 3px; }
+.bar { display: flex; flex-wrap: wrap; gap: 2px; margin: 3px 0 0; }
+.t, .e { width: 10px; height: 10px; border-radius: 2px; padding: 0; border: 0; flex: none; }
+.t { cursor: pointer; }
+.t.inv { width: 34px; }
+.t:hover, .t:focus-visible, .t.on { outline: 2px solid var(--focus); outline-offset: 1px; }
+.e { border: 1px solid var(--free); background: transparent; }
+.f0 { background: var(--fit-0); } .f1 { background: var(--fit-1); } .f2 { background: var(--fit-2); }
+.f3 { background: var(--fit-3); } .f4 { background: var(--fit-4); } .fn { background: var(--free); }
+#pop { position: fixed; z-index: 10; display: none; width: min(440px, calc(100vw - 32px)); max-height: min(560px, calc(100vh - 32px));
+  overflow: auto; background: var(--raised); color: var(--text); border: 1px solid var(--line); border-radius: 8px;
+  box-shadow: var(--shadow); padding: 12px 14px; font-size: 12.5px; }
+#pop.show { display: block; }
+#pop .k { font-size: 11px; color: var(--text-2); text-transform: uppercase; letter-spacing: .04em; }
+#pop h3 { font-size: 14px; margin: 3px 0 2px; font-weight: 600; line-height: 1.3; }
+#pop .who { color: var(--text-2); margin-bottom: 8px; }
+#pop .facts { display: grid; grid-template-columns: max-content 1fr; gap: 2px 10px; margin: 0 0 8px; }
+#pop .facts dt { color: var(--text-2); } #pop .facts dd { margin: 0; }
+#pop .num { font-variant-numeric: tabular-nums; font-weight: 600; }
+#pop .sum { margin: 0 0 8px; }
+#pop .abs { white-space: pre-wrap; color: var(--text-2); border-top: 1px solid var(--line); padding-top: 8px; margin: 0; }
+#pop .hint { font-size: 11px; color: var(--text-3); margin-top: 8px; }
+#pop .x { position: sticky; top: 0; float: right; border: 0; background: none; color: var(--text-2); font-size: 18px; line-height: 1; cursor: pointer; display: none; }
+#pop.pinned .x { display: block; }
+#pop.pinned .hint { display: none; }
+.chip { display: inline-block; width: 10px; height: 10px; border-radius: 2px; vertical-align: -1px; margin-right: 4px; }
+@media (max-width: 480px) { header { padding: 12px 16px 4px; } .grid { grid-template-columns: 1fr 1fr; gap: 14px 12px; overflow-x: visible; } }
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1 id="h1"></h1>
+    <div class="stamp" id="stamp"></div>
+    <div class="totals" id="totals"></div>
+  </div>
+  <div class="legend" id="legend"></div>
+</header>
+<main class="grid" id="grid"></main>
+<div id="pop" role="dialog" aria-live="polite"><button class="x" aria-label="Close" id="close">×</button><div id="popbody"></div></div>
+<script type="application/json" id="data">__DATA__</script>
+<script>
+(function () {
+  const D = JSON.parse(document.getElementById('data').textContent);
+  const B = D.fit_bins;
+  const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'}[c]));
+  const bin = f => { if (f == null) return 'fn'; let k = 0; while (k < B.length && f >= B[k]) k++; return 'f' + k; };
+  const f3 = x => x == null ? '–' : x.toFixed(3);
+
+  function dial(v, size) {
+    const s = size || 22, r = s * 0.41, cx = s / 2, cy = s * 0.5, w = s * 0.14;
+    const pt = (a, rr) => [cx - rr * Math.cos(a), cy - rr * Math.sin(a)];
+    const [x0, y0] = pt(0, r), [x1, y1] = pt(Math.PI, r);
+    let out = `<svg class="dial" width="${s}" height="${s * 0.6}" viewBox="0 0 ${s} ${s * 0.6}" aria-hidden="true">` +
+      `<path d="M${x0},${y0} A${r},${r} 0 0 1 ${x1},${y1}" fill="none" stroke="var(--track)" stroke-width="${w}" stroke-linecap="round"/>`;
+    if (v == null) return out + '</svg>';
+    const a = Math.PI * v, [xv, yv] = pt(a, r), [xn, yn] = pt(a, r * 0.95);
+    if (v > 0.001) out += `<path d="M${x0},${y0} A${r},${r} 0 0 1 ${xv},${yv}" fill="none" stroke="var(--heat)" stroke-width="${w}" stroke-linecap="round"/>`;
+    out += `<line x1="${cx}" y1="${cy}" x2="${xn}" y2="${yn}" stroke="var(--text)" stroke-width="${s * 0.07}" stroke-linecap="round"/>` +
+      `<circle cx="${cx}" cy="${cy}" r="${s * 0.07}" fill="var(--text)"/></svg>`;
+    return out;
+  }
+
+  // header and legend
+  const title = `DQI ${D.year} sort overview`.replace('  ', ' ');
+  document.getElementById('h1').textContent = title;
+  document.getElementById('stamp').innerHTML = `From data commit <code>${esc(D.commit.hash)}</code>, ${esc(D.commit.date)}: ${esc(D.commit.subject)}`;
+  let nS = 0, nT = 0, nI = 0;
+  D.areas.forEach(a => a.sessions.forEach(s => { nS++; s.talks.forEach(t => { nT++; if (t.type === 'invited') nI++; }); }));
+  document.getElementById('totals').textContent = `${D.areas.length} review areas · ${nS} sessions · ${nT} talks (${nI} invited)` +
+    (D.unplaced.length ? ` · ${D.unplaced.length} not in a session` : '');
+  const labels = ['< ' + B[0].toFixed(2)].concat(B.slice(0, -1).map((b, k) => `${b.toFixed(2)}–${B[k + 1].toFixed(2)}`), ['≥ ' + B[B.length - 1].toFixed(2)]);
+  document.getElementById('legend').innerHTML =
+    `<div class="row"><span class="lab">Fit to the rest of its session (embedding similarity):</span>` +
+    labels.map((l, k) => `<span class="sw"><span class="chip f${k}"></span>${l}</span>`).join('') + `</div>` +
+    `<div class="row"><span class="lab">Square: contributed talk · wide box: invited · outline: free 12 min</span></div>` +
+    `<div class="row">${dial(0.15, 22)}${dial(0.85, 22)}<span class="lab">Expected attendance, ranked among ${D.n_estimated} in-person sessions: 0 lowest, 1 highest</span></div>`;
+
+  // columns
+  const talks = [], sessions = [];
+  const grid = document.getElementById('grid');
+  let html = '';
+  const areaList = D.unplaced.length ? D.areas.concat([{code: 'Unplaced', name: 'Talks not in a session', sessions: [{id: '', title: 'Not in a session', kind: '', minutes: 0, units: 0, talks: D.unplaced, dial: null}]}]) : D.areas;
+  areaList.forEach(a => {
+    const nt = a.sessions.reduce((n, s) => n + s.talks.length, 0);
+    html += `<section class="area"><h2>${esc(a.code)}</h2><div class="aname">${esc(a.name)}</div>` +
+      `<div class="acount">${a.sessions.length} sessions · ${nt} talks</div>`;
+    a.sessions.forEach(s => {
+      const si = sessions.push(Object.assign({area: a.code}, s)) - 1;
+      let used = 0, bar = '';
+      s.talks.forEach(t => {
+        const ti = talks.push(Object.assign({session: s.id, session_title: s.title}, t)) - 1;
+        used += t.units;
+        bar += `<button class="t ${t.type === 'invited' ? 'inv' : ''} ${bin(t.fit)}" data-t="${ti}" aria-label="${esc(t.title)}, fit ${f3(t.fit)}"></button>`;
+      });
+      for (let k = used; k < s.units; k++) bar += '<span class="e" aria-hidden="true"></span>';
+      html += `<div class="sess"><div class="sh" tabindex="0" data-s="${si}">${dial(s.dial)}<span class="st"><b>${esc(s.id)}</b>${esc(s.title)}</span></div>` +
+        `<div class="bar">${bar}</div></div>`;
+    });
+    html += '</section>';
+  });
+  grid.innerHTML = html;
+  grid.style.setProperty('--ncol', areaList.length);
+
+  // popup
+  const pop = document.getElementById('pop'), body = document.getElementById('popbody');
+  let pinned = null, current = null;
+  const catName = c => c ? `${esc(c)}${D.categories[c] ? ' ' + esc(D.categories[c]) : ''}` : '–';
+
+  function talkHtml(t) {
+    const kind = t.type === 'invited' ? 'Invited' : 'Contributed';
+    const fitLine = t.fit == null ? 'no embedding' :
+      `<span class="chip ${bin(t.fit)}"></span><span class="num">${f3(t.fit)}</span> to the rest of ${esc(t.session || 'its session')}`;
+    let facts = `<dt>Fit</dt><dd>${fitLine}</dd>`;
+    if (t.other) facts += `<dt>Next best</dt><dd><span class="num">${f3(t.other_fit)}</span> to ${esc(t.other)} ${esc(t.other_title)}</dd>`;
+    facts += `<dt>Category</dt><dd>${catName(t.cat)}${t.best && t.best !== t.cat ? `<br>card: ${catName(t.best)}` : ''}</dd>`;
+    if (t.series) facts += `<dt>Series</dt><dd>${esc(t.series)}</dd>`;
+    return `<div class="k">${kind} · ${t.units * 12} min · ${esc(t.id)}${t.session ? ' · ' + esc(t.session) : ''}</div>` +
+      `<h3>${esc(t.title)}</h3><div class="who">${esc(t.speaker)}${t.inst ? ', ' + esc(t.inst) : ''}</div>` +
+      `<dl class="facts">${facts}</dl>` + (t.summary ? `<p class="sum"><b>Summary.</b> ${esc(t.summary)}</p>` : '') +
+      (t.abstract ? `<p class="abs">${esc(t.abstract)}</p>` : '<p class="abs">No abstract yet.</p>') +
+      '<div class="hint">Click to pin and scroll the abstract.</div>';
+  }
+
+  function sessHtml(s) {
+    const used = s.talks.reduce((n, t) => n + t.units, 0) * 12;
+    let facts = `<dt>Length</dt><dd>${s.minutes} min, ${used} filled</dd><dt>Talks</dt><dd>${s.talks.length}` +
+      ` (${s.talks.filter(t => t.type === 'invited').length} invited)</dd>`;
+    if (s.coherence != null) facts += `<dt>Coherence</dt><dd><span class="num">${f3(s.coherence)}</span> mean fit</dd>`;
+    if (s.dial != null) facts += `<dt>Attendance</dt><dd>${dial(s.dial, 28)} <span class="num">${s.dial.toFixed(2)}</span>` +
+      (s.estimate ? `, estimated peak ${s.estimate.interest} (${s.estimate.low}–${s.estimate.high})` : '') + '</dd>';
+    else facts += `<dt>Attendance</dt><dd>no estimate</dd>`;
+    return `<div class="k">${esc(s.kind || 'session')} · ${esc(s.area)}</div><h3>${esc(s.id)} ${esc(s.title)}</h3>` +
+      `<dl class="facts">${facts}</dl>` + (s.scope ? `<p class="sum">${esc(s.scope)}</p>` : '');
+  }
+
+  // beside the mark if it fits, else above or below it (whichever has more room); never on top of it
+  function place(el) {
+    const r = el.getBoundingClientRect(), m = 16, gap = 10, pw = pop.offsetWidth;
+    const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+    let x = null, y;
+    if (r.right + gap + pw <= innerWidth - m) x = r.right + gap;
+    else if (r.left - gap - pw >= m) x = r.left - gap - pw;
+    if (x != null) {
+      pop.style.maxHeight = Math.min(560, innerHeight - 2 * m) + 'px';
+      y = clamp(r.top - 8, m, innerHeight - m - pop.offsetHeight);
+    } else {
+      x = clamp(r.left, m, innerWidth - pw - m);
+      const below = innerHeight - r.bottom - gap - m, above = r.top - gap - m;
+      pop.style.maxHeight = Math.min(560, Math.max(below, above)) + 'px';
+      y = below >= above ? r.bottom + gap : r.top - gap - pop.offsetHeight;
+    }
+    pop.style.left = x + 'px'; pop.style.top = y + 'px';
+  }
+
+  function show(el) {
+    if (current) current.classList.remove('on');
+    current = el;
+    body.innerHTML = el.dataset.t != null ? talkHtml(talks[+el.dataset.t]) : sessHtml(sessions[+el.dataset.s]);
+    pop.classList.add('show'); pop.scrollTop = 0;
+    if (el.dataset.t != null) el.classList.add('on');
+    place(el);
+  }
+  function hide() {
+    if (pinned) return;
+    pop.classList.remove('show');
+    if (current) current.classList.remove('on');
+    current = null;
+  }
+  function unpin() { pinned = null; pop.classList.remove('pinned'); hide(); }
+  const target = e => e.target.closest('.t, .sh');
+
+  grid.addEventListener('mouseover', e => { const el = target(e); if (el && !pinned) show(el); });
+  grid.addEventListener('mouseout', e => { const el = target(e); if (el && !el.contains(e.relatedTarget) && !pop.contains(e.relatedTarget)) hide(); });
+  grid.addEventListener('focusin', e => { const el = target(e); if (el && !pinned) show(el); });
+  grid.addEventListener('focusout', () => hide());
+  grid.addEventListener('click', e => {
+    const el = target(e);
+    if (!el) { if (pinned) unpin(); return; }
+    if (pinned === el) { unpin(); return; }
+    pinned = null; show(el); pinned = el; pop.classList.add('pinned');
+    e.stopPropagation();
+  });
+  pop.addEventListener('mouseleave', e => { if (!pinned && !(current && current.contains(e.relatedTarget))) hide(); });
+  document.getElementById('close').addEventListener('click', unpin);
+  document.addEventListener('click', e => { if (pinned && !pop.contains(e.target) && !target(e)) unpin(); });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') unpin(); });
+  addEventListener('scroll', () => { if (current) place(current); }, {passive: true});
+  addEventListener('resize', () => { if (current) place(current); });
+})();
+</script>
+</body>
+</html>
