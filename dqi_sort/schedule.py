@@ -11,10 +11,13 @@ budget  decides each in-person session's room size class against the rooms the g
         holds exactly as many sessions as it has slots of that length. A size a reviewer set in an area sheet
         (sorting/sessions.csv `size`) is kept. Writes views/room_sizes.md: per length and class the sessions wanted
         and the slots there are, every session whose size differs from its suggestion, and the sessions at each
-        boundary, so the lead can swap a few. --apply writes the sizes into sorting/sessions.csv.
+        boundary, so the lead can swap a few. Mini-symposia only get sizes with a recorded slot left, and it says
+        when there are more mini-symposia of a length than recorded slots. --apply writes the sizes into
+        sorting/sessions.csv.
 solve   assigns every session to a room-time slot (schedule/slots.csv) and writes schedule/schedule.csv and
-        views/schedule.md. Hard rules: a slot of the session's own length, in a room of its decided size; no speaker
-        in two sessions at once; locked rows in schedule.csv stay. Preferences (weights in config.yaml
+        views/schedule.md. Hard rules: a slot of the session's own length, in a room of its decided size; a
+        mini-symposium (a session with an invited talk) only in a recorded room (venue/rooms.csv `recorded`; APS
+        records mini-symposia only there); no speaker in two sessions at once; locked rows in schedule.csv stay. Preferences (weights in config.yaml
         `scheduling_weights`, defaults in WEIGHTS): submitters' day requests (parsed from the cards' constraints;
         "not Friday" is strong, "prefers" weaker); similar sessions not in parallel (session centroids of the card
         embeddings), near-duplicates above all; high-interest sessions spread evenly over the time blocks; each
@@ -24,7 +27,8 @@ solve   assigns every session to a room-time slot (schedule/slots.csv) and write
         very closely related sessions (the top 2% of pairs) on the same day, and each room kept to one topic family
         (the area's `modality` in config.yaml, e.g. superconducting, else the area).
 check   rewrites views/schedule.md (the checks and the grid) for the current schedule, without changing it.
-swap    swaps the slots of two sessions of the same length and room size, then checks. Swapping within one room keeps
+swap    swaps the slots of two sessions of the same length and room size (a mini-symposium only into a recorded
+        room), then checks. Swapping within one room keeps
         each session's invited-talk block (stage 9).
 grid    writes the schedule as a session grid in Google Sheets (the APS layout), in the review folder: rooms as
         columns, with name and capacity; one row per time block; each cell holds the session type (Symposium,
@@ -36,26 +40,53 @@ import numpy as np
 from dqi_sort import sessions as S
 
 ORDER = ['large', 'medium', 'small']
+MARKED = lambda room: str(room.get('recorded') or '').strip().lower() in ('yes', 'true', '1')   # labelled recorded in the venue file
 
 
-def allocate(sess, interest, have):
-    """{session_id: size}: per length, reviewers' sizes stand; the rest fill the classes largest first, by interest."""
+def allocate(sess, interest, have, have_rec=None, minis=()):
+    """{session_id: size}: per length, reviewers' sizes stand; the rest take the largest class with room, by interest.
+
+    APS records mini-symposia only in recorded rooms, so a mini-symposium (in `minis`) takes a class only if it has a
+    recorded slot left (have_rec: Counter of (size, minutes) over recorded slots), and a contributed session uses a
+    recorded slot only when the rest of the class is full and the remaining mini-symposia still have enough. Without
+    have_rec every slot counts as recorded."""
+    have_rec = have if have_rec is None else have_rec
     decided = {}
     for minutes in {int(s['minutes']) for s in sess}:
         mine = [s for s in sess if int(s['minutes']) == minutes]
         free = collections.Counter({c: have[(c, minutes)] for c in ORDER})
+        frec = collections.Counter({c: min(have_rec[(c, minutes)], free[c]) for c in ORDER})
+
+        def take(i, c):
+            decided[i] = c; free[c] -= 1
+            if i in minis or free[c] < frec[c]:     # a contributed session takes an unrecorded slot first
+                frec[c] = max(0, frec[c] - 1) if i in minis else free[c]
         for s in mine:
             if s.get('size') in ORDER:
-                decided[s['session_id']] = s['size']; free[s['size']] -= 1
+                take(s['session_id'], s['size'])
         rest = sorted((s for s in mine if s['session_id'] not in decided), key=lambda s: -interest[s['session_id']])
-        k = 0
-        for c in ORDER:
-            for s in rest[k:k + max(0, free[c])]:
-                decided[s['session_id']] = c
-            k += max(0, free[c])
-        for s in rest[k:]:                          # more sessions than slots: should not happen after the global pass
-            decided[s['session_id']] = 'small'
+        minis_left = sum(1 for s in rest if s['session_id'] in minis)
+        for s in rest:
+            i = s['session_id']
+            for c in ORDER:
+                if free[c] <= 0:
+                    continue
+                if i in minis:
+                    if frec[c] > 0:
+                        take(i, c); minis_left -= 1; break
+                elif free[c] > frec[c] or sum(frec.values()) - 1 >= minis_left:
+                    take(i, c); break
+            else:                                   # more sessions than slots: should not happen after the global pass
+                decided[i] = 'small'
     return decided
+
+
+def minis_of(data_dir, sess):
+    """Session IDs (of sess) holding an invited talk: the mini-symposia, which APS records."""
+    talks = {t['talk_id']: t for t in S.read_csv(os.path.join(data_dir, 'talks.csv')) if t['status'] == 'active'}
+    ids = {s['session_id'] for s in sess}
+    return {a['session_id'] for a in S.read_csv(os.path.join(data_dir, 'sorting', 'assignments.csv'))
+            if a['session_id'] in ids and a['talk_id'] in talks and talks[a['talk_id']]['type'] == 'invited'}
 
 
 def budget(data_dir, apply=False):
@@ -68,13 +99,22 @@ def budget(data_dir, apply=False):
     rooms = {r['room_id']: r for r in S.read_csv(os.path.join(data_dir, 'venue', 'rooms.csv'))}
     slots = [s for s in S.read_csv(os.path.join(data_dir, 'schedule', 'slots.csv')) if s['track'] == 'in_person']
     have = collections.Counter((rooms[s['room_id']]['size'], int(s['minutes'])) for s in slots)
-    decided, lines = allocate(sess, {i: e['interest'] for i, e in est.items()}, have), []
+    have_rec = collections.Counter((rooms[s['room_id']]['size'], int(s['minutes'])) for s in slots if S.is_recorded(rooms[s['room_id']]))
+    minis = minis_of(data_dir, sess)
+    decided, lines = allocate(sess, {i: e['interest'] for i, e in est.items()}, have, have_rec, minis), []
+    problems = S.recording_problems(collections.Counter(int(s['minutes']) for s in sess if s['session_id'] in minis),
+                                    collections.Counter({m: sum(have_rec[(c, m)] for c in ORDER) for m in (144, 108)}))
+    if problems:
+        lines += ['**Not enough recorded rooms** (APS records mini-symposia only in recorded rooms; re-flow some '
+                  'mini-symposia to the other length): ' + '; '.join(problems) + '.', '']
     for minutes in sorted({int(s['minutes']) for s in sess}, reverse=True):
         mine = [s for s in sess if int(s['minutes']) == minutes]
         want = collections.Counter(est[s['session_id']]['size'] for s in mine)
         got = collections.Counter(decided[s['session_id']] for s in mine)
-        lines += [f'## {minutes}-minute sessions ({len(mine)})', '', '| Size | Suggested by the model | Slots | Decided |', '| --- | --- | --- | --- |']
-        lines += [f'| {c} | {want[c]} | {have[(c, minutes)]} | {got[c]} |' for c in ORDER]
+        got_m = collections.Counter(decided[s['session_id']] for s in mine if s['session_id'] in minis)
+        lines += [f'## {minutes}-minute sessions ({len(mine)}, {sum(got_m.values())} mini-symposia)', '',
+                  '| Size | Suggested by the model | Slots | Recorded slots | Decided | of which mini-symposia |', '| --- | --- | --- | --- | --- | --- |']
+        lines += [f'| {c} | {want[c]} | {have[(c, minutes)]} | {have_rec[(c, minutes)]} | {got[c]} | {got_m[c]} |' for c in ORDER]
         ranked = sorted(mine, key=lambda s: -est[s['session_id']]['interest'])
         lines += ['', 'At each boundary (the last two in the class above and the first two below; swap any you like):', '']
         for upper, lower in (('large', 'medium'), ('medium', 'small')):
@@ -85,7 +125,8 @@ def budget(data_dir, apply=False):
     changed = [s for s in sess if decided[s['session_id']] != est[s['session_id']]['size']]
     up = [s for s in changed if ORDER.index(decided[s['session_id']]) < ORDER.index(est[s['session_id']]['size'])]
     head = ['# Room sizes against the rooms we have', '', 'Generated by `python -m dqi_sort.schedule budget`; do not edit. Within each session length, the sessions '
-            'with the highest estimated peak attendance get the largest rooms; sizes reviewers set are kept.', '',
+            'with the highest estimated peak attendance get the largest rooms; sizes reviewers set are kept. Mini-symposia only get '
+            'sizes with a recorded slot left (APS records them only in recorded rooms).', '',
             f'{len(changed)} sessions differ from the model\'s per-session suggestion: {len(up)} move up, {len(changed) - len(up)} move down.', '']
     with open(os.path.join(data_dir, 'views', 'room_sizes.md'), 'w', encoding='utf-8') as f:
         f.write('\n'.join(head + lines) + '\n')
@@ -179,6 +220,9 @@ def solve(data_dir, iters=400000, seed=1, check_only=False):
     for sl in slots.values():
         if sl['track'] == 'in_person':
             by_class[(int(sl['minutes']), rooms[sl['room_id']]['size'])].append(sl['slot_id'])
+    minis = minis_of(data_dir, inp)                           # APS records these only in recorded rooms
+    rec_slot = {x: S.is_recorded(rooms[slots[x]['room_id']]) for x in slots if slots[x]['track'] == 'in_person'}
+    fits = lambda i, x: i not in minis or rec_slot.get(x, True)
     rnd = random.Random(seed)
     assign = dict(locked)
     for c, sids in by_class.items():
@@ -187,7 +231,16 @@ def solve(data_dir, iters=400000, seed=1, check_only=False):
         if len(todo) > len(free):
             sys.exit(f'{len(todo)} sessions of {c} for {len(free)} slots')
         rnd.shuffle(free)
-        assign.update(zip(todo, free))
+        free.sort(key=lambda x: not rec_slot[x])            # recorded slots first, for the mini-symposia
+        todo.sort(key=lambda i: i not in minis)
+        need = sum(1 for i in todo if i in minis)
+        if need > sum(1 for x in free if rec_slot[x]):
+            sys.exit(f'{need} mini-symposia of {c} for {sum(1 for x in free if rec_slot[x])} recorded slots: '
+                     'run `schedule budget --apply` again (it sizes mini-symposia by the recorded rooms)')
+        minis_c = [i for i in todo if i in minis]
+        rest_free = free[len(minis_c):]
+        rnd.shuffle(rest_free)                               # contributed sessions: any slot left, recorded or not
+        assign.update(zip(minis_c, free)); assign.update(zip([i for i in todo if i not in minis], rest_free))
     block = lambda i: (slots[assign[i]]['day'], slots[assign[i]]['start'])
     order = {(d, st): n for n, (d, st) in enumerate(sorted({(sl['day'], sl['start']) for sl in slots.values() if sl['track'] == 'in_person'},
                                                           key=lambda x: (DAYS.index(x[0]), x[1])))}
@@ -261,7 +314,7 @@ def solve(data_dir, iters=400000, seed=1, check_only=False):
         c = rnd.choice(classes)
         a, b = rnd.sample(movable[c], 2)
         ba, bb = block(a), block(b)
-        if ba == bb:
+        if ba == bb or not (fits(a, assign[b]) and fits(b, assign[a])):     # mini-symposia stay in recorded rooms
             continue
         ra, rb = slots[assign[a]]['room_id'], slots[assign[b]]['room_id']
         near = {a, b} | close[a] | close[b]
@@ -293,7 +346,7 @@ def solve(data_dir, iters=400000, seed=1, check_only=False):
         out = [{'session_id': i, 'slot_id': assign[i], 'locked': 'true' if i in locked else 'false'} for i in sorted(assign)]
         S.write_csv(spath, ['session_id', 'slot_id', 'locked'], out)
     report(data_dir, sess, assign, slots, rooms, members, talks, cards, sim, k, tdup, t0, est, req, speakers, blocks(), rooms_seq(), w,
-           close, family)
+           close, family, minis)
     return assign
 
 
@@ -305,6 +358,12 @@ def swap(data_dir, a, b):
     if (sess[a]['minutes'], sess[a]['size']) != (sess[b]['minutes'], sess[b]['size']):
         sys.exit(f'{a} and {b} differ in length or room size; they cannot swap')
     at = {r['session_id']: r for r in rows}
+    rooms = {r['room_id']: r for r in S.read_csv(os.path.join(data_dir, 'venue', 'rooms.csv'))}
+    slots = {s['slot_id']: s for s in S.read_csv(os.path.join(data_dir, 'schedule', 'slots.csv'))}
+    minis = minis_of(data_dir, [sess[a], sess[b]])
+    for x, y in ((a, b), (b, a)):
+        if x in minis and not S.is_recorded(rooms[slots[at[y]['slot_id']]['room_id']]):
+            sys.exit(f"{x} is a mini-symposium and {y}'s room is not recorded; they cannot swap")
     at[a]['slot_id'], at[b]['slot_id'] = at[b]['slot_id'], at[a]['slot_id']
     S.write_csv(spath, ['session_id', 'slot_id', 'locked'], rows)
     print(f"{a} -> {at[a]['slot_id']}; {b} -> {at[b]['slot_id']}")
@@ -334,7 +393,7 @@ def virtual_slots(data_dir, rows, members, talks, slots):
     return out
 
 
-def report(data_dir, sess, assign, slots, rooms, members, talks, cards, sim, k, tdup, t0, est, req, speakers, bl, rs, w, close, family):
+def report(data_dir, sess, assign, slots, rooms, members, talks, cards, sim, k, tdup, t0, est, req, speakers, bl, rs, w, close, family, minis=()):
     lines = ['# The schedule (proposed)', '', 'Generated by `python -m dqi_sort.schedule solve`; do not edit. Rows: time blocks; one line per room.', '']
     clashes, dup_par, close_par, day_bad, day_pref = [], [], [], [], []
     for b, v in sorted(bl.items(), key=lambda kv: (DAYS.index(kv[0][0]), kv[0][1])):
@@ -358,6 +417,7 @@ def report(data_dir, sess, assign, slots, rooms, members, talks, cards, sim, k, 
     lines += ['## Checks', '',
               f'- Every session has a slot of its own length in a room of its decided size: yes ({len(assign)} sessions).',
               f'- Speakers in two sessions at once: {len(clashes)}' + (': ' + '; '.join(clashes) if clashes else ''),
+              f'- Mini-symposia in recorded rooms: {sum(1 for i in minis if i in assign and S.is_recorded(rooms[slots[assign[i]]["room_id"]]))} of {sum(1 for i in minis if i in assign)}.',
               f'- Day requests: {n_req} sessions hold a talk with one; {len(day_bad)} "not this day" broken, {len(day_pref)} preferences missed.',
               f'- Near-duplicate sessions in parallel (similarity at least {tdup:.3f}, the top 0.5% of pairs): {len(dup_par)}.',
               f'- Days with more than two very closely related sessions (top {100 - w["close_pct"]}% of pairs): {len(crowded)}' + (': ' + '; '.join(crowded) if crowded else '') + '.',
@@ -375,7 +435,8 @@ def report(data_dir, sess, assign, slots, rooms, members, talks, cards, sim, k, 
         for r in room_order:
             if r in here:
                 i = here[r]
-                lines.append(f"- {r} ({rooms[r]['size']}): {i} {sess[i]['title']} (est. {est[i]})")
+                lines.append(f"- {r} ({rooms[r]['size']}{', recorded' if MARKED(rooms[r]) else ''}): {i} {sess[i]['title']}"
+                             f"{' (mini-symposium)' if i in minis else ''} (est. {est[i]})")
         lines.append('')
     v = [i for i in assign if sess[i]['area'] == 'VIRTUAL']
     if v:
@@ -414,7 +475,7 @@ def grid_rows(sched, slots, rooms, sess, members, cards):
     at = {(sl['day'], sl['start'], sl['room_id']): sl['slot_id'] for sl in ip}
     by_slot = {v: k for k, v in sched.items()}
     header = ['Room'] + [rooms[r]['name'] for r in room_ids]
-    rows = [['Capacity'] + [f"{rooms[r]['capacity']} ({rooms[r]['size']})" for r in room_ids]]
+    rows = [['Capacity'] + [f"{rooms[r]['capacity']} ({rooms[r]['size']}{', REC' if MARKED(rooms[r]) else ''})" for r in room_ids]]
     green = []
     for n, (d, st, en) in enumerate(blocks):
         row = [f'{d} {st}–{en}']

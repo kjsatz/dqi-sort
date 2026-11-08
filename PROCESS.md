@@ -216,9 +216,9 @@ The data repo holds one set of files per year:
 | `sorting/sheets.csv` | sheet made | kind (shared / area / grid / recruiting / delivery), area, round, commit, content (hash of the area's sessions when sent), sheet_id, url, made |
 | `sorting/area_status.csv` | review area | area, responsible, status (as typed in the shared sheet; saved at each sync) |
 | `sorting/notes.csv` | human note | round, area, reviewer, talk_id or session_id, note, resolution |
-| `venue/rooms.csv` | room | room_id, name, capacity, size (small / medium / large), zone, invited_block_144, invited_block_108 |
+| `venue/rooms.csv` | room | room_id, name, capacity, size (small / medium / large), zone, invited_block_144, invited_block_108, recorded (yes / no: APS records the room; a file without the column counts every room as recorded) |
 | `venue/room_distances.csv` | pair of rooms | room_a, room_b, walk_minutes (rough) |
-| `schedule/slots.csv` | room-time slot | slot_id, track, day, start, end, minutes, room_id (blank for virtual) |
+| `schedule/slots.csv` | room-time slot | slot_id, track, day, start, end, minutes, room_id (blank for virtual), block (APS's block code, optional) |
 | `schedule/schedule.csv` | session | session_id, slot_id, locked |
 | `history/attendance.csv` | past session | year, session_code, title, type (contributed / mini-symposium / symposium), primary_unit, day, start, end, minutes, room, capacity, peak (most people inside at once), entries, avg_visit_min, peak_share, full, note; source links in a comment header |
 | `history/attendance_model.npz` | — | The fitted attendance model; see `docs/attendance.md` |
@@ -264,6 +264,7 @@ Hard rules:
 
 - every session gets exactly one slot, of its own length (the global pass builds as many 144- and 108-minute sessions as there are slots of each)
 - every session gets a room of its decided size class
+- every mini-symposium (a session with an invited talk) is in a recorded room: APS records mini-symposia only there (2027). The budget sizes mini-symposia only into classes with a recorded slot left, and the validator and the global pass warn when a session length has more mini-symposia than recorded slots (a 108-minute session may use a spare 144-minute recorded slot); the fix is to make some mini-symposia the other length
 - no speaker is in two places at once
 - submitters' day constraints are honoured where possible
 - confirmed chairs are not scheduled against their own talks or stated unavailability (if returns are in)
