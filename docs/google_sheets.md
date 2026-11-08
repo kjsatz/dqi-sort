@@ -75,7 +75,8 @@ python -m dqi_sort.sheets sync DATA_DIR
 ```
 
 It updates the shared sheet in place and makes a new sheet for each area whose sessions changed since its last
-sheet (`--areas SCDEV,QEC` or `--all` to choose). Ollama must be running for the attendance estimates. The links
+sheet (`--areas SCDEV,QEC` or `--all` to choose). If the sort changes before anyone has started on the current round (no Status), `--reissue`
+rewrites those areas' sheets in place instead, keeping their links and access. Ollama must be running for the attendance estimates. The links
 are printed and recorded in `DATA_DIR/sorting/sheets.csv`; commit that file.
 
 Access: give each area's reviewers edit access to their own area sheet. A new round's sheet then gets the same
