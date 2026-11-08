@@ -96,3 +96,12 @@ def test_link_sharing_only_when_set_and_not_doubled():
     import pytest
     with pytest.raises(ValueError):
         gsheets.new_sheet_access(drive, None, 'owner')
+
+
+def test_protected_ranges_are_owner_only():
+    b = Sh.shared_book('Y', 'stamp', [], {}, {}, {}, [], [], [['QEC', 'q', 'link', 1, 1, 1, '', '', 't']], owner='lead@example.com')
+    assert b.owner == 'lead@example.com'
+    reqs = Sh.owner_only(b.tabs[0][3](7, 1), b.owner)
+    prot = [r['addProtectedRange']['protectedRange'] for r in reqs if 'addProtectedRange' in r]
+    assert prot and all(p['editors'] == {'users': ['lead@example.com']} for p in prot)
+    assert all('editors' not in r.get('addProtectedRange', {}).get('protectedRange', {}) for r in Sh.owner_only(b.tabs[0][3](7, 1), None))
