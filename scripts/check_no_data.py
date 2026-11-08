@@ -11,7 +11,7 @@ import os, subprocess, sys
 BLOCKED = {'.csv', '.tsv', '.jsonl', '.json', '.npz', '.npy', '.pkl', '.parquet', '.xlsx', '.xls', '.xlsm',
            '.docx', '.pdf', '.zip', '.gz', '.html', '.htm'}
 ALLOWED_DIRS = ('tests/fixtures/',)
-ALLOWED_FILES = {'prototype/scripts/map_template.html', 'dqi_sort/overview_page.html'}   # templates only; data is injected outside the repo
+ALLOWED_FILES = {'prototype/scripts/map_template.html', 'dqi_sort/overview_page.html', 'dqi_sort/schedule_page.html'}   # templates only; data is injected outside the repo
 MAX_BYTES = 300_000
 
 

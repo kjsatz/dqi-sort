@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>__TITLE__</title>
+<!-- Template for dqi_sort/schedule_page.py, which fills in the title and the data. Keep it free of conference data. -->
+<style>
+:root { color-scheme: light; --surface:#fcfcfb; --raised:#fff; --line:#e4e3df; --text:#0b0b0b; --text-2:#52514e; --text-3:#7a7974;
+  --none:#efeeea; --hatch:#e4e3df; --focus:#0b0b0b; --shadow:0 6px 24px rgba(0,0,0,.14); }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { color-scheme: dark; --surface:#1a1a19; --raised:#252523; --line:#383835;
+  --text:#f0efec; --text-2:#c3c2b7; --text-3:#8f8e86; --none:#2a2a28; --hatch:#33332f; --focus:#f0efec; --shadow:0 6px 24px rgba(0,0,0,.5); } }
+:root[data-theme="dark"] { color-scheme: dark; --surface:#1a1a19; --raised:#252523; --line:#383835; --text:#f0efec; --text-2:#c3c2b7;
+  --text-3:#8f8e86; --none:#2a2a28; --hatch:#33332f; --focus:#f0efec; --shadow:0 6px 24px rgba(0,0,0,.5); }
+* { box-sizing: border-box; }
+body { margin:0; background:var(--surface); color:var(--text); font:13px/1.35 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; }
+header { padding:16px 16px 6px; }
+h1 { font-size:18px; margin:0 0 2px; font-weight:600; }
+.sub { color:var(--text-2); font-size:12px; max-width:1100px; }
+.legend { display:flex; flex-wrap:wrap; align-items:center; gap:6px 22px; margin:10px 0 4px; font-size:11.5px; color:var(--text-2); }
+.ramp { position:relative; width:260px; height:12px; border-radius:2px; margin-bottom:14px; }
+.ramp .tick { position:absolute; top:14px; transform:translateX(-50%); font-size:10.5px; }
+.badge { display:inline-block; font-size:9px; font-weight:700; letter-spacing:.03em; padding:0 3px; border-radius:2px; border:1px solid currentColor; opacity:.85; margin-right:3px; vertical-align:1px; }
+.wrap { overflow-x:auto; padding:6px 16px 24px; }
+table { border-collapse:separate; border-spacing:3px; table-layout:fixed; }
+th, td { vertical-align:top; }
+th.room { width:118px; padding:5px 6px; border-radius:4px; font-size:11px; text-align:left; font-weight:600; }
+th.room .cap { font-weight:400; font-size:10.5px; }
+td.desc { font-size:10px; line-height:1.25; color:var(--text-2); padding:3px 5px; border-bottom:1px solid var(--line); vertical-align:top; }
+th.blk { width:92px; text-align:left; font-size:11px; font-weight:600; color:var(--text-2); padding:4px 4px 4px 0; white-space:nowrap; }
+th.blk .len { font-weight:400; color:var(--text-3); }
+tr.daystart th.blk, tr.daystart td { border-top:2px solid var(--line); }
+td.c { height:64px; padding:4px 5px; border-radius:4px; font-size:10.5px; line-height:1.2; cursor:pointer; position:relative; overflow:hidden; }
+td.c:hover, td.c.on { outline:2px solid var(--focus); outline-offset:0; }
+td.c .id { font-weight:700; font-size:10px; }
+td.c .t { display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; }
+td.c .warn { position:absolute; right:3px; top:2px; font-size:10px; font-weight:700; }
+td.none { background:repeating-linear-gradient(45deg,var(--none),var(--none) 5px,var(--hatch) 5px,var(--hatch) 10px); border-radius:4px; }
+td.open { border:1px dashed var(--line); border-radius:4px; color:var(--text-3); font-size:10px; text-align:center; vertical-align:middle; }
+.virtual { padding:0 16px 32px; }
+.virtual h2 { font-size:14px; margin:8px 0; }
+.virtual ul { margin:0; padding-left:18px; color:var(--text-2); }
+#pop { position:fixed; z-index:10; display:none; width:min(460px,calc(100vw - 32px)); max-height:min(600px,calc(100vh - 32px)); overflow:auto;
+  background:var(--raised); border:1px solid var(--line); border-radius:8px; box-shadow:var(--shadow); padding:12px 14px; font-size:12.5px; }
+#pop.show { display:block; }
+#pop h3 { font-size:14px; margin:2px 0 4px; }
+#pop .k { font-size:11px; color:var(--text-2); text-transform:uppercase; letter-spacing:.04em; }
+#pop dl { display:grid; grid-template-columns:max-content 1fr; gap:2px 10px; margin:6px 0 8px; }
+#pop dt { color:var(--text-2); } #pop dd { margin:0; }
+#pop ol { margin:6px 0 0; padding-left:20px; } #pop li { margin:2px 0; }
+#pop .chip { display:inline-block; width:9px; height:9px; border-radius:2px; margin-right:4px; vertical-align:0; box-shadow:inset 0 0 0 1px rgba(0,0,0,.2); }
+#pop .x { float:right; border:0; background:none; color:var(--text-2); font-size:18px; cursor:pointer; display:none; }
+#pop.pinned .x { display:block; }
+</style>
+</head>
+<body>
+<header>
+  <h1 id="h1"></h1>
+  <div class="sub" id="sub"></div>
+  <div class="legend" id="legend"></div>
+</header>
+<div class="wrap"><table id="grid"></table></div>
+<div class="virtual" id="virtual"></div>
+<div id="pop" role="dialog"><button class="x" id="close" aria-label="Close">×</button><div id="body"></div></div>
+<script type="application/json" id="data">__DATA__</script>
+<script>
+(function () {
+  const D = JSON.parse(document.getElementById('data').textContent);
+  const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+  // thermometer: ColorBrewer YlOrRd over log(people) from LO to HI
+  const LO = 30, HI = 600;
+  const RAMP = ['#ffffcc','#ffeda0','#fed976','#feb24c','#fd8d3c','#fc4e2a','#e31a1c','#bd0026','#800026'].map(h => [1,3,5].map(k => parseInt(h.slice(k,k+2),16)));
+  const u = v => Math.max(0, Math.min(1, (Math.log(v) - Math.log(LO)) / (Math.log(HI) - Math.log(LO))));
+  const color = v => { const x = u(v) * (RAMP.length - 1), k = Math.min(RAMP.length - 2, Math.floor(x)), w = x - k;
+    return 'rgb(' + RAMP[k].map((c, j) => Math.round(c + (RAMP[k+1][j] - c) * w)).join(',') + ')'; };
+  const ink = v => u(v) > 0.62 ? '#fff' : '#111';
+  const SPEC = ['#9e0142','#d53e4f','#f46d43','#fdae61','#fee08b','#ffffbf','#e6f598','#abdda4','#66c2a5','#3288bd','#5e4fa2'].map(h => [1,3,5].map(k => parseInt(h.slice(k,k+2),16)));
+  const fitColor = f => { const x = Math.max(0, Math.min(1, (f - 0.73) / 0.26)) * 10, k = Math.min(9, Math.floor(x)), w = x - k;
+    return 'rgb(' + SPEC[k].map((c, j) => Math.round(c + (SPEC[k+1][j] - c) * w)).join(',') + ')'; };
+
+  const ours = D.cells.filter(c => c.kind === 'ours' && c.track === 'in_person');
+  const recRoom = Object.fromEntries(D.rooms.map(r => [r.id, r.rec]));
+  const ms = ours.filter(c => c.type === 'mini-symposium'), msRec = ms.filter(c => recRoom[c.room]).length;
+  const nSym = D.cells.filter(c => c.kind === 'symposium').length;
+  document.getElementById('h1').textContent = D.title;
+  document.getElementById('sub').innerHTML = (D.dry_run ? `A dry run of <code>schedule budget</code> + <code>schedule solve</code> on a copy of data commit <code>${esc(D.commit)}</code> (the real sort, sizes and schedule are unchanged). `
+      : `The schedule in data commit <code>${esc(D.commit)}</code> (schedule/schedule.csv). `) +
+    `${ours.length} in-person sessions, ${ms.length} mini-symposia (${msRec} in recorded rooms)` + (nSym ? `, the ${nSym} DQI symposia as APS placed them` : '') + '. ' +
+    `Sessions are coloured by estimated peak attendance and room headings by seats, on the same scale, so a session hotter than its room's heading may be short of seats. Click a session for its talks.`;
+  const ticks = [50, 100, 200, 300, 500];
+  document.getElementById('legend').innerHTML =
+    `<span>Estimated peak / room seats:</span><span class="ramp" style="background:linear-gradient(to right,${Array.from({length:21},(_, k) => color(Math.exp(Math.log(LO) + k/20*(Math.log(HI)-Math.log(LO)))) + ' ' + k*5 + '%').join(',')})">` +
+    ticks.map(t => `<span class="tick" style="left:${(u(t)*100).toFixed(1)}%">${t}</span>`).join('') + `</span>` +
+    `<span><span class="badge">MS</span>mini-symposium &nbsp;<span class="badge">SYM</span>DQI symposium (APS) &nbsp;<span class="badge">REC</span>recorded room &nbsp;▲ high estimate above the room's seats &nbsp;hatched: not ours</span>`;
+
+  const at = {}; D.cells.forEach(c => { if (c.track === 'in_person') at[`${c.day}|${c.start}|${c.room}`] = c; });
+  const open = new Set(D.open);
+  const all = [];
+  let h = '<tr><th></th>' + D.rooms.map(r => `<th class="room" style="background:${color(r.cap)};color:${ink(r.cap)}">${esc(r.name)}${r.rec ? ' <span class="badge">REC</span>' : ''}<br><span class="cap">${r.cap} seats · ${r.size}</span></th>`).join('') + '</tr>';
+  h += '<tr><th class="blk"><span class="len">In this room</span></th>' + D.rooms.map(r => `<td class="desc">${esc((D.room_desc || {})[r.id] || '')}</td>`).join('') + '</tr>';
+  let lastDay = '';
+  D.blocks.forEach(b => {
+    h += `<tr class="${b.day !== lastDay ? 'daystart' : ''}"><th class="blk">${b.day !== lastDay ? b.day + ' ' : ''}${b.start}<br><span class="len">${b.minutes} min · ${esc(b.code)}</span></th>`;
+    lastDay = b.day;
+    D.rooms.forEach(r => {
+      const key = `${b.day}|${b.start}|${r.id}`, c = at[key];
+      if (c) {
+        const n = all.push(Object.assign({cap: r.cap, rec: r.rec, roomName: r.name}, c)) - 1;
+        const badge = c.kind === 'symposium' ? '<span class="badge">SYM</span>' : c.type === 'mini-symposium' ? '<span class="badge">MS</span>' : '';
+        const warn = c.high && c.high > r.cap ? '<span class="warn" title="high estimate above the seats">▲</span>' : '';
+        const bg = c.est ? color(c.est) : 'var(--none)', fg = c.est ? ink(c.est) : 'var(--text)';
+        h += `<td class="c" data-n="${n}" style="background:${bg};color:${fg}">${warn}<div class="id">${badge}${esc(c.kind === 'symposium' ? 'Symposium' : c.id)}</div><div class="t">${esc(c.title)}</div></td>`;
+      } else if (open.has(key)) h += '<td class="open">open</td>';
+      else h += '<td class="none"></td>';
+    });
+    h += '</tr>';
+  });
+  document.getElementById('grid').innerHTML = h;
+  const virt = D.cells.filter(c => c.track === 'virtual').sort((a, b) => ['Mon','Tue','Wed','Thu','Fri'].indexOf(a.day) - ['Mon','Tue','Wed','Thu','Fri'].indexOf(b.day) || a.start.localeCompare(b.start));
+  document.getElementById('virtual').innerHTML = '<h2>Virtual' + (D.time_zone ? ' (times ' + esc(D.time_zone) + ')' : '') + '</h2><ul>' + virt.map(c => {
+    const n = all.push(c) - 1; return `<li><a href="#" data-n="${n}">${esc(c.day)} ${esc(c.start)} · ${esc(c.id)} ${esc(c.title)}</a></li>`; }).join('') + '</ul>';
+
+  const pop = document.getElementById('pop'), body = document.getElementById('body');
+  let pinned = null, cur = null;
+  function html(c) {
+    let s = `<div class="k">${esc(c.kind === 'symposium' ? 'DQI symposium (placed by APS)' : c.type)} · ${c.minutes} min · ${esc(c.day)} ${esc(c.start)}${c.roomName ? ' · ' + esc(c.roomName) : ''}</div>` +
+      `<h3>${c.kind === 'symposium' ? '' : esc(c.id) + ' '}${esc(c.title)}</h3><dl>`;
+    if (c.est) s += `<dt>Est. peak</dt><dd><b>${c.est}</b> (${c.low}–${c.high})${c.kind === 'symposium' ? ', ranked among symposia' : ''}</dd>`;
+    if (c.cap) s += `<dt>Room</dt><dd>${c.cap} seats${c.rec ? ', recorded' : ''}${c.size ? '; size class decided: ' + esc(c.size) : ''}</dd>`;
+    if (c.area) s += `<dt>Area</dt><dd>${esc(c.area)}</dd>`;
+    if (c.coh) s += `<dt>Coherence</dt><dd>${c.coh.toFixed(3)} (mean fit)</dd>`;
+    s += '</dl>';
+    if (c.scope) s += `<div style="color:var(--text-2)">${esc(c.scope)}</div>`;
+    if (c.talks) s += '<ol>' + c.talks.map(t => `<li><span class="chip" style="background:${fitColor(t.fit)}" title="fit ${t.fit}"></span>${t.inv ? '<b>' : ''}${esc(t.t)}${t.inv ? '</b> (invited)' : ''} <span style="color:var(--text-3)">— ${esc(t.sp)}</span></li>`).join('') + '</ol>';
+    return s;
+  }
+  function place(el) {
+    const r = el.getBoundingClientRect(), m = 16, pw = pop.offsetWidth;
+    let x = r.right + 8; if (x + pw > innerWidth - m) x = Math.max(m, r.left - pw - 8);
+    pop.style.left = x + 'px'; pop.style.maxHeight = (innerHeight - 2 * m) + 'px';
+    pop.style.top = Math.max(m, Math.min(innerHeight - m - pop.offsetHeight, r.top - 8)) + 'px';
+  }
+  function show(el) { if (cur) cur.classList.remove('on'); cur = el; el.classList.add('on'); body.innerHTML = html(all[+el.dataset.n]); pop.classList.add('show'); pop.scrollTop = 0; place(el); }
+  function hide() { if (pinned) return; pop.classList.remove('show'); if (cur) cur.classList.remove('on'); cur = null; }
+  function unpin() { pinned = null; pop.classList.remove('pinned'); hide(); }
+  const tgt = e => e.target.closest('[data-n]');
+  document.addEventListener('mouseover', e => { const el = tgt(e); if (el && !pinned) show(el); });
+  document.addEventListener('mouseout', e => { const el = tgt(e); if (el && !el.contains(e.relatedTarget) && !pop.contains(e.relatedTarget)) hide(); });
+  document.addEventListener('click', e => {
+    const el = tgt(e);
+    if (el) { e.preventDefault(); if (pinned === el) return unpin(); pinned = null; show(el); pinned = el; pop.classList.add('pinned'); return; }
+    if (pinned && !pop.contains(e.target)) unpin();
+  });
+  document.getElementById('close').addEventListener('click', unpin);
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') unpin(); });
+})();
+</script>
+</body>
+</html>
