@@ -8,8 +8,10 @@ it takes about 15 minutes and costs nothing.
 ## What you will end up with
 
 - A Google Cloud project with a small OAuth "app" that only you use. It lets the dqi-sort code act as you, and it
-  is allowed exactly one permission, `drive.file`: it can see and edit only files it created itself, nothing else
-  in your Drive.
+  is allowed two permissions: `drive.file`, so in Drive it can see and edit only files it created itself, and
+  `spreadsheets`, so it can read and edit Google Sheets you can edit (needed to write into APS's sorting sheet,
+  such as its Virtual Sorting tab). If you signed in before the second was added, the next run asks you to
+  approve again.
 - Two files on your computer, outside every repository:
   - `~/.config/dqi-sort/oauth_client.json`: the app's client file, downloaded from the console
   - `~/.config/dqi-sort/token.json`: your saved sign-in, created on first use
