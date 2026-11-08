@@ -313,7 +313,7 @@ This step is done once, before sorting starts, and revisited only if APS changes
 
 Invited talks should not all open their sessions. If each room puts its invited talk at a different point, attendees can move between rooms to catch several.
 
-Sessions are built from 36-minute blocks: one invited talk or three contributed talks. A session has 0 or 1 invited talks (occasionally 2). This year there are two lengths:
+Sessions are built from 36-minute blocks: one invited talk or three contributed talks. A session has 0 or 1 invited talks. Two is the exception (the lead's rule, Nov 2026): only when a topic has too few contributed talks to build a session around each invited talk, accepting a little less coherence to avoid it; the checks warn on every session with two. Until talk order is set, a session with two lists both first; at this stage they are placed apart (typically one first and one last). This year there are two lengths:
 
 | Session length | Blocks | Invited talk can be talk number |
 | --- | --- | --- |

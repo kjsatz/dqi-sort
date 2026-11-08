@@ -82,3 +82,18 @@ def test_hold_refused_for_a_talk_the_lead_kept():
     srt = fake([], pool=[{'id': '1', 'from': 'A', 'reason': 'x', 'suggested_home': 'y'}], talks=talks)
     _, err = P.apply_ops(srt, [{'op': 'hold', 'talk': '1', 'action': 'decide', 'reason': 'x'}])
     assert err and 'kept' in err[0]
+
+
+def test_views_rewrites_the_session_views_from_sorting(tmp_path):
+    import os
+    from tests.test_overview import make_repo
+    from dqi_sort import pack
+    d = str(tmp_path / 'data')
+    os.makedirs(d)
+    make_repo(d)
+    with open(os.path.join(d, 'config.yaml'), 'a') as f:
+        f.write('session_slots: {144: 0, 108: 2}\n')
+    pack.views(d, attendance=False)
+    area = open(os.path.join(d, 'views', 'sessions', 'A.md')).read()
+    assert '### A01: First' in area and '`dqi_sort.pack views` from `sorting/`' in area and '**Talk 1**' in area
+    assert '| A | 2 | 0 / 2 |' in open(os.path.join(d, 'views', 'sessions.md')).read()

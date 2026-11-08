@@ -35,7 +35,9 @@ general scratchpad).
   swap or in the nearest session with room. The reason says why, in one line the lead can act on. A promotional tone is
   no reason to hold a talk. If the sort has more talks than room, the talks left out should be ones another unit
   would take (cards marked "other unit", "belongs there" first): they are the easiest for the lead to place elsewhere.
-- Series move as a block (moving one part moves all, in order). At most 2 invited talks per session. At most
+- Series move as a block (moving one part moves all, in order). One invited talk per session: two only
+  when the topic has too few contributed talks to give each its own session (say why), both placed first; a
+  session holding two is worth fixing by a swap (the invited talk for three orals) when a fair home exists. At most
   {MAX_INST} talks from one institution per session (soft).
 
 ## How to work

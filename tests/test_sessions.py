@@ -75,3 +75,16 @@ def test_apart_requests():
     data['talks'][ids[0]]['apart'] = [ids[1]]; data['talks'][ids[1]]['apart'] = [ids[0]]
     err, _ = S.check_proposal({'sessions': [session(ids, None)], 'released': []}, data)
     assert any('asked not to share a session' in e for e in err)
+
+
+def test_two_invited_talks_warn_three_are_an_error():
+    data = area(n_oral=6)
+    ids = sorted(data['talks'])
+    data['talks'][ids[0]] = talk('invited')
+    data['talks'][ids[1]] = talk('invited')                # 2 x 3 + 4 = 10 units
+    err, warn = S.check_proposal({'sessions': [session(ids, None)], 'released': []}, data)
+    assert not any('invited' in e for e in err) and any('two invited talks' in w for w in warn)
+    data['talks'][ids[1]] = talk()                          # one invited talk: no warning
+    data['talks'][ids[2]] = talk()
+    err, warn = S.check_proposal({'sessions': [session(ids[:6], None)], 'released': []}, data)
+    assert not any('invited' in w for w in warn)
