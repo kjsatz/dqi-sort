@@ -47,6 +47,7 @@ Every command takes the private data folder as its argument (`DATA_DIR`, one rep
 | 9 | `order positions / prepare / apply / check` |
 | 10 | `chairs sync` |
 | 11 | `validate [--delivery]`, `deliver`, `late add / withdraw / move` |
+| Any time | `overview DATA_DIR [--commit REF]`: the whole sort on one page ([docs/overview.md](docs/overview.md)) |
 | Scoring | `score metrics / judge-prepare / judge-report` ([docs/dry_runs.md](docs/dry_runs.md)) |
 
 Each module's docstring (`python -m dqi_sort.<module> -h`) explains its options.

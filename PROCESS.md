@@ -250,7 +250,7 @@ Rules:
 
    With `--delivery`, what must hold before the APS sheet is written becomes an error rather than a warning: an empty pool, no talk still offered to another unit, every session scheduled and chaired.
 6. Alternative splits are files under `sorting/options/<area>/`. Picking one is a single commit.
-7. Generated views (`views/sessions.md`, `views/schedule.md`, an interactive topic map) are for reading only. Nobody edits them.
+7. Generated views (`views/sessions.md`, `views/schedule.md`, the overview page `views/overview.html`) are for reading only. Nobody edits them.
 
 Room distances can be rough, and pairs may be left out. A missing pair counts as near if both rooms are in the same zone and far otherwise. A first version can be just `rooms.csv` with zones.
 
