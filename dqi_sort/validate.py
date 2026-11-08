@@ -136,6 +136,9 @@ def check_sessions(d, delivery):
                 series_at[talks[i]['series']].add(sid)
         inst = collections.Counter(talks[i]['institution'] or talks[i]['affiliation'] for i in m)
         out += [('WARN', f'{sid}: {n} talks from {k} (more than {cap_inst})') for k, n in inst.items() if k and n > cap_inst]
+        n_inv = sum(talks[i]['type'] == 'invited' for i in m)
+        if n_inv > 1:
+            out.append(('WARN', f'{sid}: {n_inv} invited talks (one per session; two only as an exception)'))
     out += [('WARN', f"series {k} is split over sessions {', '.join(sorted(v))}") for k, v in sorted(series_at.items()) if len(v) > 1]
     budget = cfg.get('session_budget')
     n_ip = sum(1 for s in sess.values() if not is_virtual(s))

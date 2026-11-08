@@ -20,7 +20,9 @@ them best, so neighbouring cards are often related, but categories do not matter
 
 {RULES}
 - **Series.** All parts of a series must be in the same session, consecutive, in part order.
-- **At most 2 invited talks per session.** Put each invited talk in the session whose topic it fits best.
+- **One invited talk per session.** Put each invited talk in the session whose topic it fits best, and give each
+  its own session even if that costs a little coherence. Two in one session is the exception, only when the topic
+  has too few contributed talks to build a session around each (say why in `notes`); put both first.
 - **At most {MAX_INST} talks from one institution per session** (a soft rule; parts of a series count). Break
   it only when the topic leaves no reasonable alternative, and say so in `notes`.
 - **Submitter requests.** Honour requests about grouping or order (e.g. "same session as my colleague's talk").

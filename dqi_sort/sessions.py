@@ -8,8 +8,8 @@ prepare  writes, per work area, work/sessions/AREA/: cards.txt (one compact card
          (the area's numbers), prompt.md (prompts/session_spec.md, filled in) and talks.json (what `check` needs).
          One Claude agent per area then reads prompt.md and writes proposal.json there.
 check    validates one draft: every talk placed once or released with a reason; in-person sessions of
-         MIN_UNITS to MAX_UNITS units (length is chosen later, by the global pass: dqi_sort.pack); at most 2 invited
-         talks; series together, consecutive and in order; virtual sessions of virtual_session_min (config) whose speakers share a
+         MIN_UNITS to MAX_UNITS units (length is chosen later, by the global pass: dqi_sort.pack); at most 1 invited
+         talk (2 warns: only as an exception); series together, consecutive and in order; virtual sessions of virtual_session_min (config) whose speakers share a
          time window, with every virtual talk placed (the virtual track releases nothing). Prints ERROR and WARN
          lines, or OK.
 
@@ -21,7 +21,9 @@ import yaml
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PROMPT = os.path.join(HERE, 'prompts', 'session_spec.md')
 UNIT_MIN = 12
-MAX_INVITED = 2
+MAX_INVITED = 2          # hard limit; the rule is one, and a second is the exception (TWO_INVITED_WARN)
+TWO_INVITED_WARN = ('two invited talks: keep one per session unless the topic has too few contributed talks '
+                    'to give each its own session; say why in notes, and put both first')
 MIN_UNITS, MAX_UNITS = 8, 12   # a draft session: 108 minutes one short, up to a full 144
 RELEASE_WARN = 0.08      # warn when an area releases more than this share of its units
 WINDOW_RE = re.compile(r'\d\d:\d\d-\d\d:\d\d')
@@ -260,6 +262,8 @@ def session_problems(s, n, info, limits, assumed):
     inv = sum(info[i]['type'] == 'invited' for i in talks)
     if inv > MAX_INVITED:
         err.append(f'{n}: {inv} invited talks (at most {MAX_INVITED})')
+    elif inv == 2:
+        warn.append(f'{n}: {TWO_INVITED_WARN}')
     bad = [i for i in s.get('weakest_fits') or [] if i not in talks]
     if bad or len(s.get('weakest_fits') or []) > 3:
         err.append(f'{n}: weakest_fits must be up to 3 of the session\'s own talks')
