@@ -69,6 +69,34 @@ def apart_pairs(data_dir):
 
 
 # ---------- the grid ----------
+def is_recorded(room):
+    """A room of venue/rooms.csv is recorded unless its `recorded` column says no (a file without it: all recorded)."""
+    return str(room.get('recorded') or 'yes').strip().lower() not in ('no', 'false', '0')
+
+
+def recorded_slots(data_dir):
+    """Counter of minutes over the in-person slots in recorded rooms, or None before the grid (schedule/slots.csv)."""
+    spath, rpath = os.path.join(data_dir, 'schedule', 'slots.csv'), os.path.join(data_dir, 'venue', 'rooms.csv')
+    if not (os.path.exists(spath) and os.path.exists(rpath)):
+        return None
+    rooms = {r['room_id']: r for r in read_csv(rpath)}
+    return collections.Counter(int(s['minutes']) for s in read_csv(spath)
+                               if s['track'] == 'in_person' and is_recorded(rooms.get(s['room_id'], {})))
+
+
+def recording_problems(minis, rec):
+    """APS records mini-symposia only in recorded rooms. minis, rec: Counters by minutes (sessions with an invited talk;
+    recorded slots). A 108-minute session may use a spare 144-minute recorded slot. Returns problem strings."""
+    out, spare = [], rec[144] - minis[144]
+    if spare < 0:
+        out.append(f'{minis[144]} mini-symposia of 144 min for {rec[144]} recorded 144-min slots')
+    over = minis[108] - rec[108] - max(0, spare)
+    if over > 0:
+        out.append(f'{minis[108]} mini-symposia of 108 min for {rec[108]} recorded 108-min slots'
+                   + (f' (plus {spare} spare of 144 min)' if spare > 0 else ''))
+    return out
+
+
 def grid(data_dir):
     """(144-minute slots, 108-minute slots, Counter of (track, minutes), Counter of virtual windows "HH:MM-HH:MM").
 

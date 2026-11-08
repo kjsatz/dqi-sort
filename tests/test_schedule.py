@@ -32,3 +32,26 @@ def test_grid_rows_rooms_as_columns_with_requests_and_green_slots():
     assert header == ['Room', 'Ballroom 1', 'Hall A 1'] and rows[0] == ['Capacity', '500 (large)', '144 (small)']
     assert rows[1] == ['Mon 08:00–10:24', 'Mini-Symposium\nQEC01\nSuperconducting QEC\n\nRequests: not Fri', '(open)']
     assert rows[2] == ['Tue 08:00–10:24', 'Contributed\nSPIN02\nShuttling', ''] and sorted(green) == [(1, 1), (1, 2), (2, 1)]
+
+
+def test_allocate_keeps_mini_symposia_in_recorded_rooms():
+    # 144-min: large 2 slots (1 recorded), small 2 slots (1 recorded); two mini-symposia, two contributed sessions
+    sess = [{'session_id': k, 'minutes': '144', 'size': ''} for k in 'ABCD']
+    interest = {'A': 400, 'B': 300, 'C': 200, 'D': 100}       # B and D are the mini-symposia
+    have = {('large', 144): 2, ('small', 144): 2}
+    have_rec = {('large', 144): 1, ('small', 144): 1}
+    import collections
+    d = Sc.allocate(sess, interest, collections.Counter(have), collections.Counter(have_rec), {'B', 'D'})
+    assert collections.Counter(d.values()) == {'large': 2, 'small': 2}
+    assert d['B'] == 'large' and d['D'] == 'small'           # each mini-symposium in a class with a recorded slot left
+    assert d['A'] == 'large' and d['C'] == 'small'           # A takes the unrecorded large slot
+
+
+def test_recording_problems_count_spare_long_slots_for_short_sessions():
+    import collections
+    from dqi_sort import sessions as S
+    C = collections.Counter
+    assert S.recording_problems(C({144: 51, 108: 46}), C({144: 54, 108: 46})) == []
+    assert S.recording_problems(C({144: 50, 108: 48}), C({144: 54, 108: 46})) == []      # two 108s in spare 144s
+    assert len(S.recording_problems(C({144: 64, 108: 33}), C({144: 54, 108: 46}))) == 1
+    assert S.is_recorded({'recorded': 'no'}) is False and S.is_recorded({}) is True

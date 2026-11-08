@@ -293,6 +293,10 @@ def check(srt):
         lo, hi = LENGTHS[lengths[sid]]
         delta[sid] = lo - u if u < lo else (hi - u if u > hi else 0)
     err, warn = problems(srt)
+    rec = S.recorded_slots(srt.data_dir) if getattr(srt, 'data_dir', None) else None
+    if rec is not None:                          # APS records mini-symposia only in recorded rooms
+        minis = collections.Counter(lengths[s['id']] for s in srt.state['sessions'] if any(srt.talks[i]['type'] == 'invited' for i in s['talks']))
+        warn += [p + ': make some mini-symposia the other length' for p in S.recording_problems(minis, rec)]
     extra = len(units) - (srt.n144 + srt.n108)
     held = [p for p in srt.state['pool'] if p.get('hold')]
     fits = not err and extra <= 0 and all(v == 0 for v in delta.values()) and len(held) == len(srt.state['pool'])

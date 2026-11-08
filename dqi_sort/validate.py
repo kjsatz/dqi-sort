@@ -140,6 +140,12 @@ def check_sessions(d, delivery):
         if n_inv > 1:
             out.append(('WARN', f'{sid}: {n_inv} invited talks (one per session; two only as an exception)'))
     out += [('WARN', f"series {k} is split over sessions {', '.join(sorted(v))}") for k, v in sorted(series_at.items()) if len(v) > 1]
+    if d['slots'] and d['rooms']:              # APS records mini-symposia only in recorded rooms
+        rec = collections.Counter(int(x['minutes']) for x in d['slots'].values()
+                                  if x['track'] == 'in_person' and S.is_recorded(d['rooms'].get(x['room_id'], {})))
+        minis = collections.Counter(int(s['minutes']) for sid, s in sess.items() if not is_virtual(s)
+                                    and any(talks[i]['type'] == 'invited' for i in members.get(sid, []) if i in talks))
+        out += [('ERROR' if delivery else 'WARN', p) for p in S.recording_problems(minis, rec)]
     budget = cfg.get('session_budget')
     n_ip = sum(1 for s in sess.values() if not is_virtual(s))
     if budget and n_ip > int(budget):
@@ -170,6 +176,8 @@ def check_schedule(d, delivery):
         room = rooms.get(slot.get('room_id') or '')
         if room and s.get('size') and room.get('size') and room['size'] != s['size']:
             out.append(('WARN', f"{sid}: size {s['size']}, in room {room['room_id']} ({room['size']})"))
+        if room and not S.is_recorded(room) and any(talks[i]['type'] == 'invited' for i in members.get(sid, []) if i in talks):
+            out.append(('ERROR', f"{sid}: a mini-symposium in {room['room_id']}, which is not recorded (APS records mini-symposia only in recorded rooms)"))
     when = collections.defaultdict(set)          # speaker -> sessions
     for sid, m in members.items():
         if sid in sched:
