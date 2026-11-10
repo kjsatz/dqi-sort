@@ -155,3 +155,20 @@ def test_invited_topics_overrides_and_boilerplate(data):
     assert a['1000006']['body'].startswith('A real abstract') and 'raw' not in a['1000006']
     assert t['1000006']['speaker'] == 'Gus Replacement'
     assert "['1000003', '1000006']" in out
+
+
+def test_also_presenting(data):
+    cfg = (data / 'config.yaml').read_text(encoding='utf-8')
+    (data / 'config.yaml').write_text(cfg.replace('  Sorter Notes: sorter_note\n',
+                                                  '  Sorter Notes: sorter_note\n  Also Presenting: also_presenting\n'),
+                                      encoding='utf-8')
+    v = data / 'input' / 'virtual.csv'
+    lines = v.read_text(encoding='utf-8').splitlines()
+    lines = [lines[0] + ',Also Presenting'] + [l + (',Poster:  Session III' if l.startswith('1000010') else ',') for l in lines[1:]]
+    v.write_text('\n'.join(lines) + '\n', encoding='utf-8')
+    out = run_intake(data)
+    t = talks(data)
+    assert t['1000010']['also_presenting'] == 'Poster: Session III'
+    assert t['1000011']['also_presenting'] == ''
+    assert 'views/also_presenting.md' in out
+    assert '1000010' in (data / 'views' / 'also_presenting.md').read_text(encoding='utf-8')

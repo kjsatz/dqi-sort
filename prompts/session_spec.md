@@ -36,9 +36,7 @@ platform or device (e.g. fluxonium, cat qubits, NV ensembles) or by problem (e.g
 decoding), whichever gives the more natural audience for that set of talks. When a topic has more talks than
 one session holds, split it along a real seam (theory and experiment, junction physics and junction
 fabrication) rather than arbitrarily, and make the halves' scopes clearly different. Order the talks so the
-session flows: related talks adjacent, theory and experiment pairs together, series consecutive, and talks from the
-same institution or group on related topics next to each other (after their group's invited talk, if it is in the
-session). Where an
+session flows: related talks adjacent, theory and experiment pairs together, series consecutive. {INSTITUTION_ORDER} Where an
 invited talk goes in the order is decided later, at scheduling; put it where it fits best (usually first).
 
 Titles are what people see in the program: short, specific, in title case, with no area codes or numbering

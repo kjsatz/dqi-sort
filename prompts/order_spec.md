@@ -24,12 +24,11 @@ talk (background, earlier work, the same system) come before it; follow-ups and 
 talks sit next to each other; theory and experiment on the same system pair up. The session should read as a story
 to someone who stays for all of it.
 
-Talks from the same institution or group on related topics sit together as a block, and a group whose invited talk is
-in the session usually follows it directly (the invited speaker's students and collaborators right after them). When
-the invited talk must move to reach its block, move its group with it rather than splitting the group. The current
-order is usually the area reviewer's: keep its blocks and change it only as much as the invited talk's block and the
-rules require. The check prints WARN lines for split institution groups: fix them unless a rule or a note forces the
-split.
+{INSTITUTION_ORDER}
+
+The current order is usually the area reviewer's: keep it and change it only as much as the invited talk's block and
+the rules require. The check may print WARN lines about the institution order: fix them unless a rule or a reviewer
+note forces otherwise.
 
 ## Output
 

@@ -34,3 +34,30 @@ def test_reviewer_notes_skips_resolved(tmp_path):
 
 def test_reviewer_notes_missing_file(tmp_path):
     assert O.reviewer_notes(str(tmp_path)) == ({}, {})
+
+
+def test_group_runs_and_warnings_by_mode():
+    talks = _talks([('1', 'G'), ('2', 'G'), ('3', 'G'), ('4', 'U'), ('5', 'U'), ('6', 'G')])
+    order = ['1', '2', '3', '4', '5', '6']
+    assert O.group_runs(order, talks) == ['G']
+    assert O.institution_warnings(order, talks, 'group') == ['talks from G are not together']
+    assert O.institution_warnings(order, talks, 'mix') == ['more than two talks in a row from G']
+    assert O.institution_warnings(order, talks, 'none') == []
+
+
+def test_institution_order_config():
+    from dqi_sort import sessions as S
+    assert S.institution_order({})[0] == 'group'
+    assert S.institution_order({'institution_order': 'Mix'})[0] == 'mix'
+    assert S.institution_order({'institution_order': 'none'}) == ('none', '')
+    import pytest
+    with pytest.raises(SystemExit):
+        S.institution_order({'institution_order': 'cluster'})
+
+
+def test_card_text_shows_also_presenting():
+    from dqi_sort import sessions as S
+    t = {'talk_id': '1', 'type': 'oral', 'title': 'T', 'speaker': 'S', 'institution': 'I', 'affiliation': 'I',
+         'series': '', 'series_part': '', 'track': 'in_person', 'time_windows': '', 'flags': '',
+         'also_presenting': 'Invited symposium X (Mon 8:00)'}
+    assert 'speaker also presents: Invited symposium X (Mon 8:00)' in S.card_text(t, None, {})

@@ -14,6 +14,9 @@ Reads DATA_DIR/config.yaml:
                   submits, the real abstract wins and the topic is reported as no longer needed.
     overrides (optional): a CSV with talk_id, field, value, note: the lead's corrections to APS's data, applied on
                   every intake (fields: speaker, affiliation, submitted_category). Flag `override`.
+    aps_columns may map APS's "Also Presenting" column to also_presenting: the speaker's other talks at the meeting
+                  (symposia, posters, other sessions), copied into talks.csv as given. Talk cards show it, and every
+                  talk that has one is listed in views/also_presenting.md for scheduling.
     aps_boilerplate_notes (optional): regular expressions; a submitter note that matches one is APS's own text
                   (e.g. "NOT YET SUBMITTED ... Please contact ...") and is dropped (kept in `raw`).
 
@@ -32,12 +35,14 @@ import yaml
 from dqi_sort import textfix
 
 FIELDS = {'talk_id', 'first_name', 'last_name', 'speaker', 'affiliation', 'submitted_category', 'type', 'title',
-          'body', 'submitter_notes', 'time_windows', 'session_id', 'order', 'sorter_note'}
+          'body', 'submitter_notes', 'time_windows', 'session_id', 'order', 'sorter_note', 'also_presenting'}
 REQUIRED = {'talk_id', 'type', 'title'}
 TEXT_FIELDS = ['title', 'body', 'submitter_notes', 'affiliation', 'speaker']
 TALK_COLS = ['talk_id', 'track', 'type', 'minutes', 'title', 'speaker', 'affiliation', 'institution',
-             'submitted_category', 'area', 'series', 'series_part', 'time_windows', 'status', 'flags', 'notes']
-INTAKE_COLS = ['track', 'type', 'minutes', 'title', 'speaker', 'affiliation', 'submitted_category', 'time_windows']
+             'submitted_category', 'area', 'series', 'series_part', 'time_windows', 'also_presenting', 'status', 'flags',
+             'notes']
+INTAKE_COLS = ['track', 'type', 'minutes', 'title', 'speaker', 'affiliation', 'submitted_category', 'time_windows',
+               'also_presenting']
 INTAKE_FLAGS = ('no_abstract', 'text_repaired', 'still_garbled', 'same_abstract', 'same_title',
                 'category_not_dqi', 'no_time_window', 'not_in_aps_input', 'expected_topic', 'override')
 REF_COLS = ['talk_id', 'session_id', 'order', 'locked', 'note']
@@ -208,6 +213,7 @@ def process(rec, cfg, extras=None):
     talk = {'talk_id': rec['talk_id'], 'track': rec['track'], 'type': typ,
             'minutes': str(cfg['talk_lengths_min'][typ]), 'title': text['title'], 'speaker': text['speaker'],
             'affiliation': text['affiliation'], 'submitted_category': cat, 'time_windows': windows,
+            'also_presenting': ' '.join(rec.get('also_presenting', '').split()),
             'flags': sorted(set(flags))}
     abstract = {'talk_id': rec['talk_id'], 'title': text['title'], 'body': text['body'],
                 'submitter_notes': text['submitter_notes']}
@@ -260,6 +266,20 @@ def write_jsonl(path, recs):
     with open(path, 'w', encoding='utf-8') as f:
         for r in recs:
             f.write(json.dumps(r, ensure_ascii=False) + '\n')
+
+
+def write_also_presenting(d, rows):
+    """views/also_presenting.md: every active talk whose speaker has another talk at the meeting (scheduling input)."""
+    also = [r for r in rows if (r.get('also_presenting') or '').strip() and r.get('status', 'active') == 'active']
+    if not also:
+        return 0
+    lines = ['# Speakers who also present elsewhere', '',
+             "From APS's Also Presenting column: avoid scheduling these talks against the speaker's other commitments.", '']
+    lines += [f"- {r['talk_id']} {r['speaker']}: {r['title']}\n  - also: {r['also_presenting']}" for r in also]
+    os.makedirs(os.path.join(d, 'views'), exist_ok=True)
+    with open(os.path.join(d, 'views', 'also_presenting.md'), 'w', encoding='utf-8') as f:
+        f.write('\n'.join(lines) + '\n')
+    return len(also)
 
 
 def merge(old_rows, new_talks):
@@ -361,6 +381,9 @@ def main():
     write_jsonl(os.path.join(d, 'abstracts.jsonl'), [abstracts[i] for i in sorted(abstracts, key=id_key)])
     if refs:
         write_csv(os.path.join(d, 'reference', 'aps_assignments.csv'), REF_COLS, sorted(refs, key=lambda r: id_key(r['talk_id'])))
+    also = write_also_presenting(d, rows)
+    if also:
+        print(f'{also} talks whose speaker also presents elsewhere: views/also_presenting.md')
     print(f'\nWrote talks.csv and abstracts.jsonl in {d}')
 
 
