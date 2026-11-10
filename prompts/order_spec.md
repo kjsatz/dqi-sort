@@ -14,7 +14,8 @@ helper scripts in `{DIR}/scratch/`.
 - The invited talk starts the block given for its session. Put exactly the right number of contributed minutes before
   it (36 per block). A session with two invited talks puts the other at another block start.
 - Parts of a series stay consecutive, in part order, and do not straddle the invited talk.
-- Submitters' order requests ("after X", "before Y") hold.
+- Submitters' order requests ("after X", "before Y") hold, and so do the area reviewer's notes listed under a session
+  ("keep the Penn talks with Sigillito's invited talk", "Savytskyy right after Carter").
 
 ## What a good order is
 
@@ -22,6 +23,13 @@ Do not just slide the invited talk into place: rethink the order so the session 
 talk (background, earlier work, the same system) come before it; follow-ups and applications come after. Related
 talks sit next to each other; theory and experiment on the same system pair up. The session should read as a story
 to someone who stays for all of it.
+
+Talks from the same institution or group on related topics sit together as a block, and a group whose invited talk is
+in the session usually follows it directly (the invited speaker's students and collaborators right after them). When
+the invited talk must move to reach its block, move its group with it rather than splitting the group. The current
+order is usually the area reviewer's: keep its blocks and change it only as much as the invited talk's block and the
+rules require. The check prints WARN lines for split institution groups: fix them unless a rule or a note forces the
+split.
 
 ## Output
 
