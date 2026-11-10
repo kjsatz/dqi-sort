@@ -89,10 +89,29 @@ def access(drive, file_id):
 
 
 def share(drive, file_id, bodies):
-    """Give each permission body access to the file. People are added quietly: Drive sends them no email."""
+    """Give each permission body access to the file; returns {'emailed': [...], 'failed': [(who, error), ...]}.
+
+    People are added quietly: Drive sends them no email. Drive refuses that for an address with no Google account
+    (HTTP 400), so such a person is shared with again with Drive's invitation email (the lead's standing choice, Nov 10).
+    One refusal never stops the rest: anything that still fails is returned in 'failed'."""
+    out = {'emailed': [], 'failed': []}
     for b in bodies:
-        kw = {'sendNotificationEmail': False} if b['type'] in ('user', 'group') else {}
-        drive.permissions().create(fileId=file_id, body=b, fields='id', **kw).execute(num_retries=5)
+        who = b.get('emailAddress') or b.get('domain') or b['type']
+        person = b['type'] in ('user', 'group')
+        try:
+            drive.permissions().create(fileId=file_id, body=b, fields='id',
+                                       **({'sendNotificationEmail': False} if person else {})).execute(num_retries=5)
+            continue
+        except Exception as e:
+            if not (person and getattr(getattr(e, 'resp', None), 'status', None) == 400):
+                out['failed'].append((who, e.__class__.__name__))
+                continue
+        try:                                     # not a Google account: Drive must email them an invitation
+            drive.permissions().create(fileId=file_id, body=b, fields='id', sendNotificationEmail=True).execute(num_retries=5)
+            out['emailed'].append(who)
+        except Exception as e:
+            out['failed'].append((who, e.__class__.__name__))
+    return out
 
 
 def new_sheet_access(drive, previous_id, link_role):
