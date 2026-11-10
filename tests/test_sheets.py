@@ -111,3 +111,27 @@ def test_reissuable_only_rounds_nobody_started():
     last = {'A': {'round': '1'}, 'B': {'round': '1'}, 'C': {'round': '2'}}
     status = {'A': ('Ann', ''), 'B': ('Bob', 'in progress'), 'C': ('Cy', '')}
     assert Sh.reissuable(['A', 'B', 'C', 'D'], last, {('C', '2')}, status) == ['A']   # B started, C read back, D new
+
+
+def test_share_emails_only_addresses_without_a_google_account():
+    from dqi_sort import gsheets
+
+    class NoGoogle(Exception):
+        class resp:
+            status = 400
+
+    class Drive(FakeDrive):
+        def create(self, fileId, body, fields, **kw):
+            if body.get('emailAddress') == 'prof@uni.edu' and kw.get('sendNotificationEmail') is False:
+                raise NoGoogle()
+            if body.get('emailAddress') == 'gone@x.org':
+                raise RuntimeError('boom')
+            return super().create(fileId, body, fields, **kw)
+
+    drive = Drive({})
+    res = gsheets.share(drive, 'new', [{'type': 'user', 'role': 'writer', 'emailAddress': 'prof@uni.edu'},
+                                       {'type': 'user', 'role': 'writer', 'emailAddress': 'gone@x.org'},
+                                       {'type': 'user', 'role': 'writer', 'emailAddress': 'rev@gmail.com'}])
+    assert res == {'emailed': ['prof@uni.edu'], 'failed': [('gone@x.org', 'RuntimeError')]}
+    sent = [(b['emailAddress'], kw) for _, b, kw in drive.created]
+    assert sent == [('prof@uni.edu', {'sendNotificationEmail': True}), ('rev@gmail.com', {'sendNotificationEmail': False})]

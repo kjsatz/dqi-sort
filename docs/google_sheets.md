@@ -83,7 +83,9 @@ are printed and recorded in `DATA_DIR/sorting/sheets.csv`; commit that file.
 
 Access: give each area's reviewers edit access to their own area sheet. A new round's sheet then gets the same
 access as the area's previous sheet, so reviewers keep it from round to round (Drive sends them no email; tell them
-the new link, which the shared sheet's first tab also lists). To open every new sheet to anyone with the link, set
+the new link, which the shared sheet's first tab also lists). The exception is an address with no Google account:
+Drive will not add it quietly, so sync shares again with Drive's invitation email and prints who was emailed. One
+refusal never drops the others; anyone who still cannot be added is printed, to share by hand. To open every new sheet to anyone with the link, set
 `link_sharing` in the `sheets:` line of config.yaml, e.g. `sheets: {folder_id: "...", folder_name: "...",
 link_sharing: reader}` (reader, commenter or writer; leave it out to keep new sheets private). The links are
 unlisted: nobody finds the sheets without the link.

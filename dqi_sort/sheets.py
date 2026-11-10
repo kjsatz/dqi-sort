@@ -454,10 +454,15 @@ def sync(data_dir, areas=None, all_areas=False, attendance=True, reissue=False):
         aid = gsheets.create_sheet(drive, title, folder)
         prev = last.get(area)                    # a new round keeps the access of the area's previous sheet
         try:
-            gsheets.share(drive, aid, gsheets.new_sheet_access(drive, prev['sheet_id'] if prev else None, link_role))
+            bodies = gsheets.new_sheet_access(drive, prev['sheet_id'] if prev else None, link_role)
         except Exception as e:                   # the previous sheet trashed or unreachable: link sharing only
-            print(f'{area}: could not copy access from round {prev["round"] if prev else "?"} ({e.__class__.__name__}); link sharing only')
-            gsheets.share(drive, aid, gsheets.new_sheet_access(drive, None, link_role))
+            print(f'{area}: could not read the access of round {prev["round"] if prev else "?"} ({e.__class__.__name__}); link sharing only')
+            bodies = gsheets.new_sheet_access(drive, None, link_role)
+        res = gsheets.share(drive, aid, bodies)
+        if res['emailed']:
+            print(f"{area}: Drive emailed an invitation to {', '.join(res['emailed'])} (no Google account, so not added quietly)")
+        for who, err in res['failed']:
+            print(f'{area}: could not give {who} access to round {rnd} ({err}); share it by hand')
         area_book(area, names.get(area, ''), rnd, stamp_text, sess, talks, cards, est, options.get(area), fit).write(sheets, aid, True)
         drive.files().update(fileId=aid, body={'description': stamp_text}).execute(num_retries=5)
         log.append({'kind': 'area', 'area': area, 'round': rnd, 'commit': commit, 'content': content_hash(area, sess, talks),
