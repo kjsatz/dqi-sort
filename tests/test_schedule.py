@@ -65,3 +65,15 @@ def test_assumed_windows_from_the_committed_file(tmp_path):
     S.write_assumed_windows(d, {'12': '06:30-07:54', '3': ['09:30-10:54', '12:15-13:39']})
     assert S.assumed_windows(d) == {'3': {'09:30-10:54', '12:15-13:39'}, '12': {'06:30-07:54'}}
     assert open(os.path.join(d, 'sorting', 'assumed_windows.csv')).read().splitlines()[1].startswith('3,')   # sorted by ID
+
+
+def test_virtual_slots_keep_locked_placements(tmp_path):
+    from dqi_sort.schedule import virtual_slots
+    slots = {f'{d}-{t}-V1': {'slot_id': f'{d}-{t}-V1', 'track': 'virtual', 'day': d, 'start': s}
+             for d in ('Mon', 'Tue') for t, s in (('0630', '06:30'), ('1215', '12:15'))}
+    rows = [{'session_id': 'VIRA', 'area': 'VIRTUAL'}, {'session_id': 'VIRB', 'area': 'VIRTUAL'}]
+    members = {'VIRA': ['1'], 'VIRB': ['2']}
+    talks = {'1': {'time_windows': '12:15-13:39'}, '2': {'time_windows': '12:15-13:39'}}
+    assert virtual_slots(str(tmp_path), rows, members, talks, slots) == {'VIRA': 'Mon-1215-V1', 'VIRB': 'Tue-1215-V1'}
+    locked = virtual_slots(str(tmp_path), rows, members, talks, slots, {'VIRA': 'Tue-1215-V1'})
+    assert locked == {'VIRA': 'Tue-1215-V1', 'VIRB': 'Mon-1215-V1'}

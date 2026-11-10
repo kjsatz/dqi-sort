@@ -342,7 +342,7 @@ def solve(data_dir, iters=400000, seed=1, check_only=False):
                 rs[r].sort(key=lambda i: order[block(i)])
     # virtual sessions: a slot in a window every speaker can make
     if not check_only:
-        assign.update(virtual_slots(data_dir, rows, members, talks, slots))
+        assign.update(virtual_slots(data_dir, rows, members, talks, slots, locked))
         out = [{'session_id': i, 'slot_id': assign[i], 'locked': 'true' if i in locked else 'false'} for i in sorted(assign)]
         S.write_csv(spath, ['session_id', 'slot_id', 'locked'], out)
     report(data_dir, sess, assign, slots, rooms, members, talks, cards, sim, k, tdup, t0, est, req, speakers, blocks(), rooms_seq(), w,
@@ -370,12 +370,16 @@ def swap(data_dir, a, b):
     solve(data_dir, check_only=True)
 
 
-def virtual_slots(data_dir, rows, members, talks, slots):
+def virtual_slots(data_dir, rows, members, talks, slots, locked=None):
+    """{virtual session: slot}. Locked placements (schedule.csv) stay as they are; each other virtual session gets a
+    block every speaker can make, on the least-used day and not in parallel where avoidable."""
     win = lambda txt: {m.group(0)[:5] for m in re.finditer(r'\d\d:\d\d-\d\d:\d\d', txt or '')}
     assumed = {i: {w[:5] for w in ws} for i, ws in S.assumed_windows(data_dir).items()}
     free = sorted((s for s in slots.values() if s['track'] == 'virtual'), key=lambda s: (s['start'], DAYS.index(s['day'])))
-    used_days, out = collections.Counter(), {}
-    for s in sorted((s for s in rows if s['area'] == 'VIRTUAL'), key=lambda s: s['session_id']):
+    virtual = [s for s in rows if s['area'] == 'VIRTUAL']
+    out = {s['session_id']: locked[s['session_id']] for s in virtual if s['session_id'] in (locked or {})}
+    used_days = collections.Counter(slots[v]['day'] for v in out.values())
+    for s in sorted((s for s in virtual if s['session_id'] not in out), key=lambda s: s['session_id']):
         ok = None
         for t in members[s['session_id']]:
             w_ = assumed.get(t) or win(talks[t]['time_windows'])

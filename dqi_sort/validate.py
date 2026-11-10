@@ -165,9 +165,13 @@ def check_schedule(d, delivery):
     out += [('ERROR', f"{r['session_id']}: slot {r['slot_id']} is not in schedule/slots.csv") for r in d['schedule'] if r['slot_id'] not in d['slots']]
     used = collections.Counter(r['slot_id'] for r in d['schedule'])
     out += [('ERROR', f'slot {k} holds {n} sessions') for k, n in used.items() if n > 1]
+    missing = [sid for sid in sorted(sess) if sid not in sched]
+    if delivery:
+        out += [('ERROR', f'{sid}: not scheduled') for sid in missing]
+    elif missing:                                # a partial schedule, e.g. only the locked virtual sessions so far
+        out.append(('WARN', f"{len(missing)} sessions not scheduled yet ({', '.join(missing[:5])}{', ...' if len(missing) > 5 else ''})"))
     for sid, s in sorted(sess.items()):
         if sid not in sched:
-            out.append(('ERROR' if delivery else 'WARN', f'{sid}: not scheduled'))
             continue
         slot = sched[sid]
         if (slot['track'] == 'virtual') != is_virtual(s):
