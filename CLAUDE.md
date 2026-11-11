@@ -9,7 +9,7 @@ Tools for sorting the APS Global Physics Summit DQI (Division of Quantum Informa
 - **The in-person and virtual tracks are a hard partition.** No step may move a talk between them; the drafts, the global pass and their checks refuse it.
 - People decide at the checkpoints in `PROCESS.md`. Claude drafts, proposes and flags; it does not make the checkpoint decisions.
 - Data in the private repo is plain CSV / JSONL, sorted by stable ID, so diffs are readable. Never delete talk rows; change their status.
-- `main` is protected: never push to it. Work on a branch and open a pull request; the `checks` workflow (no data files, tests) must pass. Enable the local hook once per clone with `git config core.hooksPath .githooks`.
+- `main` is protected by two rulesets: never push to it. Work on a branch and open a pull request; the `checks` workflow (no data files, tests) must pass, and a pull request needs one approving review. Kevin, as admin, may bypass the review for his own pull requests (the ones Claude opens): merge with `gh pr merge N --squash --admin` once `checks` passes, and only when he asks. Collaborators cannot approve or merge their own. Enable the local hook once per clone with `git config core.hooksPath .githooks`.
 
 ## Layout
 

@@ -59,7 +59,7 @@ Open an [issue](https://github.com/kjsatz/dqi-sort/issues), or comment on any li
 ## Contributing
 
 - **No conference data in this repo.** It is public. Abstracts, names, emails, sorts, schedules and anything made from them live in the private data repos. Test data must be made up.
-- `main` is protected: branch and open a pull request. A check refuses data files and runs the tests. Turn on the same check locally once per clone with `git config core.hooksPath .githooks`.
+- `main` is protected: branch (in this repo if you are a collaborator, or in your fork) and open a pull request. It merges once a check passes (it refuses data files and runs the tests) and the maintainer approves it. Turn on the same check locally once per clone with `git config core.hooksPath .githooks`.
 - Set up and test:
 
   ```
