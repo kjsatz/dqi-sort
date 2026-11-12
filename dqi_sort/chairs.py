@@ -82,9 +82,12 @@ def volunteers(data_dir, cfg, talks):
                 pm = col(r, "speaker's presentation", 'speaker').lower()
                 p['presenting'].add('virtual' if pm.startswith('virtual') else 'in_person')
                 p['chaired_before'] = p['chaired_before'] or col(r, 'have you session chaired')
-                i = col(r, 'id')
+                i = col(r, 'id', 'abstract id')
                 if i and i not in p['talk_ids']:
                     p['talk_ids'].append(i)
+                if yes(col(r, 'chosen')):            # already ticked in APS's volunteer sheet (by us or another unit)
+                    how = col(r, 'aps notes')
+                    p['note'].append('already chosen in APS\'s volunteer sheet' + (f' ({how})' if how else ''))
     by_name = collections.defaultdict(list)
     for t in talks.values():
         if t['status'] == 'active':
@@ -340,10 +343,10 @@ def area_rows(area, vols, entries, sess, sched, assign_of=None):
     return rows, n_people
 
 
-def book(cfg, areas, tabs, overview, reviewers, counts, others, name_of):
+def book(cfg, areas, tabs, overview, reviewers, counts, others, name_of, owner=None):
     from dqi_sort.sheets import Book, tab_requests, protect_req, color_req, HEADER_ROW, NOTES
     title = (cfg.get('sheets') or {}).get('folder_name', 'DQI')
-    b = Book(f'{title}: session chair recruiting. One tab per review area; edit the tinted cells. See Instructions.')
+    b = Book(f'{title}: session chair recruiting. One tab per review area; edit the tinted cells. See Instructions.', owner)
     orows = []
     for a in areas:
         n_need, n_people, placed = counts[a]
@@ -378,8 +381,34 @@ def book(cfg, areas, tabs, overview, reviewers, counts, others, name_of):
     return b
 
 
+ASSIGN = [  # chair_process: aps_invites (2027): APS writes to every chair we name; we only choose
+    ['How it works this year', 'APS sends the invitations. You only choose a chair for each session: anyone on this volunteer list can be '
+                               'assigned without asking them first (they volunteered). You may also bring in someone from your own network '
+                               'who is a better match; check with them first that they agree.'],
+    ['Diversity', 'Strive for a diverse set of chairs in terms of career stage, institution, and demographics.'],
+    ['Assigning', 'For each person you choose, tick Confirmed? and type the session code in Chairing session(s) (e.g. SCDEV12). Add '
+                  'someone not listed in the blank rows under the volunteers: name, email and affiliation in the first three columns (the '
+                  'affiliation goes to APS with the chair). Emailed? is not needed this year.'],
+    ['Already chosen', 'A volunteer whose note says "already chosen in APS\'s volunteer sheet" has been picked by us or another unit: '
+                       'choose someone else.'],
+    ['Abstract ID', 'Filled in for the listed volunteers. For someone you add, enter their abstract ID if they can find it, so they are '
+                    'never placed against their own talk. Leave it blank if they have no talk.'],
+    ['Chairing session(s)', 'The session code(s) they chair; pick a session close to their own topic where you can, and not one where they '
+                            'speak. A few people may chair more than one: separate the codes with ";" (e.g. QEC03; QEC07).'],
+    ['Availability and Notes', 'Optional: when they cannot chair ("Mon AM; not Thursday afternoon"), and anything Claude should know. '
+                               'Once the schedule is set, Claude checks every chair against their own talks and availability.'],
+    [NOTE_COL, 'Filled in by Claude from APS\'s list: another talk under the same name (to confirm), an abstract not in our program, '
+               'or already chosen.'],
+    [CHECK_COL, 'Filled in by Claude: how Availability was read, and any problem with a placement once the schedule is set.'],
+]
+
+
 def instructions(cfg):
     dates = cfg.get('meeting_dates', 'April 11-16, 2027')
+    if cfg.get('chair_process') == 'aps_invites':
+        return [['Topic', 'What to do'],
+                ['Your area', 'Each review area has a tab, listing the volunteers whose own talk is in that area. The area needs one chair '
+                              'per session (two per virtual session). The Overview shows how many are needed and chosen.']] + ASSIGN
     return [['Topic', 'What to do'],
             ['Your area', 'Each review area has a tab, listing the volunteers whose own talk is in that area. The area needs one confirmed chair '
                           'per session (two per virtual session); there are no backups. The Overview shows how many are needed and confirmed.'],
@@ -445,11 +474,19 @@ def sync(data_dir):
         counts[a] = (need(a, [x for x in sess if sess[x]['area'] == a]), n_people,
                      sum(len(codes(e)) for e in entries.values() if e['area'] == a and yes(e.get('confirmed'))))
     others = sorted((v for v in vols if not v['area']), key=lambda v: v['name'])
-    b = book(cfg, areas, tabs, overview, reviewers, counts, others, lambda a: names.get(a, ''))
+    owner = drive.about().get(fields='user(emailAddress)').execute()['user']['emailAddress']   # locked columns: the lead only
+    b = book(cfg, areas, tabs, overview, reviewers, counts, others, lambda a: names.get(a, ''), owner)
     fresh = row is None
     title = (cfg.get('sheets') or {}).get('folder_name', 'DQI')
     sid = gsheets.create_sheet(drive, f'{title}: chair recruiting', (cfg.get('sheets') or {}).get('folder_id')) if fresh else row['sheet_id']
     b.write(sheets, sid, fresh)
+    shared = next((r for r in reversed(log) if r['kind'] == 'shared'), None)
+    if fresh and shared:                          # the same people as the shared sheet (the reviewers)
+        res = gsheets.share(drive, sid, gsheets.access(drive, shared['sheet_id']))
+        if res['emailed']:
+            print(f"Drive emailed an invitation to {', '.join(res['emailed'])} (no Google account)")
+        for who, err in res['failed']:
+            print(f'could not give {who} access ({err}); share it by hand')
     commit = __import__('subprocess').run(['git', '-C', data_dir, 'rev-parse', '--short', 'HEAD'], capture_output=True, text=True).stdout.strip()
     now = __import__('datetime').datetime.now().isoformat(timespec='minutes')
     if fresh:
