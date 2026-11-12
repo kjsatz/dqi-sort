@@ -8,8 +8,8 @@ def _talks(spec):
 
 
 def test_group_splits_flags_only_split_institutions():
-    talks = _talks([('1', 'Penn'), ('2', 'Penn'), ('3', 'HRL'), ('4', 'Sandia'), ('5', 'Penn'), ('6', 'Sandia'), ('7', '')])
-    assert O.group_splits(['1', '2', '3', '4', '5', '6', '7'], talks) == ['Penn', 'Sandia']
+    talks = _talks([('1', 'Uni A'), ('2', 'Uni A'), ('3', 'Uni B'), ('4', 'Uni C'), ('5', 'Uni A'), ('6', 'Uni C'), ('7', '')])
+    assert O.group_splits(['1', '2', '3', '4', '5', '6', '7'], talks) == ['Uni A', 'Uni C']
     assert O.group_splits(['1', '2', '5', '3', '4', '6', '7'], talks) == []
 
 
@@ -24,12 +24,12 @@ def test_reviewer_notes_skips_resolved(tmp_path):
     with open(d / 'notes.csv', 'w', newline='', encoding='utf-8') as f:
         w = csv.DictWriter(f, ['round', 'area', 'reviewer', 'talk_id', 'session_id', 'note', 'resolution'])
         w.writeheader()
-        w.writerow({'round': 1, 'area': 'SPIN', 'reviewer': 'r', 'talk_id': '10', 'session_id': 'SPIN08', 'note': 'keep Penn block', 'resolution': ''})
-        w.writerow({'round': 1, 'area': 'SPIN', 'reviewer': 'r', 'talk_id': '', 'session_id': 'SPIN08', 'note': 'session note', 'resolution': ''})
-        w.writerow({'round': 1, 'area': 'SPIN', 'reviewer': 'r', 'talk_id': '11', 'session_id': 'SPIN08', 'note': 'done', 'resolution': 'moved'})
+        w.writerow({'round': 1, 'area': 'XA', 'reviewer': 'r', 'talk_id': '10', 'session_id': 'X08', 'note': 'keep lab X block', 'resolution': ''})
+        w.writerow({'round': 1, 'area': 'XA', 'reviewer': 'r', 'talk_id': '', 'session_id': 'X08', 'note': 'session note', 'resolution': ''})
+        w.writerow({'round': 1, 'area': 'XA', 'reviewer': 'r', 'talk_id': '11', 'session_id': 'X08', 'note': 'done', 'resolution': 'moved'})
     by_talk, by_sess = O.reviewer_notes(str(tmp_path))
-    assert by_talk == {'10': ['keep Penn block']}
-    assert by_sess == {'SPIN08': ['session note']}
+    assert by_talk == {'10': ['keep lab X block']}
+    assert by_sess == {'X08': ['session note']}
 
 
 def test_reviewer_notes_missing_file(tmp_path):

@@ -15,7 +15,7 @@ helper scripts in `{DIR}/scratch/`.
   it (36 per block). A session with two invited talks puts the other at another block start.
 - Parts of a series stay consecutive, in part order, and do not straddle the invited talk.
 - Submitters' order requests ("after X", "before Y") hold, and so do the area reviewer's notes listed under a session
-  ("keep the Penn talks with Sigillito's invited talk", "Savytskyy right after Carter").
+  ("keep lab X's talks with its invited talk", "talk B right after talk A").
 
 ## What a good order is
 
