@@ -343,10 +343,10 @@ def area_rows(area, vols, entries, sess, sched, assign_of=None):
     return rows, n_people
 
 
-def book(cfg, areas, tabs, overview, reviewers, counts, others, name_of):
+def book(cfg, areas, tabs, overview, reviewers, counts, others, name_of, owner=None):
     from dqi_sort.sheets import Book, tab_requests, protect_req, color_req, HEADER_ROW, NOTES
     title = (cfg.get('sheets') or {}).get('folder_name', 'DQI')
-    b = Book(f'{title}: session chair recruiting. One tab per review area; edit the tinted cells. See Instructions.')
+    b = Book(f'{title}: session chair recruiting. One tab per review area; edit the tinted cells. See Instructions.', owner)
     orows = []
     for a in areas:
         n_need, n_people, placed = counts[a]
@@ -474,11 +474,19 @@ def sync(data_dir):
         counts[a] = (need(a, [x for x in sess if sess[x]['area'] == a]), n_people,
                      sum(len(codes(e)) for e in entries.values() if e['area'] == a and yes(e.get('confirmed'))))
     others = sorted((v for v in vols if not v['area']), key=lambda v: v['name'])
-    b = book(cfg, areas, tabs, overview, reviewers, counts, others, lambda a: names.get(a, ''))
+    owner = drive.about().get(fields='user(emailAddress)').execute()['user']['emailAddress']   # locked columns: the lead only
+    b = book(cfg, areas, tabs, overview, reviewers, counts, others, lambda a: names.get(a, ''), owner)
     fresh = row is None
     title = (cfg.get('sheets') or {}).get('folder_name', 'DQI')
     sid = gsheets.create_sheet(drive, f'{title}: chair recruiting', (cfg.get('sheets') or {}).get('folder_id')) if fresh else row['sheet_id']
     b.write(sheets, sid, fresh)
+    shared = next((r for r in reversed(log) if r['kind'] == 'shared'), None)
+    if fresh and shared:                          # the same people as the shared sheet (the reviewers)
+        res = gsheets.share(drive, sid, gsheets.access(drive, shared['sheet_id']))
+        if res['emailed']:
+            print(f"Drive emailed an invitation to {', '.join(res['emailed'])} (no Google account)")
+        for who, err in res['failed']:
+            print(f'could not give {who} access ({err}); share it by hand')
     commit = __import__('subprocess').run(['git', '-C', data_dir, 'rev-parse', '--short', 'HEAD'], capture_output=True, text=True).stdout.strip()
     now = __import__('datetime').datetime.now().isoformat(timespec='minutes')
     if fresh:
