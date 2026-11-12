@@ -64,7 +64,7 @@ def test_instructions_for_aps_invites_and_chosen_flag(tmp_path):
     from dqi_sort import chairs as C
     how = C.instructions({'chair_process': 'aps_invites'})
     text = ' '.join(' '.join(r) for r in how)
-    assert 'APS sends the invitations' in text and 'Subject:' not in text and 'diverse' in text
+    assert 'APS will send the chair invitations' in text and 'Subject:' not in text and 'diverse' in text and 'Emailed?' not in text
     assert 'Subject:' in ' '.join(' '.join(r) for r in C.instructions({}))
     d = tmp_path; (d / 'v.csv').write_text('Sub-category,First name,Email,Affiliation,Chairing method,Abstract ID,Chosen,APS notes\n'
                                            '24.01.01,Ada,ada@x.org,X,Both,100,TRUE,DQI VIRTUAL01 chair\n'
@@ -72,3 +72,15 @@ def test_instructions_for_aps_invites_and_chosen_flag(tmp_path):
     vols = C.volunteers(str(d), {'chair_volunteers': {'in_person': 'v.csv'}, 'division_code': 24}, {})
     notes = {v['name']: v['match_note'] for v in vols}
     assert 'already chosen' in notes['Ada'] and 'VIRTUAL01' in notes['Ada'] and 'already chosen' not in notes['Bo']
+
+
+def test_assign_only_layout_drops_checkboxes_and_moves_session():
+    from dqi_sort import chairs as C
+    cols, edit, boxes, chosen, count = C.layout({'chair_process': 'aps_invites'})
+    assert 'Emailed?' not in cols and 'Confirmed?' not in cols and boxes == []
+    assert cols.index('Chairing session(s)') < cols.index('Availability') < cols.index('Notes')
+    assert chosen == 'ABCDEFGHIJ'[cols.index('Chairing session(s)')] and count == 'COUNTA'
+    vols = [{'name': 'Ada', 'email': 'ada@x.org', 'affiliation': 'X', 'talk_ids': '1', 'own_sessions': 'S01', 'match_note': '', 'area': 'A'}]
+    rows, n = C.area_rows('A', vols, {('A', 'Ada', 'ada@x.org'): {'session': 'S02', 'notes': 'n'}}, {}, {}, cols=cols)
+    assert n == 1 and rows[0][cols.index('Chairing session(s)')] == 'S02' and len(rows[0]) == len(cols)
+    assert C.layout({})[0] == C.COLS
