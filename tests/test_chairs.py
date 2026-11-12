@@ -98,7 +98,7 @@ def test_sessions_needing_a_chair_on_top_and_read_back_below():
     assert top[0][:3] == ['Session', 'Title', 'Status'] and [r[:2] for r in top[1:]] == [['A01', 'One'], ['A02', 'Two']]
     s0 = C.start_row(top)                         # every session listed; the status is live: a formula on the volunteers' session cells
     assert top[2][2].startswith('=LET(') and f'$A${s0 + 1}:$A${s0 + len(rows)}' in top[2][2] and '$A4&' in top[2][2]
-    assert f'$G${s0 + 1}:$G${s0 + len(rows)}' in top[2][2] and 'Needs a chair' in top[2][2]
+    assert f'$H${s0 + 1}:$H${s0 + len(rows)}' in top[2][2] and 'Needs a chair' in top[2][2]
     assert C.start_row(top) == 2 + len(top) + 1 and C.start_row([]) == 2
 
     class Fake:                                   # the tab as written: title, block, blank, header, volunteers
@@ -119,3 +119,17 @@ def test_skip_virtual_drops_it_from_the_instructions():
     from dqi_sort import chairs as C
     text = ' '.join(r[1] for r in C.instructions({'chair_process': 'aps_invites', 'chair_skip_virtual': True}))
     assert 'virtual' not in text.lower()
+
+
+def test_similar_sessions_column_and_layout_by_name():
+    from dqi_sort import chairs as C
+    cols, edit, boxes, chosen, _ = C.layout({'chair_process': 'aps_invites'})
+    assert cols.index(C.SPEAK) + 1 == cols.index(C.SIMILAR) and chosen == 'H' and [cols[i] for i in edit] == \
+        ['Abstract ID', 'Chairing session(s)', 'Availability', 'Notes']
+    assert [C.COLS[i] for i in C.BOXES] == ['Emailed?', 'Confirmed?'] and C.layout({})[3] == 'I'
+    vols = [{'name': 'Ada', 'email': 'ada@x.org', 'affiliation': 'X', 'talk_ids': '7', 'own_sessions': 'A01', 'match_note': '', 'area': 'A'}]
+    seen = []
+    sim = lambda ids, area, own: seen.append((ids, area, own)) or 'A03; A02'
+    rows, n, top = C.area_rows('A', vols, {}, {'A01': {'area': 'A', 'title': 'x'}}, {}, {'7': 'A01'}, cols, sim)
+    assert rows[0][cols.index(C.SIMILAR)] == 'A03; A02' and seen == [(['7'], 'A', {'A01'})]
+    assert rows[0][cols.index(C.SPEAK)] == 'A01'
