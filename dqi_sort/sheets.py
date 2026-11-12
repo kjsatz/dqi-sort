@@ -236,6 +236,7 @@ class Book:
                 reqs.append({'unmergeCells': {'range': {'sheetId': sid}}})          # the area sheets' comment box
                 reqs += [{'deleteConditionalFormatRule': {'sheetId': sid, 'index': 0}} for _ in have[name].get('conditionalFormats', [])]
                 reqs += [{'deleteProtectedRange': {'protectedRangeId': p['protectedRangeId']}} for p in have[name].get('protectedRanges', [])]
+                reqs.append({'updateSheetProperties': {'properties': {'sheetId': sid, 'index': k}, 'fields': 'index'}})   # tabs in the order given
             elif fresh and k == 0:
                 sid = first
                 reqs.append({'updateSheetProperties': {'properties': {'sheetId': sid, 'title': name}, 'fields': 'title'}})

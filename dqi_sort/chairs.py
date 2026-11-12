@@ -14,6 +14,9 @@ sync  makes the recruiting spreadsheet the first time (in the review folder), th
         text: wishes, a decline, anything Claude should know when placing) and Session; blank rows for people from the
         expert's network; once scheduled, the sessions still needing a chair.
       - Other volunteers (abstract not in our program), and Instructions (how to fill it in, diversity, the invitation).
+      With `chair_process: aps_invites` (APS invites every chair named) Instructions comes first, the area tabs have no
+      Emailed?/Confirmed? and put Chairing session(s) before Availability and Notes, and a session code means chosen
+      (a listed volunteer needs no confirmation; someone a reviewer adds is assumed to have agreed).
       Once schedule/schedule.csv exists it places each area's confirmed chairs who have no session, all at once: never
       in a session where they speak or at a time they present or are unavailable, and close to their own talk's topic
       where it can. Claude reads the Notes first and types a Session for anyone whose wishes need it. A Check column
@@ -31,6 +34,18 @@ COLS = ['Volunteer', 'Email', 'Affiliation', 'Abstract ID', 'Scheduled sessions'
 NC = len(COLS)
 EDIT = [3, 6, 7, 8, 9, 10]                 # Abstract ID, Emailed?, Confirmed?, Availability, Notes, Session
 BOXES = [6, 7]                             # Emailed?, Confirmed? as checkboxes
+# chair_process: aps_invites (2027): APS invites the chairs we name, so there is nothing to email or confirm; a person with
+# a session code typed is chosen (a volunteer from APS's list needs no further confirmation; someone added has agreed)
+COLS_APS = ['Volunteer', 'Email', 'Affiliation', 'Abstract ID', 'Scheduled sessions', NOTE_COL, 'Chairing session(s)', 'Availability',
+            'Notes', CHECK_COL]
+EDIT_APS = [3, 6, 7, 8]                    # Abstract ID, Session, Availability, Notes
+
+
+def layout(cfg):
+    """(columns, editable column indexes, checkbox column indexes, column letter counted as chosen, its formula)"""
+    if (cfg or {}).get('chair_process') == 'aps_invites':
+        return COLS_APS, EDIT_APS, [], 'G', 'COUNTA'
+    return COLS, EDIT, BOXES, 'H', 'COUNTIF'
 READ = {'name': ['Volunteer'], 'email': ['Email'], 'affiliation': ['Affiliation'], 'abstract_id': ['Abstract ID'], 'emailed': ['Emailed?'],   # fields by header:
         'confirmed': ['Confirmed?'], 'availability': ['Availability'], 'notes': ['Notes'], 'session': ['Chairing session(s)', 'Session']}  # renames keep working
 NEW_ROWS = 25                              # blank rows for people from the expert's own network
@@ -201,10 +216,12 @@ def read_back(sheets, sid, areas):
             continue
         vals = sheets.spreadsheets().values().get(spreadsheetId=sid, range=f"'{t}'!A2:N2000").execute(num_retries=5).get('values', [])
         if t == 'Overview':
+            head = [h.strip() for h in (vals[0] if vals else [])]
+            ri, si = (head.index(h) if h in head else None for h in ('Responsible', 'Status'))
             for r in vals[1:]:
-                r = r + [''] * 8
+                r = r + [''] * len(head)
                 if r[0]:
-                    overview[r[0]] = (r[2].strip(), r[7].strip())
+                    overview[r[0]] = (r[ri].strip() if ri is not None else '', r[si].strip() if si is not None else '')
             continue
         head = [h.strip() for h in (vals[0] if vals else [])]
         at = {f: next((head.index(h) for h in names if h in head), None) for f, names in READ.items()}
@@ -314,92 +331,110 @@ def checks(entries, vols, sess, sched, presents):
         e['check'] = '; '.join(dict.fromkeys(x for x in c if x))
 
 
-def area_rows(area, vols, entries, sess, sched, assign_of=None):
+def area_rows(area, vols, entries, sess, sched, assign_of=None, cols=None):
     assign_of = assign_of or {}
+    cols = cols or COLS
+    nc = len(cols)
+
+    def line(**k):
+        d = {'Volunteer': k['name'], 'Email': k['email'], 'Affiliation': k['aff'], 'Abstract ID': k['aid'], 'Scheduled sessions': k['sched'],
+             NOTE_COL: k['note'], 'Emailed?': yes(k['e'].get('emailed')), 'Confirmed?': yes(k['e'].get('confirmed')),
+             'Availability': k['e'].get('availability', ''), 'Notes': k['e'].get('notes', ''), 'Chairing session(s)': k['e'].get('session', ''),
+             CHECK_COL: k['e'].get('check', '')}
+        return [d[c] for c in cols]
     when = lambda x: f"{x} ({sched[x]['day']} {sched[x]['start']})" if x in sched else x
     mine = sorted((v for v in vols if v['area'] == area), key=lambda v: v['name'])
     known = {(v['name'], v['email']) for v in mine}
     rows = []
     for v in mine:
         e = entries.get((area, v['name'], v['email']), {})
-        rows.append([v['name'], v['email'], v['affiliation'], e.get('abstract_id') or v['talk_ids'].replace(';', ', '),
-                     '; '.join(when(x) for x in v['own_sessions'].split(';') if x), v['match_note'],
-                     yes(e.get('emailed')), yes(e.get('confirmed')), e.get('availability', ''), e.get('notes', ''), e.get('session', ''), e.get('check', '')])
+        rows.append(line(name=v['name'], email=v['email'], aff=v['affiliation'], aid=e.get('abstract_id') or v['talk_ids'].replace(';', ', '),
+                         sched='; '.join(when(x) for x in v['own_sessions'].split(';') if x), note=v['match_note'], e=e))
     for (a, n, m), e in sorted(entries.items()):
         if a == area and (n, m) not in known:
             theirs = [assign_of.get(i, '') for i in re.split(r'[;,\s]+', e.get('abstract_id') or '') if i]
-            rows.append([n, m, e.get('affiliation', ''), e.get('abstract_id', ''), '; '.join(when(x) for x in theirs if x), 'added by the area',
-                         yes(e.get('emailed')), yes(e.get('confirmed')), e.get('availability', ''), e.get('notes', ''),
-                         e.get('session', ''), e.get('check', '')])
+            rows.append(line(name=n, email=m, aff=e.get('affiliation', ''), aid=e.get('abstract_id', ''),
+                             sched='; '.join(when(x) for x in theirs if x), note='added by the area', e=e))
     n_people = len(rows)
-    rows += [[''] * 6 + [False, False] + [''] * 4 for _ in range(NEW_ROWS)]
+    rows += [[False if c in ('Emailed?', 'Confirmed?') else '' for c in cols] for _ in range(NEW_ROWS)]
     mine_s = sorted((x for x in sess if sess[x]['area'] == area), key=lambda x: (DAYS.index(sched[x]['day']), sched[x]['start']) if x in sched else (9, x))
     per = 2 if area == 'VIRTUAL' else 1
     if sched:
         got = collections.Counter(x for e in entries.values() if e['area'] == area and yes(e.get('confirmed')) for x in codes(e))
         open_ = [x for x in mine_s if got[x] < per]
-        rows += [[''] * NC, [NEEDING, 'Title', 'When', 'Chairs still needed'] + [''] * (NC - 4)]
-        rows += [[x, sess[x]['title'], f"{sched[x]['day']} {sched[x]['start']}" if x in sched else '', per - got[x]] + [''] * (NC - 4) for x in open_]
+        rows += [[''] * nc, [NEEDING, 'Title', 'When', 'Chairs still needed'] + [''] * (nc - 4)]
+        rows += [[x, sess[x]['title'], f"{sched[x]['day']} {sched[x]['start']}" if x in sched else '', per - got[x]] + [''] * (nc - 4) for x in open_]
     return rows, n_people
 
 
 def book(cfg, areas, tabs, overview, reviewers, counts, others, name_of, owner=None):
     from dqi_sort.sheets import Book, tab_requests, protect_req, color_req, HEADER_ROW, NOTES
     title = (cfg.get('sheets') or {}).get('folder_name', 'DQI')
+    cols, edit, boxes, chosen, count = layout(cfg)
+    assign_only = cols is COLS_APS
     b = Book(f'{title}: session chair recruiting. One tab per review area; edit the tinted cells. See Instructions.', owner)
+    how = instructions(cfg)                       # first, so nobody misses it
+    b.tab('Instructions', how[0], how[1:], lambda sid, n: tab_requests(sid, n, [190, 760], wrap_cols=[1]) + protect_req(sid))
     orows = []
     for a in areas:
         n_need, n_people, placed = counts[a]
         resp, stat = overview.get(a, (reviewers.get(a, ''), ''))
-        conf = f"=COUNTIF('{a}'!H{HEADER_ROW + 1}:H{HEADER_ROW + n_people + NEW_ROWS},TRUE)"
-        orows.append([a, name_of(a), resp, n_need, conf, placed, topic(a, cfg), stat])
-    b.tab('Overview', ['Area', 'Name', 'Responsible', 'Chairs needed', 'Confirmed', 'Placed on sessions', 'Topic in the invitation', 'Status'], orows,
-          lambda sid, n: tab_requests(sid, n, [80, 320, 200, 100, 90, 110, 220, 320], wrap_cols=[1, 7], notes_cols=[2, 7]) + protect_req(sid, n, [2, 7]))
+        rng = f"'{a}'!{chosen}{HEADER_ROW + 1}:{chosen}{HEADER_ROW + n_people + NEW_ROWS}"
+        conf = f"=COUNTA({rng})" if count == 'COUNTA' else f"=COUNTIF({rng},TRUE)"
+        orows.append([a, name_of(a), resp, n_need, conf, stat] if assign_only else [a, name_of(a), resp, n_need, conf, placed, topic(a, cfg), stat])
+    if assign_only:
+        b.tab('Overview', ['Area', 'Name', 'Responsible', 'Chairs needed', 'Chosen', 'Status'], orows,
+              lambda sid, n: tab_requests(sid, n, [80, 320, 200, 100, 90, 420], wrap_cols=[1, 5], notes_cols=[2, 5]) + protect_req(sid, n, [2, 5]))
+    else:
+        b.tab('Overview', ['Area', 'Name', 'Responsible', 'Chairs needed', 'Confirmed', 'Placed on sessions', 'Topic in the invitation', 'Status'], orows,
+              lambda sid, n: tab_requests(sid, n, [80, 320, 200, 100, 90, 110, 220, 320], wrap_cols=[1, 7], notes_cols=[2, 7]) + protect_req(sid, n, [2, 7]))
+    widths = ({'Volunteer': 170, 'Email': 210, 'Affiliation': 200, 'Abstract ID': 90, 'Scheduled sessions': 170, NOTE_COL: 200,
+               'Emailed?': 75, 'Confirmed?': 85, 'Availability': 170, 'Notes': 320, 'Chairing session(s)': 140, CHECK_COL: 240})
+    wrap = [i for i, c in enumerate(cols) if c in ('Affiliation', 'Abstract ID', 'Scheduled sessions', NOTE_COL, 'Availability', 'Notes', CHECK_COL)]
     for a in areas:
         rows, n_people = tabs[a]
 
         def fmt(sid, n, n_people=n_people):
             people = n_people + NEW_ROWS
-            reqs = tab_requests(sid, n, [170, 210, 200, 90, 170, 200, 75, 85, 170, 320, 140, 240], wrap_cols=[2, 3, 4, 5, 8, 9, 11])
-            reqs += [color_req(sid, HEADER_ROW, HEADER_ROW + people, c, c + 1, NOTES) for c in EDIT]
+            reqs = tab_requests(sid, n, [widths[c] for c in cols], wrap_cols=wrap)
+            reqs += [color_req(sid, HEADER_ROW, HEADER_ROW + people, c, c + 1, NOTES) for c in edit]
             reqs.append(color_req(sid, HEADER_ROW + n_people, HEADER_ROW + people, 0, 3, NOTES))
             reqs.append({'repeatCell': {'range': {'sheetId': sid, 'startRowIndex': HEADER_ROW + people + 1, 'endRowIndex': HEADER_ROW + people + 2},
                                         'cell': {'userEnteredFormat': {'textFormat': {'bold': True}}}, 'fields': 'userEnteredFormat.textFormat.bold'}})
             reqs += [{'setDataValidation': {'range': {'sheetId': sid, 'startRowIndex': HEADER_ROW, 'endRowIndex': HEADER_ROW + people,
                                                       'startColumnIndex': c, 'endColumnIndex': c + 1},
-                                            'rule': {'condition': {'type': 'BOOLEAN'}}}} for c in BOXES]
-            free = [{'sheetId': sid, 'startRowIndex': HEADER_ROW, 'endRowIndex': HEADER_ROW + people, 'startColumnIndex': c, 'endColumnIndex': c + 1} for c in EDIT]
+                                            'rule': {'condition': {'type': 'BOOLEAN'}}}} for c in boxes]
+            free = [{'sheetId': sid, 'startRowIndex': HEADER_ROW, 'endRowIndex': HEADER_ROW + people, 'startColumnIndex': c, 'endColumnIndex': c + 1} for c in edit]
             free.append({'sheetId': sid, 'startRowIndex': HEADER_ROW + n_people, 'endRowIndex': HEADER_ROW + people, 'startColumnIndex': 0, 'endColumnIndex': 3})
             return reqs + [{'addProtectedRange': {'protectedRange': {'range': {'sheetId': sid}, 'unprotectedRanges': free, 'warningOnly': False,
                                                                      'description': 'Generated by dqi_sort.chairs'}}}]
-        b.tab(a, COLS, rows, fmt)
+        b.tab(a, cols, rows, fmt)
     b.tab('Other volunteers', ['Volunteer', 'Email', 'Affiliation', NOTE_COL],
           [[v['name'], v['email'], v['affiliation'], v['match_note']] for v in others],
           lambda sid, n: tab_requests(sid, n, [180, 220, 240, 420], wrap_cols=[2, 3]) + protect_req(sid))
-    how = instructions(cfg)
-    b.tab('Instructions', how[0], how[1:], lambda sid, n: tab_requests(sid, n, [190, 760], wrap_cols=[1]) + protect_req(sid))
     return b
 
 
-ASSIGN = [  # chair_process: aps_invites (2027): APS writes to every chair we name; we only choose
-    ['How it works this year', 'APS sends the invitations. You only choose a chair for each session: anyone on this volunteer list can be '
-                               'assigned without asking them first (they volunteered). You may also bring in someone from your own network '
-                               'who is a better match; check with them first that they agree.'],
+ASSIGN = [  # chair_process: aps_invites (2027): APS writes to every chair we name; reviewers only choose
+    ['How it works this year', 'APS sends the chair invitations, so there is nothing to email. Everyone listed in your tab volunteered '
+                               'through APS: you can assign them without asking them first. You are also welcome to bring in someone else '
+                               'who would be a good chair for a session; please check with them first that they are willing and available.'],
     ['Diversity', 'Strive for a diverse set of chairs in terms of career stage, institution, and demographics.'],
-    ['Assigning', 'For each person you choose, tick Confirmed? and type the session code in Chairing session(s) (e.g. SCDEV12). Add '
-                  'someone not listed in the blank rows under the volunteers: name, email and affiliation in the first three columns (the '
-                  'affiliation goes to APS with the chair). Emailed? is not needed this year.'],
+    ['Assigning', 'For each person you choose, type the session code in Chairing session(s), e.g. SCDEV12. That is all: a session code '
+                  'means chosen. To add someone who is not listed, use the blank rows under the volunteers: name, email and affiliation '
+                  'in the first three columns (the affiliation goes to APS with the chair), then the session code.'],
+    ['Choosing a session', 'Pick a session close to their own topic where you can, and never one where they speak (Scheduled sessions '
+                           'lists the sessions of their own talks). A few people may chair more than one: separate the codes with ";", '
+                           'e.g. QEC03; QEC07.'],
     ['Already chosen', 'A volunteer whose note says "already chosen in APS\'s volunteer sheet" has been picked by us or another unit: '
                        'choose someone else.'],
-    ['Abstract ID', 'Filled in for the listed volunteers. For someone you add, enter their abstract ID if they can find it, so they are '
-                    'never placed against their own talk. Leave it blank if they have no talk.'],
-    ['Chairing session(s)', 'The session code(s) they chair; pick a session close to their own topic where you can, and not one where they '
-                            'speak. A few people may chair more than one: separate the codes with ";" (e.g. QEC03; QEC07).'],
+    ['Abstract ID', 'Filled in for the listed volunteers. For someone you add, enter their abstract ID if they have a talk, so they are '
+                    'never placed against it. Leave it blank if they have no talk.'],
     ['Availability and Notes', 'Optional: when they cannot chair ("Mon AM; not Thursday afternoon"), and anything Claude should know. '
                                'Once the schedule is set, Claude checks every chair against their own talks and availability.'],
     [NOTE_COL, 'Filled in by Claude from APS\'s list: another talk under the same name (to confirm), an abstract not in our program, '
                'or already chosen.'],
-    [CHECK_COL, 'Filled in by Claude: how Availability was read, and any problem with a placement once the schedule is set.'],
+    [CHECK_COL, 'Filled in by Claude: how Availability was read, and any problem with a chair once the schedule is set.'],
 ]
 
 
@@ -407,8 +442,8 @@ def instructions(cfg):
     dates = cfg.get('meeting_dates', 'April 11-16, 2027')
     if cfg.get('chair_process') == 'aps_invites':
         return [['Topic', 'What to do'],
-                ['Your area', 'Each review area has a tab, listing the volunteers whose own talk is in that area. The area needs one chair '
-                              'per session (two per virtual session). The Overview shows how many are needed and chosen.']] + ASSIGN
+                ['Your area', 'Each review area has a tab listing the volunteers (from APS\'s list) whose own talk is in that area. Choose '
+                              'one chair per session (two per virtual session). The Overview shows how many are needed and chosen so far.']] + ASSIGN
     return [['Topic', 'What to do'],
             ['Your area', 'Each review area has a tab, listing the volunteers whose own talk is in that area. The area needs one confirmed chair '
                           'per session (two per virtual session); there are no backups. The Overview shows how many are needed and confirmed.'],
@@ -455,6 +490,9 @@ def sync(data_dir):
             typed, seen = got
             entries = {k: e for k, e in entries.items() if k[0] not in seen}      # each tab is the whole truth for its area
             entries.update(typed)
+    if layout(cfg)[0] is COLS_APS:                # assign-only: a session code typed means chosen (APS invites; nothing to confirm)
+        for e in entries.values():
+            e['confirmed'] = 'TRUE' if codes(e) else ''
     if sched:
         presents = presenters(vols, talks, assign, sched)
         by_key = {(v['name'], v['email']): v for v in vols}
@@ -469,7 +507,7 @@ def sync(data_dir):
     checks(entries, vols, sess, sched, presents)
     tabs, counts = {}, {}
     for a in areas:
-        rows, n_people = area_rows(a, vols, entries, sess, sched, assign)
+        rows, n_people = area_rows(a, vols, entries, sess, sched, assign, layout(cfg)[0])
         tabs[a] = (rows, n_people)
         counts[a] = (need(a, [x for x in sess if sess[x]['area'] == a]), n_people,
                      sum(len(codes(e)) for e in entries.values() if e['area'] == a and yes(e.get('confirmed'))))
