@@ -95,9 +95,9 @@ def test_sessions_needing_a_chair_on_top_and_read_back_below():
     sched = {'A01': {'day': 'Mon', 'start': '08:00'}, 'A02': {'day': 'Tue', 'start': '08:00'}}
     ent = {('A', 'Ada', 'ada@x.org'): {'area': 'A', 'session': 'A01', 'confirmed': 'TRUE'}}
     rows, n, top = C.area_rows('A', vols, ent, sess, sched, cols=cols)
-    assert top[0][:3] == ['Session', 'Title', 'Status'] and [r[:2] for r in top[1:]] == [['A01', 'One'], ['A02', 'Two']]
+    assert top[0][:4] == ['Session', 'Title', 'Status', C.SUGGEST_HEAD] and [r[:2] for r in top[1:]] == [['A01', 'One'], ['A02', 'Two']]
     s0 = C.start_row(top)                         # every session listed; the status is live: a formula on the volunteers' session cells
-    assert top[2][2].startswith('=LET(') and f'$A${s0 + 1}:$A${s0 + len(rows)}' in top[2][2] and '$A4&' in top[2][2]
+    assert top[2][2].startswith('=ARRAYFORMULA(LET(') and f'$A${s0 + 1}:$A${s0 + len(rows)}' in top[2][2] and '$A4&' in top[2][2]
     assert f'$H${s0 + 1}:$H${s0 + len(rows)}' in top[2][2] and 'Needs a chair' in top[2][2]
     assert C.start_row(top) == 2 + len(top) + 1 and C.start_row([]) == 2
 
@@ -133,3 +133,17 @@ def test_similar_sessions_column_and_layout_by_name():
     rows, n, top = C.area_rows('A', vols, {}, {'A01': {'area': 'A', 'title': 'x'}}, {}, {'7': 'A01'}, cols, sim)
     assert rows[0][cols.index(C.SIMILAR)] == 'A03; A02' and seen == [(['7'], 'A', {'A01'})]
     assert rows[0][cols.index(C.SPEAK)] == 'A01'
+
+
+def test_status_formula_stacks_every_tab_and_names_the_tab():
+    from dqi_sort import chairs as C
+    f = C.status_formula(3, [('$A$10:$A$20', '$H$10:$H$20'), ("'B'!$A$8:$A$30&\" (B tab)\"", "'B'!$H$8:$H$30")])
+    assert "FILTER({$A$10:$A$20;'B'!$A$8:$A$30&\" (B tab)\"}" in f and "UPPER({$H$10:$H$20;'B'!$H$8:$H$30}&\"\")" in f
+
+
+def test_suggested_chair_shows_its_tab_when_from_another_area():
+    from dqi_sort import chairs as C
+    cols = C.layout({'chair_process': 'aps_invites'})[0]
+    sess = {'A01': {'area': 'A', 'title': 'x'}, 'A02': {'area': 'A', 'title': 'y'}}
+    rows, n, top = C.area_rows('A', [], {}, sess, {}, {}, cols, None, {'A01': ('Ada', 'A'), 'A02': ('Bo', 'SPIN')})
+    assert [r[3] for r in top[1:]] == ['Ada', 'Bo (SPIN tab)']
