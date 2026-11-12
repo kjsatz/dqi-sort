@@ -82,9 +82,12 @@ def volunteers(data_dir, cfg, talks):
                 pm = col(r, "speaker's presentation", 'speaker').lower()
                 p['presenting'].add('virtual' if pm.startswith('virtual') else 'in_person')
                 p['chaired_before'] = p['chaired_before'] or col(r, 'have you session chaired')
-                i = col(r, 'id')
+                i = col(r, 'id', 'abstract id')
                 if i and i not in p['talk_ids']:
                     p['talk_ids'].append(i)
+                if yes(col(r, 'chosen')):            # already ticked in APS's volunteer sheet (by us or another unit)
+                    how = col(r, 'aps notes')
+                    p['note'].append('already chosen in APS\'s volunteer sheet' + (f' ({how})' if how else ''))
     by_name = collections.defaultdict(list)
     for t in talks.values():
         if t['status'] == 'active':
@@ -378,8 +381,34 @@ def book(cfg, areas, tabs, overview, reviewers, counts, others, name_of):
     return b
 
 
+ASSIGN = [  # chair_process: aps_invites (2027): APS writes to every chair we name; we only choose
+    ['How it works this year', 'APS sends the invitations. You only choose a chair for each session: anyone on this volunteer list can be '
+                               'assigned without asking them first (they volunteered). You may also bring in someone from your own network '
+                               'who is a better match; check with them first that they agree.'],
+    ['Diversity', 'Strive for a diverse set of chairs in terms of career stage, institution, and demographics.'],
+    ['Assigning', 'For each person you choose, tick Confirmed? and type the session code in Chairing session(s) (e.g. SCDEV12). Add '
+                  'someone not listed in the blank rows under the volunteers: name, email and affiliation in the first three columns (the '
+                  'affiliation goes to APS with the chair). Emailed? is not needed this year.'],
+    ['Already chosen', 'A volunteer whose note says "already chosen in APS\'s volunteer sheet" has been picked by us or another unit: '
+                       'choose someone else.'],
+    ['Abstract ID', 'Filled in for the listed volunteers. For someone you add, enter their abstract ID if they can find it, so they are '
+                    'never placed against their own talk. Leave it blank if they have no talk.'],
+    ['Chairing session(s)', 'The session code(s) they chair; pick a session close to their own topic where you can, and not one where they '
+                            'speak. A few people may chair more than one: separate the codes with ";" (e.g. QEC03; QEC07).'],
+    ['Availability and Notes', 'Optional: when they cannot chair ("Mon AM; not Thursday afternoon"), and anything Claude should know. '
+                               'Once the schedule is set, Claude checks every chair against their own talks and availability.'],
+    [NOTE_COL, 'Filled in by Claude from APS\'s list: another talk under the same name (to confirm), an abstract not in our program, '
+               'or already chosen.'],
+    [CHECK_COL, 'Filled in by Claude: how Availability was read, and any problem with a placement once the schedule is set.'],
+]
+
+
 def instructions(cfg):
     dates = cfg.get('meeting_dates', 'April 11-16, 2027')
+    if cfg.get('chair_process') == 'aps_invites':
+        return [['Topic', 'What to do'],
+                ['Your area', 'Each review area has a tab, listing the volunteers whose own talk is in that area. The area needs one chair '
+                              'per session (two per virtual session). The Overview shows how many are needed and chosen.']] + ASSIGN
     return [['Topic', 'What to do'],
             ['Your area', 'Each review area has a tab, listing the volunteers whose own talk is in that area. The area needs one confirmed chair '
                           'per session (two per virtual session); there are no backups. The Overview shows how many are needed and confirmed.'],
