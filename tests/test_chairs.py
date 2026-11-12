@@ -81,6 +81,32 @@ def test_assign_only_layout_drops_checkboxes_and_moves_session():
     assert cols.index('Chairing session(s)') < cols.index('Availability') < cols.index('Notes')
     assert chosen == 'ABCDEFGHIJ'[cols.index('Chairing session(s)')] and count == 'COUNTA'
     vols = [{'name': 'Ada', 'email': 'ada@x.org', 'affiliation': 'X', 'talk_ids': '1', 'own_sessions': 'S01', 'match_note': '', 'area': 'A'}]
-    rows, n = C.area_rows('A', vols, {('A', 'Ada', 'ada@x.org'): {'session': 'S02', 'notes': 'n'}}, {}, {}, cols=cols)
+    rows, n, top = C.area_rows('A', vols, {('A', 'Ada', 'ada@x.org'): {'session': 'S02', 'notes': 'n'}}, {}, {}, cols=cols)
+    assert top == []
     assert n == 1 and rows[0][cols.index('Chairing session(s)')] == 'S02' and len(rows[0]) == len(cols)
     assert C.layout({})[0] == C.COLS
+
+
+def test_sessions_needing_a_chair_on_top_and_read_back_below():
+    from dqi_sort import chairs as C
+    cols = C.layout({'chair_process': 'aps_invites'})[0]
+    vols = [{'name': 'Ada', 'email': 'ada@x.org', 'affiliation': 'X', 'talk_ids': '1', 'own_sessions': '', 'match_note': '', 'area': 'A'}]
+    sess = {'A01': {'area': 'A', 'title': 'One'}, 'A02': {'area': 'A', 'title': 'Two'}}
+    sched = {'A01': {'day': 'Mon', 'start': '08:00'}, 'A02': {'day': 'Tue', 'start': '08:00'}}
+    ent = {('A', 'Ada', 'ada@x.org'): {'area': 'A', 'session': 'A01', 'confirmed': 'TRUE'}}
+    rows, n, top = C.area_rows('A', vols, ent, sess, sched, cols=cols)
+    assert top[0][0] == C.NEEDING and [r[0] for r in top[1:]] == ['A02']
+    assert C.start_row(top) == 2 + len(top) + 1 and C.start_row([]) == 2
+
+    class Fake:                                   # the tab as written: title, block, blank, header, volunteers
+        def __init__(s, vals): s.vals = vals
+        def spreadsheets(s): return s
+        def get(s, **k): return s
+        def values(s): return s
+        def execute(s, **k): return {'sheets': [{'properties': {'title': 'A'}}]} if s.vals is None else {'values': s.vals}
+    grid = [[str(x) for x in r] for r in top + [[''] * len(cols), cols] + rows]
+
+    class Svc(Fake):
+        def get(s, **k): return Fake(grid if 'range' in k else None)
+    (entries, seen), _ = C.read_back(Svc(None), 'x', ['A'])
+    assert list(entries) == [('A', 'Ada', 'ada@x.org')] and entries[('A', 'Ada', 'ada@x.org')]['session'] == 'A01'
