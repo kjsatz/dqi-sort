@@ -12,7 +12,8 @@ sync  makes the recruiting spreadsheet the first time (in the review folder), th
         for volunteers; for someone added, filled in if they can find it, so their talks count in the clash check),
         Emailed? and Confirmed? (checkboxes), Availability (free text: "Mon AM; not Thursday afternoon"), Notes (free
         text: wishes, a decline, anything Claude should know when placing) and Session; blank rows for people from the
-        expert's network; once scheduled, the sessions still needing a chair.
+        expert's network. Above the volunteers, the area's sessions, each with a live Status (a formula: who has typed its
+        code, or Needs a chair).
       - Other volunteers (abstract not in our program), and Instructions (how to fill it in, diversity, the invitation).
       With `chair_process: aps_invites` (APS invites every chair named) Instructions comes first, the area tabs have no
       Emailed?/Confirmed? and put Chairing session(s) before Availability and Notes, and a session code means chosen
@@ -29,27 +30,58 @@ from dqi_sort import sessions as S
 DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri']
 NOTE_COL = 'Abstract note (Claude)'
 CHECK_COL = 'Claude availability interpretation'
-COLS = ['Volunteer', 'Email', 'Affiliation', 'Abstract ID', 'Scheduled sessions', NOTE_COL, 'Emailed?', 'Confirmed?', 'Availability', 'Notes',
+SPEAK, SIMILAR = 'Speaking in session(s)', 'Similar session(s)'
+SIMILAR_MIN = 0.9      # Similar session(s): cosine of their own talk to a session's centroid (lead, Nov 12 2026). On the 2027 sort
+                       # a volunteer's own session scored a median 0.94, the best other session in their area 0.92 (quartile 0.90)
+COLS = ['Volunteer', 'Email', 'Affiliation', 'Abstract ID', SPEAK, SIMILAR, NOTE_COL, 'Emailed?', 'Confirmed?', 'Availability', 'Notes',
         'Chairing session(s)', CHECK_COL]
-NC = len(COLS)
-EDIT = [3, 6, 7, 8, 9, 10]                 # Abstract ID, Emailed?, Confirmed?, Availability, Notes, Session
-BOXES = [6, 7]                             # Emailed?, Confirmed? as checkboxes
+at = lambda cols, names: [cols.index(c) for c in names]
+EDIT = at(COLS, ['Abstract ID', 'Emailed?', 'Confirmed?', 'Availability', 'Notes', 'Chairing session(s)'])
+BOXES = at(COLS, ['Emailed?', 'Confirmed?'])
 # chair_process: aps_invites (2027): APS invites the chairs we name, so there is nothing to email or confirm; a person with
 # a session code typed is chosen (a volunteer from APS's list needs no further confirmation; someone added has agreed)
-COLS_APS = ['Volunteer', 'Email', 'Affiliation', 'Abstract ID', 'Scheduled sessions', NOTE_COL, 'Chairing session(s)', 'Availability',
+COLS_APS = ['Volunteer', 'Email', 'Affiliation', 'Abstract ID', SPEAK, SIMILAR, NOTE_COL, 'Chairing session(s)', 'Availability',
             'Notes', CHECK_COL]
-EDIT_APS = [3, 6, 7, 8]                    # Abstract ID, Session, Availability, Notes
+EDIT_APS = at(COLS_APS, ['Abstract ID', 'Chairing session(s)', 'Availability', 'Notes'])
+letter = lambda cols, c: 'ABCDEFGHIJKLMNOP'[cols.index(c)]
 
 
 def layout(cfg):
     """(columns, editable column indexes, checkbox column indexes, column letter counted as chosen, its formula)"""
     if (cfg or {}).get('chair_process') == 'aps_invites':
-        return COLS_APS, EDIT_APS, [], 'G', 'COUNTA'
-    return COLS, EDIT, BOXES, 'H', 'COUNTIF'
+        return COLS_APS, EDIT_APS, [], letter(COLS_APS, 'Chairing session(s)'), 'COUNTA'
+    return COLS, EDIT, BOXES, letter(COLS, 'Confirmed?'), 'COUNTIF'
+
+
+def similar_finder(data_dir, talks, assign, sess):
+    """similar(abstract ids, area, sessions they speak in) -> up to two of the area's other sessions closest to their own
+    talks (cosine of the talks' mean embedding to each session's centroid, at least SIMILAR_MIN), closest first."""
+    import numpy as np
+    from dqi_sort.pack import Space
+    if not os.path.exists(os.path.join(data_dir, 'embeddings', 'cards.npz')):
+        return lambda ids, area, own: ''
+    active = {i: t for i, t in talks.items() if t['status'] == 'active'}
+    space, members = Space(data_dir, active), collections.defaultdict(list)
+    for i, a in assign.items():
+        if a and i in active:
+            members[a].append(i)
+    cent = {x: space.centroid(members[x]) for x in sess if members[x]}
+
+    def similar(ids, area, own):
+        vecs = [space.vec(i) for i in ids if space.vec(i) is not None]
+        if not vecs:
+            return ''
+        x = np.mean(vecs, axis=0); x = x / (np.linalg.norm(x) or 1)
+        sims = sorted(((float(c @ x), s) for s, c in cent.items() if c is not None and sess[s]['area'] == area and s not in own), reverse=True)
+        return '; '.join(s for v, s in sims[:2] if v >= SIMILAR_MIN)
+    return similar
+
+
 READ = {'name': ['Volunteer'], 'email': ['Email'], 'affiliation': ['Affiliation'], 'abstract_id': ['Abstract ID'], 'emailed': ['Emailed?'],   # fields by header:
         'confirmed': ['Confirmed?'], 'availability': ['Availability'], 'notes': ['Notes'], 'session': ['Chairing session(s)', 'Session']}  # renames keep working
 NEW_ROWS = 25                              # blank rows for people from the expert's own network
-NEEDING = 'Sessions still needing a chair'
+NEEDING = 'Sessions still needing a chair'    # the old block's heading (at the bottom), still read
+SESSION_HEAD = 'Session'
 ENTRY = ['area', 'name', 'email', 'affiliation', 'abstract_id', 'emailed', 'confirmed', 'availability', 'notes', 'session', 'check']
 SUBJECT = 'Session chair for DQI at the Global Physics Summit'
 TEMPLATE = """Dear {name},
@@ -223,7 +255,8 @@ def read_back(sheets, sid, areas):
                 if r[0]:
                     overview[r[0]] = (r[ri].strip() if ri is not None else '', r[si].strip() if si is not None else '')
             continue
-        head = [h.strip() for h in (vals[0] if vals else [])]
+        h0 = next((k for k, r in enumerate(vals) if 'Volunteer' in [str(x).strip() for x in r]), 0)   # below the block on top, if any
+        head, vals = [h.strip() for h in (vals[h0] if vals else [])], vals[h0:]
         at = {f: next((head.index(h) for h in names if h in head), None) for f, names in READ.items()}
         if at['name'] is None or at['email'] is None:
             print(f'{t}: no Volunteer and Email columns; its entries are not read')
@@ -331,44 +364,66 @@ def checks(entries, vols, sess, sched, presents):
         e['check'] = '; '.join(dict.fromkeys(x for x in c if x))
 
 
-def area_rows(area, vols, entries, sess, sched, assign_of=None, cols=None):
+def area_rows(area, vols, entries, sess, sched, assign_of=None, cols=None, similar=None):
     assign_of = assign_of or {}
     cols = cols or COLS
     nc = len(cols)
 
     def line(**k):
-        d = {'Volunteer': k['name'], 'Email': k['email'], 'Affiliation': k['aff'], 'Abstract ID': k['aid'], 'Scheduled sessions': k['sched'],
+        d = {'Volunteer': k['name'], 'Email': k['email'], 'Affiliation': k['aff'], 'Abstract ID': k['aid'], SPEAK: k['sched'], SIMILAR: k['sim'],
              NOTE_COL: k['note'], 'Emailed?': yes(k['e'].get('emailed')), 'Confirmed?': yes(k['e'].get('confirmed')),
              'Availability': k['e'].get('availability', ''), 'Notes': k['e'].get('notes', ''), 'Chairing session(s)': k['e'].get('session', ''),
              CHECK_COL: k['e'].get('check', '')}
         return [d[c] for c in cols]
     when = lambda x: f"{x} ({sched[x]['day']} {sched[x]['start']})" if x in sched else x
+    ids = lambda aid: [i for i in re.split(r'[;,\s]+', aid or '') if i]
+    sim = lambda aid, own: similar(ids(aid), area, set(own)) if similar else ''
     mine = sorted((v for v in vols if v['area'] == area), key=lambda v: v['name'])
     known = {(v['name'], v['email']) for v in mine}
     rows = []
     for v in mine:
         e = entries.get((area, v['name'], v['email']), {})
-        rows.append(line(name=v['name'], email=v['email'], aff=v['affiliation'], aid=e.get('abstract_id') or v['talk_ids'].replace(';', ', '),
-                         sched='; '.join(when(x) for x in v['own_sessions'].split(';') if x), note=v['match_note'], e=e))
+        aid = e.get('abstract_id') or v['talk_ids'].replace(';', ', ')
+        own = [x for x in v['own_sessions'].split(';') if x] + [assign_of.get(i, '') for i in ids(aid)]
+        rows.append(line(name=v['name'], email=v['email'], aff=v['affiliation'], aid=aid,
+                         sched='; '.join(when(x) for x in v['own_sessions'].split(';') if x), sim=sim(aid, own), note=v['match_note'], e=e))
     for (a, n, m), e in sorted(entries.items()):
         if a == area and (n, m) not in known:
-            theirs = [assign_of.get(i, '') for i in re.split(r'[;,\s]+', e.get('abstract_id') or '') if i]
+            theirs = [assign_of.get(i, '') for i in ids(e.get('abstract_id'))]
             rows.append(line(name=n, email=m, aff=e.get('affiliation', ''), aid=e.get('abstract_id', ''),
-                             sched='; '.join(when(x) for x in theirs if x), note='added by the area', e=e))
+                             sched='; '.join(when(x) for x in theirs if x), sim=sim(e.get('abstract_id'), theirs), note='added by the area', e=e))
     n_people = len(rows)
     rows += [[False if c in ('Emailed?', 'Confirmed?') else '' for c in cols] for _ in range(NEW_ROWS)]
     mine_s = sorted((x for x in sess if sess[x]['area'] == area), key=lambda x: (DAYS.index(sched[x]['day']), sched[x]['start']) if x in sched else (9, x))
     per = 2 if area == 'VIRTUAL' else 1
-    if sched:
-        got = collections.Counter(x for e in entries.values() if e['area'] == area and yes(e.get('confirmed')) for x in codes(e))
-        open_ = [x for x in mine_s if got[x] < per]
-        rows += [[''] * nc, [NEEDING, 'Title', 'When', 'Chairs still needed'] + [''] * (nc - 4)]
-        rows += [[x, sess[x]['title'], f"{sched[x]['day']} {sched[x]['start']}" if x in sched else '', per - got[x]] + [''] * (nc - 4) for x in open_]
-    return rows, n_people
+    top = [[SESSION_HEAD, 'Title', 'Status'] + [''] * (nc - 3)] if mine_s else []    # the area's sessions, above the volunteers
+    if mine_s:
+        s0 = start_row([None] * (len(mine_s) + 1))
+        col = letter(cols, 'Chairing session(s)')
+        who, typed = f'$A${s0 + 1}:$A${s0 + len(rows)}', f'${col}${s0 + 1}:${col}${s0 + len(rows)}'
+        for k, x in enumerate(mine_s):
+            r = 3 + k                             # sheet row: title, header, then the sessions
+            top.append([x, sess[x]['title'], status_formula(r, who, typed, per)] + [''] * (nc - 3))
+    return rows, n_people, top
+
+
+def status_formula(r, who, typed, per=1):
+    """Live status of the session in A{r}: the people whose Chairing session(s) cell names its code (as a whole word, any
+    case, among others), or that it still needs a chair."""
+    m = f'FILTER({who},REGEXMATCH(UPPER({typed}&""),"(^|[^A-Z0-9])"&$A{r}&"([^A-Z0-9]|$)"))'
+    tag = f'IF(k<{per},"Needs {per - 1} more: ","✓ ")' if per > 1 else '"✓ "'
+    return f'=LET(m,{m},k,IFERROR(ROWS(m),0),IF(k=0,"Needs a chair",{tag}&TEXTJOIN(", ",TRUE,m)))'
+
+
+def start_row(top):
+    """0-based index of the first volunteer row: after the title and header, or after the block on top, a blank row and the header."""
+    from dqi_sort.sheets import HEADER_ROW
+    return HEADER_ROW + (len(top) + 1 if top else 0)
 
 
 def book(cfg, areas, tabs, overview, reviewers, counts, others, name_of, owner=None):
-    from dqi_sort.sheets import Book, tab_requests, protect_req, color_req, HEADER_ROW, NOTES
+    from dqi_sort.sheets import Book, tab_requests, protect_req, color_req, HEADER_ROW, NOTES, SHORT
+    DONE = {'red': 0.85, 'green': 0.94, 'blue': 0.85}
     title = (cfg.get('sheets') or {}).get('folder_name', 'DQI')
     cols, edit, boxes, chosen, count = layout(cfg)
     assign_only = cols is COLS_APS
@@ -379,7 +434,8 @@ def book(cfg, areas, tabs, overview, reviewers, counts, others, name_of, owner=N
     for a in areas:
         n_need, n_people, placed = counts[a]
         resp, stat = overview.get(a, (reviewers.get(a, ''), ''))
-        rng = f"'{a}'!{chosen}{HEADER_ROW + 1}:{chosen}{HEADER_ROW + n_people + NEW_ROWS}"
+        s0 = start_row(tabs[a][2])
+        rng = f"'{a}'!{chosen}{s0 + 1}:{chosen}{s0 + n_people + NEW_ROWS}"
         conf = f"=COUNTA({rng})" if count == 'COUNTA' else f"=COUNTIF({rng},TRUE)"
         orows.append([a, name_of(a), resp, n_need, conf, stat] if assign_only else [a, name_of(a), resp, n_need, conf, placed, topic(a, cfg), stat])
     if assign_only:
@@ -388,27 +444,42 @@ def book(cfg, areas, tabs, overview, reviewers, counts, others, name_of, owner=N
     else:
         b.tab('Overview', ['Area', 'Name', 'Responsible', 'Chairs needed', 'Confirmed', 'Placed on sessions', 'Topic in the invitation', 'Status'], orows,
               lambda sid, n: tab_requests(sid, n, [80, 320, 200, 100, 90, 110, 220, 320], wrap_cols=[1, 7], notes_cols=[2, 7]) + protect_req(sid, n, [2, 7]))
-    widths = ({'Volunteer': 170, 'Email': 210, 'Affiliation': 200, 'Abstract ID': 90, 'Scheduled sessions': 170, NOTE_COL: 200,
+    widths = ({'Volunteer': 170, 'Email': 210, 'Affiliation': 200, 'Abstract ID': 90, SPEAK: 150, SIMILAR: 150, NOTE_COL: 200,
                'Emailed?': 75, 'Confirmed?': 85, 'Availability': 170, 'Notes': 320, 'Chairing session(s)': 140, CHECK_COL: 240})
-    wrap = [i for i, c in enumerate(cols) if c in ('Affiliation', 'Abstract ID', 'Scheduled sessions', NOTE_COL, 'Availability', 'Notes', CHECK_COL)]
+    wrap = [i for i, c in enumerate(cols) if c in ('Affiliation', 'Abstract ID', SPEAK, SIMILAR, NOTE_COL, 'Availability', 'Notes', CHECK_COL)]
     for a in areas:
-        rows, n_people = tabs[a]
+        rows, n_people, top = tabs[a]
+        s0, nc = start_row(top), len(cols)
 
-        def fmt(sid, n, n_people=n_people):
+        def fmt(sid, n, n_people=n_people, s0=s0, top=top):
             people = n_people + NEW_ROWS
             reqs = tab_requests(sid, n, [widths[c] for c in cols], wrap_cols=wrap)
-            reqs += [color_req(sid, HEADER_ROW, HEADER_ROW + people, c, c + 1, NOTES) for c in edit]
-            reqs.append(color_req(sid, HEADER_ROW + n_people, HEADER_ROW + people, 0, 3, NOTES))
-            reqs.append({'repeatCell': {'range': {'sheetId': sid, 'startRowIndex': HEADER_ROW + people + 1, 'endRowIndex': HEADER_ROW + people + 2},
-                                        'cell': {'userEnteredFormat': {'textFormat': {'bold': True}}}, 'fields': 'userEnteredFormat.textFormat.bold'}})
-            reqs += [{'setDataValidation': {'range': {'sheetId': sid, 'startRowIndex': HEADER_ROW, 'endRowIndex': HEADER_ROW + people,
+            if top:                               # the block on top: keep only the title frozen; bold the volunteer header
+                reqs.append({'updateSheetProperties': {'properties': {'sheetId': sid, 'gridProperties': {'frozenRowCount': 1}},
+                                                       'fields': 'gridProperties.frozenRowCount'}})
+                reqs.append({'repeatCell': {'range': {'sheetId': sid, 'startRowIndex': s0 - 1, 'endRowIndex': s0},
+                                            'cell': {'userEnteredFormat': {'textFormat': {'bold': True}, 'verticalAlignment': 'BOTTOM'}},
+                                            'fields': 'userEnteredFormat(textFormat,verticalAlignment)'}})
+                reqs.append({'repeatCell': {'range': {'sheetId': sid, 'startRowIndex': HEADER_ROW, 'endRowIndex': HEADER_ROW + len(top) - 1,
+                                                      'startColumnIndex': 1, 'endColumnIndex': 3},
+                                            'cell': {'userEnteredFormat': {'wrapStrategy': 'WRAP'}}, 'fields': 'userEnteredFormat.wrapStrategy'}})
+                status = [{'sheetId': sid, 'startRowIndex': HEADER_ROW, 'endRowIndex': HEADER_ROW + len(top) - 1, 'startColumnIndex': 2, 'endColumnIndex': 3}]
+                for k, (word, color) in enumerate([('Needs', SHORT), ('✓', DONE)]):
+                    reqs.append({'addConditionalFormatRule': {'index': k, 'rule': {'ranges': status, 'booleanRule': {
+                        'condition': {'type': 'TEXT_STARTS_WITH', 'values': [{'userEnteredValue': word}]}, 'format': {'backgroundColor': color}}}}})
+            reqs += [color_req(sid, s0, s0 + people, c, c + 1, NOTES) for c in edit]
+            reqs.append(color_req(sid, s0 + n_people, s0 + people, 0, 3, NOTES))
+            reqs += [{'setDataValidation': {'range': {'sheetId': sid, 'startRowIndex': s0, 'endRowIndex': s0 + people,
                                                       'startColumnIndex': c, 'endColumnIndex': c + 1},
                                             'rule': {'condition': {'type': 'BOOLEAN'}}}} for c in boxes]
-            free = [{'sheetId': sid, 'startRowIndex': HEADER_ROW, 'endRowIndex': HEADER_ROW + people, 'startColumnIndex': c, 'endColumnIndex': c + 1} for c in edit]
-            free.append({'sheetId': sid, 'startRowIndex': HEADER_ROW + n_people, 'endRowIndex': HEADER_ROW + people, 'startColumnIndex': 0, 'endColumnIndex': 3})
+            free = [{'sheetId': sid, 'startRowIndex': s0, 'endRowIndex': s0 + people, 'startColumnIndex': c, 'endColumnIndex': c + 1} for c in edit]
+            free.append({'sheetId': sid, 'startRowIndex': s0 + n_people, 'endRowIndex': s0 + people, 'startColumnIndex': 0, 'endColumnIndex': 3})
             return reqs + [{'addProtectedRange': {'protectedRange': {'range': {'sheetId': sid}, 'unprotectedRanges': free, 'warningOnly': False,
                                                                      'description': 'Generated by dqi_sort.chairs'}}}]
-        b.tab(a, cols, rows, fmt)
+        if top:
+            b.tab(a, top[0], top[1:] + [[''] * nc, list(cols)] + rows, fmt)
+        else:
+            b.tab(a, cols, rows, fmt)
     b.tab('Other volunteers', ['Volunteer', 'Email', 'Affiliation', NOTE_COL],
           [[v['name'], v['email'], v['affiliation'], v['match_note']] for v in others],
           lambda sid, n: tab_requests(sid, n, [180, 220, 240, 420], wrap_cols=[2, 3]) + protect_req(sid))
@@ -424,8 +495,9 @@ ASSIGN = [  # chair_process: aps_invites (2027): APS writes to every chair we na
     ['Assigning', 'For each person you choose, type the session code in Chairing session(s), e.g. SCDEV12. That is all: a session code '
                   'means chosen. To add someone who is not listed, use the blank rows under the volunteers: name, email and affiliation '
                   'in the first three columns (the affiliation goes to APS with the chair), then the session code.'],
-    ['Choosing a session', 'Pick a session close to their own topic, but preferably not one where they speak (Scheduled sessions '
-                           'lists the sessions of their own talks). A few people may chair more than one: separate the codes with ";", '
+    ['Choosing a session', 'Pick a session close to their own topic, but preferably not one where they speak (Speaking in session(s) '
+                           'lists the sessions of their own talks; Similar session(s) suggests up to two others in your area closest to '
+                           'their own talk, closest first). A few people may chair more than one: separate the codes with ";", '
                            'e.g. QEC03; QEC07.'],
     ['Already chosen', 'A volunteer whose note says "already chosen in APS\'s volunteer sheet" has been picked by us or another unit: '
                        'choose someone else.'],
@@ -433,6 +505,8 @@ ASSIGN = [  # chair_process: aps_invites (2027): APS writes to every chair we na
                     'never placed against it. Leave it blank if they have no talk.'],
     ['Availability and Notes', 'Optional: when they cannot chair ("Mon AM; not Thursday afternoon"), and anything Claude should know. '
                                'Once the schedule is set, Claude checks every chair against their own talks and availability.'],
+    [SIMILAR, 'Filled in by Claude: up to two sessions in your area, other than their own, closest in topic to their talk (by '
+              'the same text embeddings used for sorting), closest first. Blank when none is close. A suggestion only.'],
     [NOTE_COL, 'Filled in by Claude from APS\'s list: another talk under the same name (to confirm), an abstract not in our program, '
                'or already chosen.'],
     [CHECK_COL, 'Filled in by Claude: how Availability was read, and any problem with a chair once the schedule is set.'],
@@ -444,7 +518,8 @@ def instructions(cfg):
     if cfg.get('chair_process') == 'aps_invites':
         return [['Topic', 'What to do'],
                 ['Your area', 'Each review area has a tab listing the volunteers (from APS\'s list) whose own talk is in that area. Choose '
-                              'one chair per session (two per virtual session). The Overview shows how many are needed and chosen so far.']] + ASSIGN
+                              'one chair per session' + ('' if cfg.get('chair_skip_virtual') else ' (two per virtual session)') +
+                              '. The Overview shows how many are needed and chosen so far.']] + ASSIGN
     return [['Topic', 'What to do'],
             ['Your area', 'Each review area has a tab, listing the volunteers whose own talk is in that area. The area needs one confirmed chair '
                           'per session (two per virtual session); there are no backups. The Overview shows how many are needed and confirmed.'],
@@ -459,7 +534,7 @@ def instructions(cfg):
             ['Availability', 'In plain words, when they cannot chair: e.g. "Mon AM; not Thursday afternoon". The Check column shows how it was read.'],
             ['Notes', 'Anything useful, in free text: a topic they would like, a preferred day, someone to co-chair with. Claude reads these when '
                       'placing chairs on sessions.'],
-            ['Scheduled sessions', 'Filled in by Claude: the sessions of their own talks, with day and time once the schedule is set (blank '
+            [SPEAK, 'Filled in by Claude: the sessions of their own talks, with day and time once the schedule is set (blank '
                                    'before sessions exist).'],
             ['Chairing session(s)', 'Leave blank: once the schedule is set, Claude places each confirmed chair on one session in your area '
                                     'where they do not speak and that does not clash with their talks or availability, close to their own '
@@ -478,6 +553,8 @@ def sync(data_dir):
     cfg, talks, sess, assign, sched, vols = context(data_dir)
     names = {a: v.get('name', '') for a, v in (cfg.get('areas') or {}).items()}
     areas = sorted({s['area'] for s in sess.values()}, key=lambda a: (a == 'VIRTUAL', a))
+    if cfg.get('chair_skip_virtual'):             # virtual chairs chosen another way (2027: by the lead, chairs/virtual.csv)
+        areas = [a for a in areas if a != 'VIRTUAL']
     rpath = os.path.join(data_dir, 'sorting', 'area_status.csv')
     reviewers = {r['area']: r['responsible'] for r in S.read_csv(rpath)} if os.path.exists(rpath) else {}
     log_path = os.path.join(data_dir, 'sorting', 'sheets.csv')
@@ -507,9 +584,10 @@ def sync(data_dir):
         presents = {}
     checks(entries, vols, sess, sched, presents)
     tabs, counts = {}, {}
+    similar = similar_finder(data_dir, talks, assign, sess)
     for a in areas:
-        rows, n_people = area_rows(a, vols, entries, sess, sched, assign, layout(cfg)[0])
-        tabs[a] = (rows, n_people)
+        tabs[a] = area_rows(a, vols, entries, sess, sched, assign, layout(cfg)[0], similar)
+        n_people = tabs[a][1]
         counts[a] = (need(a, [x for x in sess if sess[x]['area'] == a]), n_people,
                      sum(len(codes(e)) for e in entries.values() if e['area'] == a and yes(e.get('confirmed'))))
     others = sorted((v for v in vols if not v['area']), key=lambda v: v['name'])
