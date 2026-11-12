@@ -12,7 +12,8 @@ sync  makes the recruiting spreadsheet the first time (in the review folder), th
         for volunteers; for someone added, filled in if they can find it, so their talks count in the clash check),
         Emailed? and Confirmed? (checkboxes), Availability (free text: "Mon AM; not Thursday afternoon"), Notes (free
         text: wishes, a decline, anything Claude should know when placing) and Session; blank rows for people from the
-        expert's network. Once scheduled, the sessions still needing a chair come first, above the volunteers.
+        expert's network. Above the volunteers, the area's sessions, each with a live Status (a formula: who has typed its
+        code, or Needs a chair).
       - Other volunteers (abstract not in our program), and Instructions (how to fill it in, diversity, the invitation).
       With `chair_process: aps_invites` (APS invites every chair named) Instructions comes first, the area tabs have no
       Emailed?/Confirmed? and put Chairing session(s) before Availability and Notes, and a session code means chosen
@@ -49,7 +50,8 @@ def layout(cfg):
 READ = {'name': ['Volunteer'], 'email': ['Email'], 'affiliation': ['Affiliation'], 'abstract_id': ['Abstract ID'], 'emailed': ['Emailed?'],   # fields by header:
         'confirmed': ['Confirmed?'], 'availability': ['Availability'], 'notes': ['Notes'], 'session': ['Chairing session(s)', 'Session']}  # renames keep working
 NEW_ROWS = 25                              # blank rows for people from the expert's own network
-NEEDING = 'Sessions still needing a chair'
+NEEDING = 'Sessions still needing a chair'    # the old block's heading (at the bottom), still read
+SESSION_HEAD = 'Session'
 ENTRY = ['area', 'name', 'email', 'affiliation', 'abstract_id', 'emailed', 'confirmed', 'availability', 'notes', 'session', 'check']
 SUBJECT = 'Session chair for DQI at the Global Physics Summit'
 TEMPLATE = """Dear {name},
@@ -332,8 +334,7 @@ def checks(entries, vols, sess, sched, presents):
         e['check'] = '; '.join(dict.fromkeys(x for x in c if x))
 
 
-def area_rows(area, vols, entries, sess, sched, assign_of=None, cols=None, done=None):
-    """done: {session: chairs already chosen outside this sheet} (the virtual chairs in chairs/virtual.csv)."""
+def area_rows(area, vols, entries, sess, sched, assign_of=None, cols=None):
     assign_of = assign_of or {}
     cols = cols or COLS
     nc = len(cols)
@@ -361,16 +362,23 @@ def area_rows(area, vols, entries, sess, sched, assign_of=None, cols=None, done=
     rows += [[False if c in ('Emailed?', 'Confirmed?') else '' for c in cols] for _ in range(NEW_ROWS)]
     mine_s = sorted((x for x in sess if sess[x]['area'] == area), key=lambda x: (DAYS.index(sched[x]['day']), sched[x]['start']) if x in sched else (9, x))
     per = 2 if area == 'VIRTUAL' else 1
-    top = []                                      # the sessions still needing a chair, shown above the volunteers
-    if sched:
-        got = collections.Counter(x for e in entries.values() if e['area'] == area and yes(e.get('confirmed')) for x in codes(e))
-        got.update(done or {})
-        open_ = [x for x in mine_s if got[x] < per]
-        top = [[NEEDING, 'Title'] + [''] * (nc - 2)]
-        top += [[x, sess[x]['title']] + [''] * (nc - 2) for x in open_]
-        if not open_:
-            top.append(['(none: every session has its chairs)'] + [''] * (nc - 1))
+    top = [[SESSION_HEAD, 'Title', 'Status'] + [''] * (nc - 3)] if mine_s else []    # the area's sessions, above the volunteers
+    if mine_s:
+        s0 = start_row([None] * (len(mine_s) + 1))
+        col = 'ABCDEFGHIJKLMNOP'[cols.index('Chairing session(s)')]
+        who, typed = f'$A${s0 + 1}:$A${s0 + len(rows)}', f'${col}${s0 + 1}:${col}${s0 + len(rows)}'
+        for k, x in enumerate(mine_s):
+            r = 3 + k                             # sheet row: title, header, then the sessions
+            top.append([x, sess[x]['title'], status_formula(r, who, typed, per)] + [''] * (nc - 3))
     return rows, n_people, top
+
+
+def status_formula(r, who, typed, per=1):
+    """Live status of the session in A{r}: the people whose Chairing session(s) cell names its code (as a whole word, any
+    case, among others), or that it still needs a chair."""
+    m = f'FILTER({who},REGEXMATCH(UPPER({typed}&""),"(^|[^A-Z0-9])"&$A{r}&"([^A-Z0-9]|$)"))'
+    tag = f'IF(k<{per},"Needs {per - 1} more: ","✓ ")' if per > 1 else '"✓ "'
+    return f'=LET(m,{m},k,IFERROR(ROWS(m),0),IF(k=0,"Needs a chair",{tag}&TEXTJOIN(", ",TRUE,m)))'
 
 
 def start_row(top):
@@ -380,7 +388,8 @@ def start_row(top):
 
 
 def book(cfg, areas, tabs, overview, reviewers, counts, others, name_of, owner=None):
-    from dqi_sort.sheets import Book, tab_requests, protect_req, color_req, HEADER_ROW, NOTES
+    from dqi_sort.sheets import Book, tab_requests, protect_req, color_req, HEADER_ROW, NOTES, SHORT
+    DONE = {'red': 0.85, 'green': 0.94, 'blue': 0.85}
     title = (cfg.get('sheets') or {}).get('folder_name', 'DQI')
     cols, edit, boxes, chosen, count = layout(cfg)
     assign_only = cols is COLS_APS
@@ -418,8 +427,12 @@ def book(cfg, areas, tabs, overview, reviewers, counts, others, name_of, owner=N
                                             'cell': {'userEnteredFormat': {'textFormat': {'bold': True}, 'verticalAlignment': 'BOTTOM'}},
                                             'fields': 'userEnteredFormat(textFormat,verticalAlignment)'}})
                 reqs.append({'repeatCell': {'range': {'sheetId': sid, 'startRowIndex': HEADER_ROW, 'endRowIndex': HEADER_ROW + len(top) - 1,
-                                                      'startColumnIndex': 1, 'endColumnIndex': 2},
+                                                      'startColumnIndex': 1, 'endColumnIndex': 3},
                                             'cell': {'userEnteredFormat': {'wrapStrategy': 'WRAP'}}, 'fields': 'userEnteredFormat.wrapStrategy'}})
+                status = [{'sheetId': sid, 'startRowIndex': HEADER_ROW, 'endRowIndex': HEADER_ROW + len(top) - 1, 'startColumnIndex': 2, 'endColumnIndex': 3}]
+                for k, (word, color) in enumerate([('Needs', SHORT), ('✓', DONE)]):
+                    reqs.append({'addConditionalFormatRule': {'index': k, 'rule': {'ranges': status, 'booleanRule': {
+                        'condition': {'type': 'TEXT_STARTS_WITH', 'values': [{'userEnteredValue': word}]}, 'format': {'backgroundColor': color}}}}})
             reqs += [color_req(sid, s0, s0 + people, c, c + 1, NOTES) for c in edit]
             reqs.append(color_req(sid, s0 + n_people, s0 + people, 0, 3, NOTES))
             reqs += [{'setDataValidation': {'range': {'sheetId': sid, 'startRowIndex': s0, 'endRowIndex': s0 + people,
@@ -534,10 +547,8 @@ def sync(data_dir):
         presents = {}
     checks(entries, vols, sess, sched, presents)
     tabs, counts = {}, {}
-    vpath = os.path.join(data_dir, 'chairs', 'virtual.csv')     # virtual chairs chosen before this sheet existed
-    done = collections.Counter(r['session_id'] for r in S.read_csv(vpath)) if os.path.exists(vpath) else {}
     for a in areas:
-        tabs[a] = area_rows(a, vols, entries, sess, sched, assign, layout(cfg)[0], done)
+        tabs[a] = area_rows(a, vols, entries, sess, sched, assign, layout(cfg)[0])
         n_people = tabs[a][1]
         counts[a] = (need(a, [x for x in sess if sess[x]['area'] == a]), n_people,
                      sum(len(codes(e)) for e in entries.values() if e['area'] == a and yes(e.get('confirmed'))))

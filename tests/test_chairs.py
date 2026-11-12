@@ -95,7 +95,10 @@ def test_sessions_needing_a_chair_on_top_and_read_back_below():
     sched = {'A01': {'day': 'Mon', 'start': '08:00'}, 'A02': {'day': 'Tue', 'start': '08:00'}}
     ent = {('A', 'Ada', 'ada@x.org'): {'area': 'A', 'session': 'A01', 'confirmed': 'TRUE'}}
     rows, n, top = C.area_rows('A', vols, ent, sess, sched, cols=cols)
-    assert top[0][:2] == [C.NEEDING, 'Title'] and [r[:2] for r in top[1:]] == [['A02', 'Two']] and not any(top[1][2:])
+    assert top[0][:3] == ['Session', 'Title', 'Status'] and [r[:2] for r in top[1:]] == [['A01', 'One'], ['A02', 'Two']]
+    s0 = C.start_row(top)                         # every session listed; the status is live: a formula on the volunteers' session cells
+    assert top[2][2].startswith('=LET(') and f'$A${s0 + 1}:$A${s0 + len(rows)}' in top[2][2] and '$A4&' in top[2][2]
+    assert f'$G${s0 + 1}:$G${s0 + len(rows)}' in top[2][2] and 'Needs a chair' in top[2][2]
     assert C.start_row(top) == 2 + len(top) + 1 and C.start_row([]) == 2
 
     class Fake:                                   # the tab as written: title, block, blank, header, volunteers
