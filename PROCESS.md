@@ -94,6 +94,8 @@ A session should not feel like one group's meeting. Drafts and the global pass t
 
 Institution is a proxy for research group. A large institution can host several unrelated groups, so reviewers can accept a flagged session. A multi-part series from one group still counts as several talks.
 
+**Order within a session** is a matter of taste, set each year by the chair in `config.yaml` (`institution_order`). `group` (the default): related talks from one institution or group sit together, after their group's invited talk when it is in the session, so the audience switches context less and can plan around a block. `mix`: spread them through the session, so a block never feels like one group's meeting and smaller groups between them get an audience. `none`: no preference. The cap above holds in every mode. The drafts and talk order are told the chosen mode, and `order check` warns (never errors) on sessions that do not follow it.
+
 ## Review areas
 
 Review is split into 5–10 areas along natural lines, made at the end of the global pass from the finished sessions: each session goes to the area that most of its talks' card categories belong to (by content, not by where the talks happened to be drafted). Areas should be roughly equal in size, but a small topic that is clearly its own thing can be a small area, and a large block of closely related sessions (superconducting qubits, for example) can be a large one. Areas are for dividing the reviewing work; they are not walls, and talks move between them.
@@ -200,7 +202,7 @@ The data repo holds one set of files per year:
 | File | One row per | Columns |
 | --- | --- | --- |
 | `config.yaml` | — | Division number, session lengths (144 and 108 minutes in person this year; 84 virtual), time zone, talk lengths (12 and 36), session budget, DQI submission categories, other APS units, APS column layout, scheduling weights |
-| `talks.csv` | talk | talk_id, track (in_person / virtual), type, minutes, title, speaker, affiliation, institution, submitted_category, area, series, series_part, time_windows (virtual only), status, flags, notes |
+| `talks.csv` | talk | talk_id, track (in_person / virtual), type, minutes, title, speaker, affiliation, institution, submitted_category, area, series, series_part, time_windows (virtual only), also_presenting (the speaker's talks elsewhere, from APS), status, flags, notes |
 | `abstracts.jsonl` | talk | talk_id, title, body, submitter_notes (repaired text), raw (the text as received, when a repair was made), text_fix (what was changed and by whom) |
 | `cards.jsonl` | talk | Presentation card as JSON |
 | `institutions.csv` | submitted affiliation | affiliation, institution |
@@ -259,7 +261,7 @@ Room distances can be rough, and pairs may be left out. A missing pair counts as
 
 **The grid.** Each day has a fixed pattern of session times. This year, Monday to Thursday each have four sessions (144, 108, 144 and 108 minutes) and Friday has three (144, 108, 144). Most rooms are ours for every session time all week; a few rooms are available only for some. The invited symposium sessions arrive already scheduled; they are entered as locked sessions in their slots. `slots.csv` lists every room-time slot we have.
 
-**Talks elsewhere in the meeting.** Some DQI speakers also give a talk outside our sessions at a fixed time, most often an invited symposium talk. APS's sheet lists these per talk (in 2027, the "Also Presenting (auto)" column, with the session and its day and time). Intake does not read that column yet, so before the solver runs, check it and add each fixed time as a hard rule for that speaker's DQI talk.
+**Talks elsewhere in the meeting.** Some DQI speakers also give a talk outside our sessions at a fixed time, most often an invited symposium talk. APS's sheet lists these per talk (in 2027, the "Also Presenting (auto)" column, with the session and its day and time). Map that column to `also_presenting` in `aps_columns` and intake copies it into `talks.csv`, shows it on the talk's card, and lists every such talk in `views/also_presenting.md`. The solver does not read it yet: before it runs, go through that list and add each fixed time as a hard rule for that speaker's DQI talk.
 
 Hard rules:
 
@@ -325,7 +327,7 @@ Sessions are built from 36-minute blocks: one invited talk or three contributed 
 After the schedule is approved:
 
 1. **Room positions.** Each room gets an invited-talk block for its 144-minute sessions and one for its 108-minute sessions (`invited_block_144`, `invited_block_108` in `rooms.csv`). The positions are chosen so that rooms running at the same time, especially nearby rooms and similar topics, stagger their invited talks. The lead can also set them by hand.
-2. **Re-order.** Claude re-orders each session with the invited talk fixed in its room's block. It does not just rotate or slide the invited talk into place; it rethinks the order so the session still flows. Talks that set up the invited talk come before it, follow-ups come after, and multi-part talks stay consecutive and do not straddle it. Submitters' "after X" requests still hold.
+2. **Re-order.** Claude re-orders each session with the invited talk fixed in its room's block. It does not just rotate or slide the invited talk into place; it rethinks the order so the session still flows. Talks that set up the invited talk come before it, follow-ups come after, and multi-part talks stay consecutive and do not straddle it. Submitters' "after X" requests still hold, and so do the reviewers' unresolved notes in `sorting/notes.csv` (`order prepare` lists them under each session): "keep lab X's talks with its invited talk" survives the re-order. The current order is usually the reviewer's, so the agent changes it only as far as the invited talk's block and the rules require, and follows `institution_order` (above).
 3. **Check.** The validator confirms that every invited talk starts on a 36-minute boundary and that every session fits its slot. Changes go into `sorting/assignments.csv` as one commit with a short note per session.
 
 Commands: `python -m dqi_sort.order positions DATA_DIR` (each room's blocks, by a search that keeps invited talks running at the same time at different positions, more so in nearby rooms and similar topics; `views/invited_positions.md`), `order prepare` (one folder per area with the sessions that hold an invited talk, for one Claude agent each, `prompts/order_spec.md`), `order apply` and `order check`. When a room's block cannot be reached (too few contributed talks before it), the nearest block that can is used. A late change to the schedule should swap sessions within a room (`schedule swap`), so each keeps its invited-talk block.

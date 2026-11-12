@@ -17,6 +17,8 @@ prepare    writes work/order/AREA/ for each area with sessions holding an invite
            series and requests) and prompt.md (prompts/order_spec.md). One Claude agent per area writes order.json.
 apply      reads every order.json, checks each session (same talks; invited talks at block starts, the first at its
            room's block; series consecutive and in order) and writes the orders into sorting/assignments.csv.
+           It also warns (never errors) on the institution order chosen in config institution_order: group (talks
+           from one institution split up), mix (more than two in a row) or none (no warnings).
 check      the validator for every scheduled session: invited talks on 36-minute boundaries (at the room's block,
            unless that block cannot be reached), series consecutive and in order, and the session fits its slot.
 """
@@ -42,6 +44,61 @@ def load(data_dir):
 
 def units(t):
     return int(t['minutes']) // S.UNIT_MIN
+
+
+def group_splits(order, talks):
+    """Institutions with two or more talks in the session that are not consecutive in `order`.
+
+    A soft rule (reviewers group a lab's talks, often right after its invited talk): reported as WARN, never an error."""
+    pos = collections.defaultdict(list)
+    for n, i in enumerate(order):
+        inst = (talks[i].get('institution') or '').strip()
+        if inst:
+            pos[inst].append(n)
+    return sorted(inst for inst, idx in pos.items() if len(idx) > 1 and idx[-1] - idx[0] != len(idx) - 1)
+
+
+def group_runs(order, talks, longest=2):
+    """Institutions with more than `longest` talks in a row in `order` (for institution_order: mix)."""
+    out, n = set(), 0
+    for k, i in enumerate(order):
+        inst = (talks[i].get('institution') or '').strip()
+        n = n + 1 if k and inst and inst == (talks[order[k - 1]].get('institution') or '').strip() else 1
+        if inst and n > longest:
+            out.add(inst)
+    return sorted(out)
+
+
+def institution_warnings(order, talks, mode):
+    """Soft WARN text for a session's order under config institution_order (group, mix or none)."""
+    if mode == 'group':
+        return [f'talks from {inst} are not together' for inst in group_splits(order, talks)]
+    if mode == 'mix':
+        return [f'more than two talks in a row from {inst}' for inst in group_runs(order, talks)]
+    return []
+
+
+def order_mode(data_dir):
+    try:
+        cfg = S.load_config(data_dir)
+    except FileNotFoundError:
+        cfg = {}
+    return S.institution_order(cfg)
+
+
+def reviewer_notes(data_dir):
+    """Unresolved reviewer notes (sorting/notes.csv, written by review.py), keyed by talk ID and by session ID."""
+    path = os.path.join(data_dir, 'sorting', 'notes.csv')
+    by_talk, by_sess = collections.defaultdict(list), collections.defaultdict(list)
+    if os.path.exists(path):
+        for r in S.read_csv(path):
+            if (r.get('resolution') or '').strip():
+                continue
+            if r.get('talk_id'):
+                by_talk[r['talk_id']].append(r['note'])
+            elif r.get('session_id'):
+                by_sess[r['session_id']].append(r['note'])
+    return by_talk, by_sess
 
 
 def feasible_blocks(talk_ids, talks, minutes):
@@ -177,6 +234,8 @@ def prepare(data_dir):
     series_parts = collections.Counter(t['series'] for t in talks.values() if t['series'] and t['status'] == 'active')
     with open(os.path.join(S.HERE, 'prompts', 'order_spec.md'), encoding='utf-8') as f:
         spec = f.read()
+    notes_talk, notes_sess = reviewer_notes(data_dir)
+    mode, inst_text = order_mode(data_dir)
     by_area = collections.defaultdict(list)
     for sid in sorted(sched):
         if any(talks[i]['type'] == 'invited' for i in members[sid]):
@@ -195,17 +254,26 @@ def prepare(data_dir):
                       + ('; this session has two invited talks: the other goes at another block start.' if n_inv > 1 else '.'), '',
                       'Current order:', '']
             lines += [S.card_text(talks[i], cards.get(i), series_parts) for i in members[sid]] + ['']
+            notes = [f'- session: {n}' for n in notes_sess.get(sid, [])]
+            notes += [f'- {i}: {n}' for i in members[sid] for n in notes_talk.get(i, [])]
+            if notes:
+                lines += ['Reviewer notes (these hold, like submitter requests):', ''] + notes + ['']
+            warn = institution_warnings(members[sid], talks, mode)
+            if warn:
+                lines += ['Institution order: ' + '; '.join(warn), '']
         with open(os.path.join(d, 'sessions.md'), 'w', encoding='utf-8') as f:
             f.write('\n'.join(lines) + '\n')
         check_cmd = f"cd {S.HERE} && .venv/bin/python -m dqi_sort.order apply {os.path.abspath(data_dir)} --only {area} --dry-run"
         with open(os.path.join(d, 'prompt.md'), 'w', encoding='utf-8') as f:
-            f.write(spec.replace('{DIR}', os.path.abspath(d)).replace('{AREA}', area).replace('{CHECK}', check_cmd))
+            f.write(spec.replace('{DIR}', os.path.abspath(d)).replace('{AREA}', area).replace('{CHECK}', check_cmd)
+                    .replace('{INSTITUTION_ORDER}', inst_text))
         print(f'{area}: {len(sids)} sessions -> {d}')
 
 
 def apply(data_dir, only=None, dry_run=False):
     talks, sess, assign, members, sched, rooms = load(data_dir)
     errs, orders = [], {}
+    mode = order_mode(data_dir)[0]
     for path in sorted(glob.glob(os.path.join(data_dir, 'work', 'order', '*', 'order.json'))):
         area = os.path.basename(os.path.dirname(path))
         if only and area != only:
@@ -216,6 +284,8 @@ def apply(data_dir, only=None, dry_run=False):
             order = [str(x) for x in order]
             e = session_problems(sid, order, talks, sched, rooms, members)
             errs += e
+            for w in institution_warnings(order, talks, mode):
+                print(f'WARN {sid}: {w}')
             if not e:
                 orders[sid] = order
     for e in errs:

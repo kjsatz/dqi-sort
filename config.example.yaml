@@ -9,6 +9,11 @@ block_min: 36
 session_slots: null           # before the real grid: {144: N, 108: M}, the slot counts APS allots
 session_budget: null          # from APS: total sessions DQI may use
 max_same_institution: 4       # soft rule, per session
+institution_order: group      # how a session orders talks from the same institution or group (a matter of taste,
+                              # set by the year's chair): group = related same-group talks together, following
+                              # their group's invited talk (less context switching for the audience); mix = spread
+                              # them through the session (avoids a "group meeting" block, gives small groups an
+                              # audience); none = no preference either way
 dqi_categories:               # this year's DQI submission categories: code: name
   # "17.01.01": "Superconducting Systems Relying on Cavity States"
 other_units:
@@ -58,6 +63,7 @@ aps_columns:                  # APS header -> field (see FIELDS in dqi_sort/inta
   Session Abbreviation: session_id    # split into reference/ on intake; written back on delivery
   Speaking Order: order
   Sorter Notes: sorter_note
+  Also Presenting: also_presenting    # the speaker's other talks (symposia, posters); see views/also_presenting.md
 aps_types: {Oral: oral, Invited: invited}
 # The lead's additions to APS's data, applied on every intake (see dqi_sort/intake.py):
 invited_topics: null          # CSV talk_id,topic: expected topics of invited talks that arrive without an abstract

@@ -45,6 +45,26 @@ def write_csv(path, cols, rows):
         w.writeheader(); w.writerows(rows)
 
 
+INSTITUTION_ORDER = {
+    'group': ('Talks from the same institution or group on related topics sit together, and a group whose invited talk '
+              'is in the session follows it directly (the invited speaker\'s students and collaborators right after '
+              'them), so the audience switches context less; when an invited talk moves, its group moves with it. The '
+              'per-session institution limit still holds.'),
+    'mix': ('Spread talks from the same institution through the session rather than in one block: a run of one '
+            'group\'s talks feels like their group meeting, and talks between them from other groups get a bigger '
+            'audience. Keep series and explicit requests together as usual.'),
+    'none': '',
+}
+
+
+def institution_order(cfg):
+    """(mode, text for the prompts) from config institution_order: group (default), mix or none."""
+    mode = str((cfg or {}).get('institution_order') or 'group').strip().lower()
+    if mode not in INSTITUTION_ORDER:
+        raise SystemExit(f'config institution_order must be one of {sorted(INSTITUTION_ORDER)}, not {mode!r}')
+    return mode, INSTITUTION_ORDER[mode]
+
+
 def load_config(data_dir):
     with open(os.path.join(data_dir, 'config.yaml'), encoding='utf-8') as f:
         return yaml.safe_load(f)
@@ -170,6 +190,8 @@ def card_text(t, card, series_parts, near=None):
         extra.append(near)
     if t['track'] == 'virtual':
         extra.append('windows: ' + (t['time_windows'] or 'none given'))
+    if (t.get('also_presenting') or '').strip():
+        extra.append('speaker also presents: ' + t['also_presenting'])
     if extra:
         lines.append('  ' + ' | '.join(extra))
     return '\n'.join(lines)
@@ -278,6 +300,7 @@ def prepare(data_dir):
         check_cmd = f"cd {HERE} && .venv/bin/python -m dqi_sort.sessions check {os.path.abspath(d)}/proposal.json"
         with open(os.path.join(d, 'prompt.md'), 'w', encoding='utf-8') as f:
             f.write(spec_text.replace('{RULES}', rules).replace('{MAX_INST}', str(max_inst))
+                    .replace('{INSTITUTION_ORDER}', institution_order(cfg)[1])
                     .replace('{CHECK}', check_cmd).replace('{DIR}', os.path.abspath(d)))
         cap = f"{limits['max_sessions']} virtual" if limits['virtual'] else f"~{limits['target_sessions']} sessions"
         print(f"{area:8s} {len(ts):4d} talks {sum(units(t) for t in ts):5d} units   {cap}   {sum(1 for t in ts if t['near'])} bridge")
