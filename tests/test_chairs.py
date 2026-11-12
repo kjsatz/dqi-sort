@@ -95,7 +95,7 @@ def test_sessions_needing_a_chair_on_top_and_read_back_below():
     sched = {'A01': {'day': 'Mon', 'start': '08:00'}, 'A02': {'day': 'Tue', 'start': '08:00'}}
     ent = {('A', 'Ada', 'ada@x.org'): {'area': 'A', 'session': 'A01', 'confirmed': 'TRUE'}}
     rows, n, top = C.area_rows('A', vols, ent, sess, sched, cols=cols)
-    assert top[0][0] == C.NEEDING and [r[0] for r in top[1:]] == ['A02']
+    assert top[0][:2] == [C.NEEDING, 'Title'] and [r[:2] for r in top[1:]] == [['A02', 'Two']] and not any(top[1][2:])
     assert C.start_row(top) == 2 + len(top) + 1 and C.start_row([]) == 2
 
     class Fake:                                   # the tab as written: title, block, blank, header, volunteers
@@ -110,3 +110,9 @@ def test_sessions_needing_a_chair_on_top_and_read_back_below():
         def get(s, **k): return Fake(grid if 'range' in k else None)
     (entries, seen), _ = C.read_back(Svc(None), 'x', ['A'])
     assert list(entries) == [('A', 'Ada', 'ada@x.org')] and entries[('A', 'Ada', 'ada@x.org')]['session'] == 'A01'
+
+
+def test_skip_virtual_drops_it_from_the_instructions():
+    from dqi_sort import chairs as C
+    text = ' '.join(r[1] for r in C.instructions({'chair_process': 'aps_invites', 'chair_skip_virtual': True}))
+    assert 'virtual' not in text.lower()

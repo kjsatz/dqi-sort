@@ -9,6 +9,7 @@ block_min: 36
 session_slots: null           # before the real grid: {144: N, 108: M}, the slot counts APS allots
 session_budget: null          # from APS: total sessions DQI may use
 chair_process: recruit        # recruit: we invite and confirm chairs; aps_invites (2027): APS writes to the chairs we name, so reviewers only assign
+chair_skip_virtual: false     # true: no VIRTUAL tab in the recruiting sheet (2027: the lead chose the virtual chairs; chairs/virtual.csv)
 max_same_institution: 4       # soft rule, per session
 institution_order: group      # how a session orders talks from the same institution or group (a matter of taste,
                               # set by the year's chair): group = related same-group talks together, following

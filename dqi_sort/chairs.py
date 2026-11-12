@@ -366,8 +366,8 @@ def area_rows(area, vols, entries, sess, sched, assign_of=None, cols=None, done=
         got = collections.Counter(x for e in entries.values() if e['area'] == area and yes(e.get('confirmed')) for x in codes(e))
         got.update(done or {})
         open_ = [x for x in mine_s if got[x] < per]
-        top = [[NEEDING, 'Title', 'When', 'Chairs still needed'] + [''] * (nc - 4)]
-        top += [[x, sess[x]['title'], f"{sched[x]['day']} {sched[x]['start']}" if x in sched else '', per - got[x]] + [''] * (nc - 4) for x in open_]
+        top = [[NEEDING, 'Title'] + [''] * (nc - 2)]
+        top += [[x, sess[x]['title']] + [''] * (nc - 2) for x in open_]
         if not open_:
             top.append(['(none: every session has its chairs)'] + [''] * (nc - 1))
     return rows, n_people, top
@@ -468,7 +468,8 @@ def instructions(cfg):
     if cfg.get('chair_process') == 'aps_invites':
         return [['Topic', 'What to do'],
                 ['Your area', 'Each review area has a tab listing the volunteers (from APS\'s list) whose own talk is in that area. Choose '
-                              'one chair per session (two per virtual session). The Overview shows how many are needed and chosen so far.']] + ASSIGN
+                              'one chair per session' + ('' if cfg.get('chair_skip_virtual') else ' (two per virtual session)') +
+                              '. The Overview shows how many are needed and chosen so far.']] + ASSIGN
     return [['Topic', 'What to do'],
             ['Your area', 'Each review area has a tab, listing the volunteers whose own talk is in that area. The area needs one confirmed chair '
                           'per session (two per virtual session); there are no backups. The Overview shows how many are needed and confirmed.'],
@@ -502,6 +503,8 @@ def sync(data_dir):
     cfg, talks, sess, assign, sched, vols = context(data_dir)
     names = {a: v.get('name', '') for a, v in (cfg.get('areas') or {}).items()}
     areas = sorted({s['area'] for s in sess.values()}, key=lambda a: (a == 'VIRTUAL', a))
+    if cfg.get('chair_skip_virtual'):             # virtual chairs chosen another way (2027: by the lead, chairs/virtual.csv)
+        areas = [a for a in areas if a != 'VIRTUAL']
     rpath = os.path.join(data_dir, 'sorting', 'area_status.csv')
     reviewers = {r['area']: r['responsible'] for r in S.read_csv(rpath)} if os.path.exists(rpath) else {}
     log_path = os.path.join(data_dir, 'sorting', 'sheets.csv')
