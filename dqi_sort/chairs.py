@@ -44,7 +44,7 @@ COLS_APS = ['Volunteer', 'Email', 'Affiliation', 'Abstract ID', SPEAK, SIMILAR, 
             'Notes', CHECK_COL]
 EDIT_APS = at(COLS_APS, ['Abstract ID', 'Chairing session(s)', 'Availability', 'Notes'])
 letter = lambda cols, c: 'ABCDEFGHIJKLMNOP'[cols.index(c)]
-SUGGEST_HEAD = 'Suggested chair (Claude)'
+SUGGEST_HEAD = 'Suggested chair (Claude, from APS volunteers, based on topic similarity)'
 CROSS_TAB = 0.02       # suggestions: a volunteer listed in another area's tab costs this much fit (2027 sort: 16 of 201 cross tabs)
 
 
@@ -518,7 +518,7 @@ def book(cfg, areas, tabs, overview, reviewers, counts, others, name_of, owner=N
                 reqs.append({'repeatCell': {'range': {'sheetId': sid, 'startRowIndex': s0 - 1, 'endRowIndex': s0},
                                             'cell': {'userEnteredFormat': {'textFormat': {'bold': True}, 'verticalAlignment': 'BOTTOM'}},
                                             'fields': 'userEnteredFormat(textFormat,verticalAlignment)'}})
-                reqs.append({'repeatCell': {'range': {'sheetId': sid, 'startRowIndex': HEADER_ROW, 'endRowIndex': HEADER_ROW + len(top) - 1,
+                reqs.append({'repeatCell': {'range': {'sheetId': sid, 'startRowIndex': HEADER_ROW - 1, 'endRowIndex': HEADER_ROW + len(top) - 1,
                                                       'startColumnIndex': 1, 'endColumnIndex': 4},
                                             'cell': {'userEnteredFormat': {'wrapStrategy': 'WRAP'}}, 'fields': 'userEnteredFormat.wrapStrategy'}})
                 status = [{'sheetId': sid, 'startRowIndex': HEADER_ROW, 'endRowIndex': HEADER_ROW + len(top) - 1, 'startColumnIndex': 2, 'endColumnIndex': 3}]
