@@ -416,14 +416,15 @@ def book(cfg, areas, tabs, overview, reviewers, counts, others, name_of, owner=N
 
 
 ASSIGN = [  # chair_process: aps_invites (2027): APS writes to every chair we name; reviewers only choose
-    ['How it works this year', 'APS sends the chair invitations, so there is nothing to email. Everyone listed in your tab volunteered '
-                               'through APS: you can assign them without asking them first. You are also welcome to bring in someone else '
-                               'who would be a good chair for a session; please check with them first that they are willing and available.'],
+    ['How it works this year', 'APS will send the chair invitations. This year, you don\'t need to email or confirm with anyone who is '
+                               'already on APS\'s list (everyone listed in your tab volunteered through APS). You are also welcome to bring '
+                               'in someone else who would be a good chair for a session; please check with them first that they are willing '
+                               'and available.'],
     ['Diversity', 'Strive for a diverse set of chairs in terms of career stage, institution, and demographics.'],
     ['Assigning', 'For each person you choose, type the session code in Chairing session(s), e.g. SCDEV12. That is all: a session code '
                   'means chosen. To add someone who is not listed, use the blank rows under the volunteers: name, email and affiliation '
                   'in the first three columns (the affiliation goes to APS with the chair), then the session code.'],
-    ['Choosing a session', 'Pick a session close to their own topic where you can, and never one where they speak (Scheduled sessions '
+    ['Choosing a session', 'Pick a session close to their own topic, but preferably not one where they speak (Scheduled sessions '
                            'lists the sessions of their own talks). A few people may chair more than one: separate the codes with ";", '
                            'e.g. QEC03; QEC07.'],
     ['Already chosen', 'A volunteer whose note says "already chosen in APS\'s volunteer sheet" has been picked by us or another unit: '

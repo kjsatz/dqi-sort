@@ -64,7 +64,7 @@ def test_instructions_for_aps_invites_and_chosen_flag(tmp_path):
     from dqi_sort import chairs as C
     how = C.instructions({'chair_process': 'aps_invites'})
     text = ' '.join(' '.join(r) for r in how)
-    assert 'APS sends the chair invitations' in text and 'Subject:' not in text and 'diverse' in text and 'Emailed?' not in text
+    assert 'APS will send the chair invitations' in text and 'Subject:' not in text and 'diverse' in text and 'Emailed?' not in text
     assert 'Subject:' in ' '.join(' '.join(r) for r in C.instructions({}))
     d = tmp_path; (d / 'v.csv').write_text('Sub-category,First name,Email,Affiliation,Chairing method,Abstract ID,Chosen,APS notes\n'
                                            '24.01.01,Ada,ada@x.org,X,Both,100,TRUE,DQI VIRTUAL01 chair\n'
