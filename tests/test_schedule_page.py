@@ -16,8 +16,14 @@ def test_page_from_a_schedule_with_symposia_and_room_lines(tmp_path):
     open(os.path.join(d, 'schedule', 'schedule.csv'), 'w').write('session_id,slot_id,locked\nA01,Mon-0800-R1,false\nA02,Mon-0800-R2,false\n')
     open(os.path.join(d, 'schedule', 'symposia.csv'), 'w').write(
         'session_id,title,minutes,day,start,end,room_id,block\nSYM-A,A Symposium,108,Mon,08:00,09:48,R3,X\n')
+    note = tmp_path / 'note.html'
+    note.write_text('<p>Please check <b>your</b> sessions.</p><script>x</script>')
     out = P.write(d, attendance=False)
     page = open(out, encoding='utf-8').read()
+    out2 = P.write(d, out=str(tmp_path / 'review.html'), attendance=False, note=str(note), title='For review')
+    page2 = open(out2, encoding='utf-8').read()
+    d2 = json.loads(page2.split('<script type="application/json" id="data">')[1].split('</script>')[0])
+    assert d2['note'].startswith('<p>Please check') and '<title>For review</title>' in page2 and page2.count('</script>') == 2
     data = json.loads(page.split('<script type="application/json" id="data">')[1].split('</script>')[0])
     assert out.endswith(os.path.join('views', 'schedule.html')) and '<title>DQI 2099 schedule</title>' in page
     assert {c['id'] for c in data['cells']} == {'A01', 'A02', 'SYM-A'}

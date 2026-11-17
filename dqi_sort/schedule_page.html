@@ -17,6 +17,9 @@ body { margin:0; background:var(--surface); color:var(--text); font:13px/1.35 sy
 header { padding:16px 16px 6px; }
 h1 { font-size:18px; margin:0 0 2px; font-weight:600; }
 .sub { color:var(--text-2); font-size:12px; max-width:1100px; }
+.note { font-size:13px; line-height:1.45; max-width:1100px; margin:4px 0 10px; padding:10px 14px; border-left:3px solid var(--text-2);
+  background:rgba(127,127,127,.08); border-radius:4px; }
+.note p { margin:0 0 6px; } .note ul, .note ol { margin:2px 0 6px; padding-left:20px; } .note li { margin:2px 0; }
 .legend { display:flex; flex-wrap:wrap; align-items:center; gap:6px 22px; margin:10px 0 4px; font-size:11.5px; color:var(--text-2); }
 .ramp { position:relative; width:260px; height:12px; border-radius:2px; margin-bottom:14px; }
 .ramp .tick { position:absolute; top:14px; transform:translateX(-50%); font-size:10.5px; }
@@ -56,6 +59,7 @@ td.open { border:1px dashed var(--line); border-radius:4px; color:var(--text-3);
 <body>
 <header>
   <h1 id="h1"></h1>
+  <div class="note" id="note" hidden></div>
   <div class="sub" id="sub"></div>
   <div class="legend" id="legend"></div>
 </header>
@@ -83,6 +87,7 @@ td.open { border:1px dashed var(--line); border-radius:4px; color:var(--text-3);
   const ms = ours.filter(c => c.type === 'mini-symposium'), msRec = ms.filter(c => recRoom[c.room]).length;
   const nSym = D.cells.filter(c => c.kind === 'symposium').length;
   document.getElementById('h1').textContent = D.title;
+  if (D.note) { const n = document.getElementById('note'); n.innerHTML = D.note; n.hidden = false; }   // the lead's own text
   document.getElementById('sub').innerHTML = (D.dry_run ? `A dry run of <code>schedule budget</code> + <code>schedule solve</code> on a copy of data commit <code>${esc(D.commit)}</code> (the real sort, sizes and schedule are unchanged). `
       : `The schedule in data commit <code>${esc(D.commit)}</code> (schedule/schedule.csv). `) +
     `${ours.length} in-person sessions, ${ms.length} mini-symposia (${msRec} in recorded rooms)` + (nSym ? `, the ${nSym} DQI symposia as APS placed them` : '') + '. ' +

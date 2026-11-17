@@ -125,12 +125,13 @@ def head(data_dir):
     return subprocess.run(['git', '-C', data_dir, 'rev-parse', '--short=7', 'HEAD'], capture_output=True, text=True).stdout.strip()
 
 
-def write(data_dir, out=None, attendance=True, dry_run=False, source=None):
+def write(data_dir, out=None, attendance=True, dry_run=False, source=None, note=None, title=None):
     """Render the schedule in `source` (default data_dir) to out (default DATA_DIR/views/schedule.html)."""
     cfg = S.load_config(data_dir)
     year = ''.join(c for c in str(cfg.get('meeting_dates', '')) if c.isdigit())[-4:]
     data = collect(source or data_dir, attendance)
-    data.update(commit=head(data_dir), dry_run=dry_run, title=f"DQI {year} schedule" + (' — dry run' if dry_run else ''))
+    data.update(commit=head(data_dir), dry_run=dry_run, title=title or f"DQI {year} schedule" + (' — dry run' if dry_run else ''),
+                note=open(note, encoding='utf-8').read() if note else '')
     out = out or os.path.join(data_dir, 'views', 'schedule_dryrun.html' if dry_run else 'schedule.html')
     os.makedirs(os.path.dirname(os.path.abspath(out)), exist_ok=True)
     with open(out, 'w', encoding='utf-8') as f:
@@ -156,6 +157,8 @@ def main():
     ap.add_argument('data_dir')
     ap.add_argument('--dry-run', action='store_true', help='budget and solve on a copy of HEAD first; the real data is not touched')
     ap.add_argument('--out')
+    ap.add_argument('--note', help='an HTML snippet shown at the top, e.g. a note to reviewers (what to check, how to reply)')
+    ap.add_argument('--title', help='page title (default "DQI <year> schedule")')
     ap.add_argument('--iters', type=int, default=400000)
     ap.add_argument('--no-attendance', action='store_true')
     a = ap.parse_args()
@@ -164,7 +167,7 @@ def main():
     else:
         if not os.path.exists(os.path.join(a.data_dir, 'schedule', 'schedule.csv')):
             sys.exit('no schedule/schedule.csv yet: run `schedule solve` (or use --dry-run)')
-        write(a.data_dir, a.out, not a.no_attendance)
+        write(a.data_dir, a.out, not a.no_attendance, note=a.note, title=a.title)
 
 
 if __name__ == '__main__':
