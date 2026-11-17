@@ -207,6 +207,9 @@ def solve(data_dir, iters=400000, seed=1, check_only=False):
     np.fill_diagonal(pen, 0)
     k = {i: n for n, i in enumerate(ids)}
     speakers = {i: {talks[t]['speaker'].strip().lower() for t in members[i] if talks[t]['speaker'].strip()} for i in ids}
+    for i, keys in chair_keys(data_dir, members).items():       # a chair counts as a speaker of the session they chair
+        if i in speakers:
+            speakers[i] |= keys
     req = {}
     for i in ids:
         bad, good = collections.Counter(), collections.Counter()
@@ -368,6 +371,28 @@ def swap(data_dir, a, b):
     S.write_csv(spath, ['session_id', 'slot_id', 'locked'], rows)
     print(f"{a} -> {at[a]['slot_id']}; {b} -> {at[b]['slot_id']}")
     solve(data_dir, check_only=True)
+
+
+def chair_keys(data_dir, members):
+    """{session: {"chair:<email>"}} for the confirmed chairs in chairs/chairs.csv: on the session they chair and on every
+    session holding one of their own talks (their Abstract ID, or their talks in chairs/volunteers.csv), so the clash rule
+    keeps a chair out of a block where they present or chair something else."""
+    path = os.path.join(data_dir, 'chairs', 'chairs.csv')
+    if not os.path.exists(path):
+        return {}
+    vpath = os.path.join(data_dir, 'chairs', 'volunteers.csv')
+    vtalks = {v['email'].lower(): v['talk_ids'] for v in S.read_csv(vpath)} if os.path.exists(vpath) else {}
+    where = {t: i for i, ts in members.items() for t in ts}
+    out = collections.defaultdict(set)
+    for c in S.read_csv(path):
+        if str(c.get('confirmed', '')).strip().upper() != 'TRUE':
+            continue
+        key = 'chair:' + (c['email'].strip().lower() or c['name'].strip().lower())
+        chairs = [x.upper() for x in re.split(r'[;,\s]+', c.get('session') or '') if x]
+        mine = re.split(r'[;,\s]+', (c.get('abstract_id') or '') + ';' + vtalks.get(c['email'].strip().lower(), ''))
+        for i in chairs + [where[t] for t in mine if t in where]:
+            out[i].add(key)
+    return out
 
 
 def virtual_slots(data_dir, rows, members, talks, slots, locked=None):

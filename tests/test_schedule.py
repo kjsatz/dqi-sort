@@ -77,3 +77,14 @@ def test_virtual_slots_keep_locked_placements(tmp_path):
     assert virtual_slots(str(tmp_path), rows, members, talks, slots) == {'VIRA': 'Mon-1215-V1', 'VIRB': 'Tue-1215-V1'}
     locked = virtual_slots(str(tmp_path), rows, members, talks, slots, {'VIRA': 'Tue-1215-V1'})
     assert locked == {'VIRA': 'Tue-1215-V1', 'VIRB': 'Mon-1215-V1'}
+
+
+def test_chair_keys_tie_a_chair_to_their_session_and_their_own_talks(tmp_path):
+    from dqi_sort import schedule as SC, sessions as S
+    (tmp_path / 'chairs').mkdir()
+    S.write_csv(str(tmp_path / 'chairs' / 'chairs.csv'), ['area', 'name', 'email', 'abstract_id', 'confirmed', 'session'],
+                [{'area': 'A', 'name': 'Ada', 'email': 'ada@x.org', 'abstract_id': '7', 'confirmed': 'TRUE', 'session': 'a01'},
+                 {'area': 'A', 'name': 'Bo', 'email': 'bo@x.org', 'abstract_id': '', 'confirmed': '', 'session': 'A03'}])
+    S.write_csv(str(tmp_path / 'chairs' / 'volunteers.csv'), ['email', 'talk_ids'], [{'email': 'ada@x.org', 'talk_ids': '8'}])
+    keys = SC.chair_keys(str(tmp_path), {'A01': ['1'], 'A02': ['7'], 'A04': ['8'], 'A03': ['9']})
+    assert keys == {'A01': {'chair:ada@x.org'}, 'A02': {'chair:ada@x.org'}, 'A04': {'chair:ada@x.org'}}
