@@ -2,7 +2,7 @@
 
 Tools for sorting the Division of Quantum Information (DQI) abstracts for the APS Global Physics Summit into sessions, scheduling the sessions into rooms, recruiting session chairs, and handing the result back to APS. Claude drafts each step; people decide at fixed checkpoints.
 
-The full process, data format and rules are in **[PROCESS.md](PROCESS.md)**. This page is the short version.
+The full process, data format and rules are in **[PROCESS.md](PROCESS.md)**; the steps in order, with the commands, are in **[RUNBOOK.md](RUNBOOK.md)**. This page is the short version.
 
 ## The process
 
@@ -33,11 +33,11 @@ In dry runs on the 2023–2026 abstracts, each year's sort fit its grid, and a b
 
 ## Running it
 
-Every command takes the private data folder as its argument (`DATA_DIR`, one repo per year, with a `config.yaml`; see [config.example.yaml](config.example.yaml)). Claude Code runs most of this; the agent steps write files that the commands check.
+Every command takes the private data folder as its argument (`DATA_DIR`, one repo per year, with a `config.yaml`; see [config.example.yaml](config.example.yaml)). Claude Code runs most of this; the agent steps write files that the commands check. Start a year with `new_year NEW_DIR --from LAST_DIR --year YYYY`, and run `status DATA_DIR` at any point for where the run stands and the next step ([RUNBOOK.md](RUNBOOK.md)).
 
 | Stage | Commands (`python -m dqi_sort.…`) |
 | --- | --- |
-| 1 | `intake DATA_DIR` |
+| 0-1 | `aps_input check / pull / diff / volunteers` (APS's sheets in), `intake DATA_DIR` |
 | 2 | `cards prepare / merge`, `embed` ([docs/cards.md](docs/cards.md), [docs/embeddings.md](docs/embeddings.md)) |
 | 3 | `linking prepare / apply` |
 | 4 | `areas propose / flags / endgame`; the lead's decisions with `decide offer / exchanged / poster / keep / duplicate …` |
@@ -46,7 +46,8 @@ Every command takes the private data folder as its argument (`DATA_DIR`, one rep
 | 8 | `schedule budget / solve / check / swap / grid`; `schedule_page` (the schedule as a page; `--dry-run` on a copy) |
 | 9 | `order positions / prepare / apply / check` |
 | 10 | `chairs sync` |
-| 11 | `validate [--delivery]`, `deliver`, `late add / withdraw / move` |
+| 11 | `validate [--delivery]`, `aps_fill write / check` (APS's sorting sheet filled and read back), `late add / withdraw / move`; `deliver` (reconciliation, and the older copy-of-APS's-page sheet) |
+| Any time | `status DATA_DIR`: each stage done or not, what waits on the lead, the next command |
 | Any time | `overview DATA_DIR [--commit REF]`: the whole sort on one page ([docs/overview.md](docs/overview.md)) |
 | Scoring | `score metrics / judge-prepare / judge-report` ([docs/dry_runs.md](docs/dry_runs.md)) |
 
@@ -69,12 +70,11 @@ Open an [issue](https://github.com/kjsatz/dqi-sort/issues), or comment on any li
 
 ## Layout
 
-- `PROCESS.md`: the process, data format and rules.
+- `PROCESS.md`: the process, data format and rules. `RUNBOOK.md`: the steps in order, for the lead.
 - `dqi_sort/`: the pipeline, one module per stage (table above), plus `gsheets.py` (Google sign-in), `attendance.py` (the attendance model) and `textfix.py`.
 - `prompts/`: the prompts for the Claude agents (cards, linking, drafts, global pass, critics, talk order, judge).
 - `docs/`: how-to notes.
 - `tests/`: pytest with made-up fixtures.
-- `prototype/`: the first test on the 2026 superconducting sessions; reference only.
 - `CLAUDE.md`: working instructions for Claude Code.
 
 ## License

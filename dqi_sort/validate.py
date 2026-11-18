@@ -54,9 +54,23 @@ def load(data_dir):
     sched = {r['session_id']: slots[r['slot_id']] for r in schedule if r['slot_id'] in slots}
     rooms = {r['room_id']: r for r in read(data_dir, 'venue', 'rooms.csv')}
     chairs = [c for c in read(data_dir, 'chairs', 'chairs.csv') if str(c.get('confirmed', '')).strip().upper() == 'TRUE']
+    chairs += virtual_chairs(data_dir, chairs)
     log = read(data_dir, 'sorting', 'status_log.csv')
     return dict(cfg=cfg, talks=talks, sess=sess, assign=assign, members=members, slots=slots, schedule=schedule, assumed=S.assumed_windows(data_dir),
                 sched=sched, rooms=rooms, chairs=chairs, log=log, aps=aps_lists(data_dir, cfg))
+
+
+def virtual_chairs(data_dir, chairs):
+    """The virtual sessions' chairs and co-chairs from chairs/virtual.csv (chosen by the lead, not in the recruiting
+    sheet), as chair rows; a person already listed for that session in chairs.csv is not added twice."""
+    have = {(norm(c['name']), x) for c in chairs for x in chair_codes(c)}
+    out = []
+    for r in read(data_dir, 'chairs', 'virtual.csv'):
+        sid, name = (r.get('session_id') or '').strip(), (r.get('name') or '').strip()
+        if sid and name and (norm(name), sid.upper()) not in have:
+            out.append({'area': 'VIRTUAL', 'name': name, 'email': r.get('email', ''), 'affiliation': r.get('affiliation', ''),
+                        'abstract_id': r.get('abstract_id', ''), 'confirmed': 'TRUE', 'session': sid, 'role': r.get('role', '')})
+    return out
 
 
 def aps_lists(data_dir, cfg):

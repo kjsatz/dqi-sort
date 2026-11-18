@@ -1,5 +1,8 @@
 """Stage 11: the sheet for APS, a copy of their sorting page with our sort filled in.
 
+Since 2027 APS takes the sort in its own sheet: use `python -m dqi_sort.aps_fill` for that. This module still writes
+views/reconciliation.md (APS's list against ours) and the copy in APS's 2026 layout, for a year that asks for it.
+
     python -m dqi_sort.deliver DATA_DIR [--local] [--force]
 
 Runs the validator with the delivery checks first and stops on any ERROR (--force writes anyway, marked as a draft

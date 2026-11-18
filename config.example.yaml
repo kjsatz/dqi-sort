@@ -8,7 +8,7 @@ talk_lengths_min: {oral: 12, invited: 36}
 block_min: 36
 session_slots: null           # before the real grid: {144: N, 108: M}, the slot counts APS allots
 session_budget: null          # from APS: total sessions DQI may use
-chair_process: recruit        # recruit: we invite and confirm chairs; aps_invites (2027): APS writes to the chairs we name, so reviewers only assign
+chair_process: aps_invites   # aps_invites (2027): APS writes to the chairs we name, so reviewers only assign; recruit: we invite and confirm chairs
 chair_skip_virtual: false     # true: no VIRTUAL tab in the recruiting sheet (2027: the lead chose the virtual chairs; chairs/virtual.csv)
 max_same_institution: 4       # soft rule, per session
 institution_order: group      # how a session orders talks from the same institution or group (a matter of taste,
@@ -50,6 +50,11 @@ other_units:
   DPP: Plasma Physics
   GCCM: Shock Compression of Condensed Matter
   GPC: Physics of Climate
+aps_sheet:                    # APS's live sorting sheet (dqi_sort.aps_input check / pull / diff; aps_fill)
+  id: ""                      # its Google Sheet ID
+  tabs: {in_person: In-Person Sorting, virtual: Virtual Sorting, spark: SPARK Sorting}   # "Name*" matches every tab starting with Name
+  snapshot_prefix: SMT28_DQI   # snapshots: input/aps/<prefix>_live_<date>_<track>.csv
+chair_volunteer_sheet: {id: "", tab: Quantum Realm, out: input/chairs/volunteers_live.csv}   # APS's volunteer chairs (aps_input volunteers)
 aps_input:                    # APS exports, relative to the data folder (CSV, or .xlsx with sheet:)
   in_person: {file: input/in_person.csv}
   virtual: {file: input/virtual.csv}

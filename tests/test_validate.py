@@ -108,3 +108,31 @@ def test_delivery_pages(tmp_path):
     assert a1[1:4] == [6, 1, 'Mon, 8:00 AM – 9:48 AM'] and a1[5:9] == ['Chair One', 'c1@u', 'Uni One', 'Confirmed'] and a1[-1] == 'Room 1'
     g = ip['grid']
     assert g['values'][g['head']][:3] == ['ID', 'First Name', 'Last Name'] and g['values'][1][g['s0']] == 'Session\nAbbreviation'
+
+
+def test_virtual_chairs_come_from_virtual_csv(tmp_path):
+    d = make(tmp_path)
+    write(d / 'chairs' / 'virtual.csv', ['session_id', 'role', 'name', 'email', 'affiliation'],
+          [['B1', 'chair', 'Vee One', 'v1@u', 'U'], ['B1', 'co-chair', 'Chair Two', 'c2@u', '']])   # Chair Two already listed
+    chairs = V.load(str(d))['chairs']
+    assert [c['name'] for c in chairs if 'B1' in V.chair_codes(c)] == ['Chair Two', 'Vee One']
+
+
+def test_status_reports_every_stage(tmp_path):
+    from dqi_sort import status
+    rows = status.stages(str(make(tmp_path)))
+    names = [r[0] for r in rows]
+    assert names[0].startswith('0.') and names[-1].startswith('11.')
+    st = dict((r[0], r[1]) for r in rows)
+    assert st['8. Schedule'] == status.DONE and st['10. Chairs'] == status.DONE and st['11. Deliver'] == status.TODO
+
+
+def test_new_year_blanks_the_yearly_settings():
+    from dqi_sort import new_year
+    old = ('meeting_dates: "April 12-16, 2027"   # note\ndivision_code: 24\n'
+           'aps_sheet:                    # comment\n  id: abc123\n  tabs: {in_person: X}\n'
+           'chair_volunteer_sheet: {id: xyz, tab: T, out: o.csv}\ninvited_first: [A1, B2]\nsheets: {folder_id: f}\nareas: {A: {}}\n')
+    cfg = yaml.safe_load(new_year.reset_config(old))
+    assert cfg['meeting_dates'] == '' and cfg['division_code'] is None and cfg['invited_first'] == [] and cfg['sheets'] == {}
+    assert cfg['aps_sheet'] == {'id': '', 'tabs': {'in_person': 'X'}} and cfg['chair_volunteer_sheet']['id'] == ''
+    assert cfg['areas'] == {'A': {}}

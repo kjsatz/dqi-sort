@@ -85,3 +85,9 @@ def test_in_person_errors_skip_the_virtual_track():
     probs = [('ERROR', 'V1: 0 of 2 chairs'), ('ERROR', '3: in the APS input but not in talks.csv'), ('ERROR', 'P1: no chair'),
              ('ERROR', '2: twice'), ('WARN', 'P1: empty')]
     assert A.in_person_errors(d, probs) == ['P1: no chair', '2: twice']
+
+
+def test_meeting_days_from_config_dates():
+    days = A.meeting_days('April 12-16, 2027')
+    assert days == {'Mon': '2027-04-12', 'Tue': '2027-04-13', 'Wed': '2027-04-14', 'Thu': '2027-04-15', 'Fri': '2027-04-16'}
+    assert A.meeting_days('') == {} and A.meeting_days('sometime in spring') == {}
