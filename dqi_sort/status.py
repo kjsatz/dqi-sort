@@ -68,6 +68,9 @@ def stages(data_dir):
     out.append(('5-6. Sessions', DONE if sess and not lonely else (PART if sess else TODO),
                 f'{len(sess)} sessions; {len(lonely)} active talks in no session', 'python -m dqi_sort.pack ... (docs/sessions.md)'))
 
+    chk = p('views', 'aps_sheet_check.md')
+    txt = open(chk, encoding='utf-8').read() if os.path.exists(chk) else ''
+    ok = 'Matches the sort in git' in txt                # delivered: rounds still out are closed
     rounds = V.read(data_dir, 'sorting', 'sheets.csv')
     applied = {(r.get('area'), str(r.get('round'))) for r in V.read(data_dir, 'sorting', 'reviews.csv')}
     latest = {}
@@ -75,7 +78,7 @@ def stages(data_dir):
         if r.get('kind') == 'area':
             latest[r['area']] = max(latest.get(r['area'], 0), int(r['round'] or 0))
     out_now = sorted(a for a, n in latest.items() if (a, str(n)) not in applied)
-    out.append(('7. Review', (PART if out_now else DONE) if latest else TODO,
+    out.append(('7. Review', (PART if out_now and not ok else DONE) if latest else TODO,
                 f"{len(latest)} areas sent; latest round not applied: {', '.join(out_now) or 'none'} (read back; apply if changed)",
                 'python -m dqi_sort.review read DATA AREA (then apply)'))
 
@@ -95,9 +98,6 @@ def stages(data_dir):
     got = sum(min(have[s], 2 if V.is_virtual(sess[s]) else 1) for s in sess)
     out.append(('10. Chairs', DONE if sess and got == need else (PART if got else TODO), f'{got} of {need} chairs', 'python -m dqi_sort.chairs sync DATA'))
 
-    chk = p('views', 'aps_sheet_check.md')
-    txt = open(chk, encoding='utf-8').read() if os.path.exists(chk) else ''
-    ok = 'Matches the sort in git' in txt
     out.append(('11. Deliver', DONE if ok else (PART if txt else TODO),
                 (txt.splitlines()[0].lstrip('# ') + (': matches' if ok else ': mismatches')) if txt else "APS's sheet not filled yet",
                 'python -m dqi_sort.aps_fill write DATA; aps_fill check DATA'))
