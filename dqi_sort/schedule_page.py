@@ -1,6 +1,6 @@
 """The schedule as one page: rooms by time blocks, coloured by expected attendance, with each session's talks.
 
-    python -m dqi_sort.schedule_page DATA_DIR [--dry-run] [--out PATH] [--no-attendance]
+    python -m dqi_sort.schedule_page DATA_DIR [--dry-run] [--out PATH] [--no-attendance] [--no-numbers]
 
 Without --dry-run: the schedule in schedule/schedule.csv, written to DATA_DIR/views/schedule.html.
 With --dry-run: copies the data repo's HEAD to a temporary folder, runs `schedule budget --apply` and `schedule solve`
@@ -17,12 +17,16 @@ The page is self-contained (no network; it holds talk titles and speakers, so it
   rooms keep a theme. ▲ marks a session whose
   high estimate exceeds the seats. Badges: MS mini-symposium, SYM symposium, REC recorded room.
 - Click a session for its scope, coherence, estimate and talks (with each talk's fit chip, pack.FIT_RANGE colours).
-Needs Ollama for the estimates (`--no-attendance` leaves them out).
+Needs Ollama for the estimates (`--no-attendance` leaves them out). `--no-numbers` makes a page to share outside the
+team: the colours and ▲ stay, but no attendance estimate, coherence or fit number is in the page (not even its source):
+each session carries only its place on the colour ramp.
 """
-import argparse, collections, io, json, os, subprocess, sys, tarfile, tempfile
+import argparse, collections, io, json, math, os, subprocess, sys, tarfile, tempfile
 import numpy as np
 
 from dqi_sort import sessions as S, pack, sheets
+
+LO, HI = 30, 600                 # the colour ramp's ends in people (log scale), as LO and HI in schedule_page.html
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 TEMPLATE = os.path.join(HERE, 'schedule_page.html')
@@ -121,17 +125,35 @@ def render(data):
     return page.replace('__TITLE__', data['title']).replace('__DATA__', blob)
 
 
+def strip_numbers(data):
+    """Keep the colours, drop the numbers: each cell's estimate becomes its place on the ramp (0..1, as the page's
+    u()), its high estimate a yes/no ▲, and coherence and fit go."""
+    cap = {r['id']: r['cap'] for r in data.get('rooms', [])}
+    for c in data.get('cells', []):
+        if c.get('est'):
+            c['heat'] = round(max(0.0, min(1.0, (math.log(c['est']) - math.log(LO)) / (math.log(HI) - math.log(LO)))), 2)
+        if c.get('high') and cap.get(c.get('room')) and c['high'] > cap[c['room']]:
+            c['over'] = True
+        for k in ('est', 'low', 'high', 'coh'):
+            c.pop(k, None)
+        for t in c.get('talks') or []:
+            t['fit'] = None
+    return data
+
+
 def head(data_dir):
     return subprocess.run(['git', '-C', data_dir, 'rev-parse', '--short=7', 'HEAD'], capture_output=True, text=True).stdout.strip()
 
 
-def write(data_dir, out=None, attendance=True, dry_run=False, source=None, note=None, title=None):
+def write(data_dir, out=None, attendance=True, dry_run=False, source=None, note=None, title=None, numbers=True):
     """Render the schedule in `source` (default data_dir) to out (default DATA_DIR/views/schedule.html)."""
     cfg = S.load_config(data_dir)
     year = ''.join(c for c in str(cfg.get('meeting_dates', '')) if c.isdigit())[-4:]
     data = collect(source or data_dir, attendance)
     data.update(commit=head(data_dir), dry_run=dry_run, title=title or f"DQI {year} schedule" + (' — dry run' if dry_run else ''),
                 note=open(note, encoding='utf-8').read() if note else '')
+    if not numbers:
+        strip_numbers(data)
     out = out or os.path.join(data_dir, 'views', 'schedule_dryrun.html' if dry_run else 'schedule.html')
     os.makedirs(os.path.dirname(os.path.abspath(out)), exist_ok=True)
     with open(out, 'w', encoding='utf-8') as f:
@@ -161,13 +183,14 @@ def main():
     ap.add_argument('--title', help='page title (default "DQI <year> schedule")')
     ap.add_argument('--iters', type=int, default=400000)
     ap.add_argument('--no-attendance', action='store_true')
+    ap.add_argument('--no-numbers', action='store_true', help='colours only: no estimate, coherence or fit numbers (a page to share)')
     a = ap.parse_args()
     if a.dry_run:
         dry_run(a.data_dir, a.out, not a.no_attendance, a.iters)
     else:
         if not os.path.exists(os.path.join(a.data_dir, 'schedule', 'schedule.csv')):
             sys.exit('no schedule/schedule.csv yet: run `schedule solve` (or use --dry-run)')
-        write(a.data_dir, a.out, not a.no_attendance, note=a.note, title=a.title)
+        write(a.data_dir, a.out, not a.no_attendance, note=a.note, title=a.title, numbers=not a.no_numbers)
 
 
 if __name__ == '__main__':
