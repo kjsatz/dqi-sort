@@ -26,7 +26,7 @@ Principles:
 | 8. Schedule | Estimates attendance for every session; proposes room trades with symposia; then a solver assigns sessions to room-time slots (see [Scheduling](#scheduling)) | **Checkpoint:** decide the trades; approve or adjust the schedule |
 | 9. Talk order | Sets each room's invited-talk position and re-orders every session around it (see [Talk order](#talk-order)) | Spot-check |
 | 10. Chairs (starts with stage 7, runs in parallel) | Links volunteers to their abstracts and lists them in the recruiting spreadsheet, a tab per review area; once the schedule is set, reads the notes, places the confirmed chairs on sessions without clashes and checks every chair | The area's expert recruits the chairs it needs, from the volunteers and their own network, during review; lead approves (see [Chairs](#chairs)) |
-| 11. Deliver | Runs the validator; writes the sort into a copy of APS's sorting page (sessions, talk order, chairs, rooms); reconciles APS's abstract list with the delivered one; handles late adds, withdrawals and moves (see [Delivery](#delivery)) | Approve each late change and the reconciliation |
+| 11. Deliver | Runs the validator; writes the sort into APS's own sorting sheet (sessions, chairs, talk order) and reads it back to check; sends APS the schedule; reconciles APS's abstract list with the delivered one; handles late adds, withdrawals and moves (see [Delivery](#delivery)) | Approve each late change and the reconciliation |
 
 After the meeting, we keep the final sort and the edits people made to Claude's drafts. They are the best input for improving the process next year.
 
@@ -374,7 +374,9 @@ Chair recruiting starts with the sort review (stage 7): by then each area's sess
 
 ## Delivery
 
-What APS wants back is its own sorting page, filled in. `python -m dqi_sort.deliver DATA_DIR` runs the validator with the delivery checks first and stops on any error (`--force` writes a draft, marked as such, for a look). It writes one Google Sheet in the review folder, made once and then rewritten in place, with a page per track (In person, Virtual). Each page is one long page, not split by area as APS's 2026 input was, in the layout of the 2026 page:
+What APS wants back is its own sorting page, filled in. Since 2027 we write into APS's live sheet directly: `python -m dqi_sort.aps_fill write DATA_DIR` runs the in-person delivery checks, saves the tab as it was, and writes each session (length, abbreviation = our code, title, chair) and each talk's Session and Order, never touching the Virtual tab or APS's own notes; `aps_fill check` reads the tab back and compares every session and talk with git, and APS's own formulas (session type, talk count, seats left). Rerun both after any late change. The schedule goes to APS separately, as a CSV with a row per session and the schedule page made with `schedule_page --no-numbers`; check APS's entry in its grid against `schedule/schedule.csv`.
+
+The older route, for a year whose APS sheet cannot be written: `python -m dqi_sort.deliver DATA_DIR` runs the validator with the delivery checks first and stops on any error (`--force` writes a draft, marked as such, for a look). It writes one Google Sheet in the review folder, made once and then rewritten in place, with a page per track (In person, Virtual). Each page is one long page, not split by area as APS's 2026 input was, in the layout of the 2026 page:
 
 - top left, the sorting categories with their counts of abstracts;
 - next to it, the session slots per time block: allocated (our room slots), created, remaining;
