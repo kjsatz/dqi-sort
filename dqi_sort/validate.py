@@ -128,7 +128,7 @@ def check_sessions(d, delivery):
         elif used < cap - S.UNIT_MIN:
             out.append(('WARN', f'{sid}: {cap - used} minutes empty'))
         sched = d['sched'] if sid in d['sched'] else {}
-        for e in session_problems(sid, m, talks, sched, d['rooms'], members):
+        for e in session_problems(sid, m, talks, sched, d['rooms'], members, frozenset(str(x) for x in (d['cfg'].get('invited_first') or []))):
             if 'minutes in a' not in e or used <= cap:            # length is reported above
                 out.append(('ERROR', e))
         for i in m:

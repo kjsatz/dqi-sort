@@ -16,6 +16,8 @@ institution_order: group      # how a session orders talks from the same institu
                               # their group's invited talk (less context switching for the audience); mix = spread
                               # them through the session (avoids a "group meeting" block, gives small groups an
                               # audience); none = no preference either way
+invited_first: []             # sessions whose invited talk must open the session (e.g. a group's talks follow it):
+                              # talk order holds them to block 1, and `order positions` fixes their rooms' block at 1
 dqi_categories:               # this year's DQI submission categories: code: name
   # "17.01.01": "Superconducting Systems Relying on Cavity States"
 other_units:
