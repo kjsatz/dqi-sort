@@ -2,6 +2,7 @@
 
     python -m dqi_sort.aps_fill write DATA_DIR [SHEET_ID] [--dry-run] [--force]
     python -m dqi_sort.aps_fill check DATA_DIR [SHEET_ID]
+    python -m dqi_sort.aps_fill schedule DATA_DIR      (views/schedule_for_aps.csv: the schedule for APS's grid)
 
 SHEET_ID defaults to config aps_sheet.id, and the tab to aps_sheet.tabs.in_person (dqi_sort.aps_input).
 
@@ -22,8 +23,11 @@ check   reads the tab back (values as shown) and compares it with the sort in gi
         do not have; and APS's own formulas: the session type (mini-symposium when it has an invited talk), the talk
         count, and no session over capacity (Seats Left below 0). Writes views/aps_sheet_check.md. Exit 1 on a
         mismatch.
+schedule  writes views/schedule_for_aps.csv, one row per in-person session sorted by day, time and room: code, title,
+        type, length, day, date, start and end, APS block, room, APS room number, seats, recorded, chair. Send it with
+        the `schedule_page --no-numbers` page; in 2027 APS entered it into its Summit Grid from this file.
 """
-import argparse, collections, datetime, json, os, sys
+import argparse, collections, csv, datetime, json, os, re, sys
 from dqi_sort import deliver as D, validate as V
 
 TAB = 'In-Person Sorting'     # set from config aps_sheet.tabs.in_person by target()
@@ -273,15 +277,63 @@ def check(data_dir, sheet_id=None):
     return 1 if probs else 0
 
 
+DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+DAY_NAMES = dict(zip(DAYS, ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']))
+
+
+def meeting_days(dates):
+    """{'Mon': '2027-04-12', ...} from config meeting_dates like "April 12-16, 2027"; {} if it does not parse."""
+    m = re.match(r'\s*([A-Za-z]+)\s+(\d+)\s*[-–]\s*(\d+),\s*(\d{4})', str(dates or ''))
+    if not m:
+        return {}
+    try:
+        first = datetime.datetime.strptime(f'{m.group(1)} {m.group(2)} {m.group(4)}', '%B %d %Y').date()
+    except ValueError:
+        return {}
+    days = int(m.group(3)) - int(m.group(2)) + 1
+    return {DAYS[(first + datetime.timedelta(k)).weekday()]: (first + datetime.timedelta(k)).isoformat() for k in range(days)}
+
+
+def schedule_csv(data_dir):
+    d = V.load(data_dir)
+    sess, sched, rooms = d['sess'], d['sched'], d['rooms']
+    chairs = D.chair_info(data_dir, d['chairs'])
+    dates = meeting_days(d['cfg'].get('meeting_dates'))
+    tz = d['cfg'].get('time_zone') or 'local'
+    rows = []
+    for sid, sl in sched.items():
+        s = sess.get(sid)
+        if not s or V.is_virtual(s) or not sl.get('room_id'):
+            continue
+        rm = rooms.get(sl['room_id'], {})
+        rows.append({'Session Abbreviation': sid, 'Session Title': s['title'],
+                     'Session Type': 'Mini-symposium' if s.get('kind') == 'mini-symposium' else 'Oral contributed',
+                     'Length (min)': s['minutes'], 'Day': DAY_NAMES.get(sl['day'], sl['day']), 'Date': dates.get(sl['day'], ''),
+                     f'Start ({tz})': sl['start'], f'End ({tz})': sl['end'], 'APS Block': sl.get('block', ''), 'Room': rm.get('name', sl['room_id']),
+                     'APS Room #': rm.get('aps_room', ''), 'Seats': rm.get('capacity', ''), 'Recorded': rm.get('recorded', ''),
+                     'Chair': ', '.join(c[0] for c in chairs.get(sid, []))})
+    rows.sort(key=lambda r: (DAYS.index(next(k for k, v in DAY_NAMES.items() if v == r['Day'])) if r['Day'] in DAY_NAMES.values() else 9,
+                             r[f'Start ({tz})'], r['Room']))
+    out = os.path.join(data_dir, 'views', 'schedule_for_aps.csv')
+    os.makedirs(os.path.dirname(out), exist_ok=True)
+    with open(out, 'w', encoding='utf-8', newline='') as f:
+        w = csv.DictWriter(f, list(rows[0]) if rows else ['Session Abbreviation'], lineterminator='\n')
+        w.writeheader()
+        w.writerows(rows)
+    print(f'{len(rows)} in-person sessions -> {os.path.relpath(out, data_dir)}')
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument('cmd', choices=['write', 'check'])
+    ap.add_argument('cmd', choices=['write', 'check', 'schedule'])
     ap.add_argument('data_dir')
     ap.add_argument('sheet_id', nargs='?')
     ap.add_argument('--dry-run', action='store_true')
     ap.add_argument('--force', action='store_true')
     a = ap.parse_args()
-    if a.cmd == 'write':
+    if a.cmd == 'schedule':
+        schedule_csv(a.data_dir)
+    elif a.cmd == 'write':
         write(a.data_dir, a.sheet_id, a.dry_run, a.force)
     else:
         sys.exit(check(a.data_dir, a.sheet_id))

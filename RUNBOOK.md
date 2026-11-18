@@ -95,9 +95,9 @@ APS took the sort back on Nov 18: about two weeks, most of it waiting for review
 3. **Validate.** `validate --delivery`: 0 errors before delivery.
 4. **Deliver.** `aps_fill write` fills APS's sorting sheet (sessions, chairs, each talk's session and order; never the
    Virtual tab), then `aps_fill check` reads it back and compares it with git. Rerun both after any late change.
-   Write the schedule for APS as a CSV (one row per session: day, time, block, room; `views/schedule_for_aps.csv` in
-   2027) and send it with the `--no-numbers` schedule page; in 2027 APS entered it into the Summit Grid. Check APS's
-   entry against `schedule/schedule.csv`.
+   `aps_fill schedule` writes the schedule for APS (`views/schedule_for_aps.csv`, one row per session: day, date,
+   time, block, room, chair); send it with the `schedule_page --no-numbers` page. In 2027 APS entered it into the
+   Summit Grid; check APS's entry (screenshots are enough) against `schedule/schedule.csv`, every cell.
 5. **Late changes:** `late add / withdraw / move`, each committed and checked; then `aps_fill write` and `check`.
 
 ## After the meeting
