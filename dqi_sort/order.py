@@ -12,6 +12,9 @@ positions  gives each room a block for the invited talks of its 144- and 108-min
            invited_block_144, invited_block_108), chosen so that invited talks running at the same time stagger:
            a random search that minimises pairs of invited talks in the same time block and the same position,
            counted double for rooms in the same zone or of the same topic family. Writes views/invited_positions.md.
+           Sessions listed in config `invited_first` (their invited talk opens the session, e.g. a group's talks
+           follow it) fix their room's block at 1 for their length; the search moves only the other rooms, and the
+           checks hold those sessions to block 1 wherever they are scheduled.
 prepare    writes work/order/AREA/ for each area with sessions holding an invited talk: sessions.md (each such
            session with its room's block, a feasible block if that one cannot be reached, and every talk's card,
            series and requests) and prompt.md (prompts/order_spec.md). One Claude agent per area writes order.json.
@@ -113,10 +116,19 @@ def feasible_blocks(talk_ids, talks, minutes):
     return out
 
 
-def target_block(sid, members, talks, sched, rooms):
+def invited_first(data_dir):
+    """Sessions whose invited talk must open the session (config `invited_first`)."""
+    try:
+        cfg = S.load_config(data_dir)
+    except FileNotFoundError:
+        cfg = {}
+    return frozenset(str(x) for x in (cfg.get('invited_first') or []))
+
+
+def target_block(sid, members, talks, sched, rooms, first=frozenset()):
     s = sched[sid]
     room = rooms.get(s['room_id']) or {}
-    want = room.get(f"invited_block_{s['minutes']}")
+    want = 1 if sid in first else room.get(f"invited_block_{s['minutes']}")
     ok = feasible_blocks(members[sid], talks, int(s['minutes']))
     want = int(want) if want else 1
     return want, (want if want in ok else min(ok, key=lambda k: (abs(k - want), k)))
@@ -135,15 +147,14 @@ def blocks_of(order, talks):
     return at, off
 
 
-def session_problems(sid, order, talks, sched, rooms, members):
+def session_problems(sid, order, talks, sched, rooms, members, first=frozenset()):
     errs = []
     if sorted(order) != sorted(members[sid]):
         return [f'{sid}: the order must list exactly the session\'s talks']
     at, off = blocks_of(order, talks)
     errs += [f'{sid}: invited talk {i} does not start a 36-minute block' for i in off]
     if at and sid in sched and sched[sid]['room_id']:
-        want, reach = target_block(sid, members, talks, sched, rooms)
-        first = min(at.values())
+        want, reach = target_block(sid, members, talks, sched, rooms, first)
         if reach not in at.values():
             errs.append(f"{sid}: no invited talk at block {reach} (the room's block{'' if reach == want else f' {want} cannot be reached'})")
     series = collections.defaultdict(list)
@@ -177,6 +188,9 @@ def positions(data_dir, seed=1, iters=20000):
     room_ids = sorted(fams)
     rnd = random.Random(seed)
     pos = {(r, m): rnd.randint(1, BLOCKS[m]) for r in room_ids for m in BLOCKS}
+    fixed = {(sched[sid]['room_id'], int(sched[sid]['minutes'])) for sid in invited_first(data_dir) if sid in sched and sched[sid]['room_id']}
+    for key in fixed:
+        pos[key] = 1
 
     def block_of(sid):
         s = sched[sid]
@@ -194,8 +208,9 @@ def positions(data_dir, seed=1, iters=20000):
                         c += 1 + (rooms[ra]['zone'] == rooms[rb]['zone']) + (family[ra] == family[rb])
         return c
     cur = cost()
+    free = [k for k in pos if k not in fixed]
     for _ in range(iters):
-        key = rnd.choice(list(pos))
+        key = rnd.choice(free)
         old = pos[key]
         pos[key] = rnd.randint(1, BLOCKS[key[1]])
         new = cost()
@@ -214,6 +229,9 @@ def positions(data_dir, seed=1, iters=20000):
              '| Room | Zone | Topic family | 144-min sessions: block (talk no.) | 108-min sessions: block (talk no.) |', '| --- | --- | --- | --- | --- |']
     lines += [f"| {r} | {rooms[r]['zone']} | {family[r]} | {pos[(r, 144)]} ({talk_no(pos[(r, 144)])}) | {pos[(r, 108)]} ({talk_no(pos[(r, 108)])}) |"
               for r in room_ids]
+    if fixed:
+        lines += ['', 'Fixed at block 1 for `invited_first` sessions: ' + ', '.join(
+            f"{sid} ({sched[sid]['room_id']}, {sched[sid]['minutes']} min)" for sid in sorted(invited_first(data_dir)) if sid in sched)]
     same = sum(1 for v in by_block.values() for a in range(len(v)) for b in range(a + 1, len(v)) if block_of(v[a]) == block_of(v[b]))
     total = sum(len(v) * (len(v) - 1) // 2 for v in by_block.values())
     lines += ['', f'{len(inv_sessions)} sessions hold an invited talk. Pairs of invited talks in the same time block: {total}; '
@@ -235,10 +253,11 @@ def prepare(data_dir):
     with open(os.path.join(S.HERE, 'prompts', 'order_spec.md'), encoding='utf-8') as f:
         spec = f.read()
     notes_talk, notes_sess = reviewer_notes(data_dir)
+    first = invited_first(data_dir)
     mode, inst_text = order_mode(data_dir)
     by_area = collections.defaultdict(list)
     for sid in sorted(sched):
-        if any(talks[i]['type'] == 'invited' for i in members[sid]):
+        if sched[sid]['room_id'] and any(talks[i]['type'] == 'invited' for i in members[sid]):   # virtual: no room, no blocks
             by_area[sess[sid]['area']].append(sid)
     root = os.path.join(data_dir, 'work', 'order')
     for area, sids in sorted(by_area.items()):
@@ -247,11 +266,12 @@ def prepare(data_dir):
         lines = [f'# {area}: sessions with an invited talk ({len(sids)})', '']
         for sid in sids:
             s = sched[sid]
-            want, reach = target_block(sid, members, talks, sched, rooms)
+            want, reach = target_block(sid, members, talks, sched, rooms, first)
             n_inv = sum(talks[i]['type'] == 'invited' for i in members[sid])
             lines += [f"## {sid}: {sess[sid]['title']} ({s['minutes']} min, {s['day']} {s['start']}, room {s['room_id']})", '',
                       f"Invited talk at block {reach} (talk number {3 * (reach - 1) + 1})" + ('' if reach == want else f" (the room's block {want} cannot be reached)")
-                      + ('; this session has two invited talks: the other goes at another block start.' if n_inv > 1 else '.'), '',
+                      + ('; this session has two invited talks: the other goes at another block start.' if n_inv > 1 else '.')
+                      + (' The invited talk opens this session (`invited_first`): keep the talks the reviewer groups with it right after it.' if sid in first else ''), '',
                       'Current order:', '']
             lines += [S.card_text(talks[i], cards.get(i), series_parts) for i in members[sid]] + ['']
             notes = [f'- session: {n}' for n in notes_sess.get(sid, [])]
@@ -274,6 +294,7 @@ def apply(data_dir, only=None, dry_run=False):
     talks, sess, assign, members, sched, rooms = load(data_dir)
     errs, orders = [], {}
     mode = order_mode(data_dir)[0]
+    first = invited_first(data_dir)
     for path in sorted(glob.glob(os.path.join(data_dir, 'work', 'order', '*', 'order.json'))):
         area = os.path.basename(os.path.dirname(path))
         if only and area != only:
@@ -282,7 +303,7 @@ def apply(data_dir, only=None, dry_run=False):
             got = json.load(f)
         for sid, order in got.items():
             order = [str(x) for x in order]
-            e = session_problems(sid, order, talks, sched, rooms, members)
+            e = session_problems(sid, order, talks, sched, rooms, members, first)
             errs += e
             for w in institution_warnings(order, talks, mode):
                 print(f'WARN {sid}: {w}')
@@ -303,7 +324,8 @@ def apply(data_dir, only=None, dry_run=False):
 
 def check(data_dir):
     talks, sess, assign, members, sched, rooms = load(data_dir)
-    errs = [e for sid in sorted(sched) for e in session_problems(sid, members[sid], talks, sched, rooms, members)]
+    first = invited_first(data_dir)
+    errs = [e for sid in sorted(sched) for e in session_problems(sid, members[sid], talks, sched, rooms, members, first)]
     for e in errs:
         print('ERROR', e)
     print(f'{len(sched)} sessions checked: {len(errs)} problems')

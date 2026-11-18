@@ -61,3 +61,16 @@ def test_card_text_shows_also_presenting():
          'series': '', 'series_part': '', 'track': 'in_person', 'time_windows': '', 'flags': '',
          'also_presenting': 'Invited symposium X (Mon 8:00)'}
     assert 'speaker also presents: Invited symposium X (Mon 8:00)' in S.card_text(t, None, {})
+
+
+def test_invited_first_overrides_the_rooms_block():
+    talks = {'i': {'type': 'invited', 'minutes': '36', 'series': '', 'series_part': ''}}
+    talks.update({str(n): {'type': 'oral', 'minutes': '12', 'series': '', 'series_part': ''} for n in range(6)})
+    members = {'S1': ['i'] + [str(n) for n in range(6)]}
+    sched = {'S1': {'room_id': 'R', 'minutes': '108', 'day': 'Mon', 'start': '08:00'}}
+    rooms = {'R': {'invited_block_108': '3'}}
+    assert O.target_block('S1', members, talks, sched, rooms)[1] == 3
+    assert O.target_block('S1', members, talks, sched, rooms, frozenset({'S1'})) == (1, 1)
+    first_order = members['S1']
+    assert O.session_problems('S1', first_order, talks, sched, rooms, members, frozenset({'S1'})) == []
+    assert O.session_problems('S1', first_order, talks, sched, rooms, members)       # block 3 wanted by the room
