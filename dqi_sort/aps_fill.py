@@ -1,7 +1,9 @@
 """Stage 11 (2027 layout): fill APS's own sorting sheet with our in-person sessions, then read it back and check.
 
-    python -m dqi_sort.aps_fill write DATA_DIR SHEET_ID [--dry-run] [--force]
-    python -m dqi_sort.aps_fill check DATA_DIR SHEET_ID
+    python -m dqi_sort.aps_fill write DATA_DIR [SHEET_ID] [--dry-run] [--force]
+    python -m dqi_sort.aps_fill check DATA_DIR [SHEET_ID]
+
+SHEET_ID defaults to config aps_sheet.id, and the tab to aps_sheet.tabs.in_person (dqi_sort.aps_input).
 
 APS's 2027 sheet keeps every in-person talk on one tab ("In-Person Sorting"): a table of sessions at the top (one
 row per session: Length, Abbreviation, Session Title, Chair Name/Email/Affiliation, optional co-chair; the other
@@ -24,7 +26,7 @@ check   reads the tab back (values as shown) and compares it with the sort in gi
 import argparse, collections, datetime, json, os, sys
 from dqi_sort import deliver as D, validate as V
 
-TAB = 'In-Person Sorting'
+TAB = 'In-Person Sorting'     # set from config aps_sheet.tabs.in_person by target()
 LAST_COL = 'Z'
 S_FIELDS = {'length': 'Length', 'abbr': 'Abbreviation', 'title': 'Session Title', 'chair': 'Chair Name',
             'email': 'Chair Email', 'aff': 'Chair Affiliation', 'co_chair': 'Co-Chair Name', 'co_email': 'Co-Chair Email',
@@ -199,12 +201,27 @@ def in_person_errors(d, probs):
     return [m for lvl, m in probs if lvl == 'ERROR' and m.split(':')[0].strip() not in virtual | vtalks]
 
 
+def target(data_dir, sheet_id=None):
+    """The sheet ID (argument, else config aps_sheet.id); sets TAB from config aps_sheet.tabs.in_person."""
+    global TAB
+    from dqi_sort import sessions as S
+    a = S.load_config(data_dir).get('aps_sheet') or {}
+    tab = (a.get('tabs') or {}).get('in_person')
+    if tab and not tab.endswith('*'):
+        TAB = tab
+    sid = sheet_id or a.get('id')
+    if not sid:
+        raise SystemExit('no SHEET_ID: pass it, or set aps_sheet.id in config.yaml')
+    return sid
+
+
 def read_tab(sheets, sheet_id, render):
     return sheets.spreadsheets().values().get(spreadsheetId=sheet_id, range=f"'{TAB}'!A1:{LAST_COL}", valueRenderOption=render
                                               ).execute(num_retries=5).get('values', [])
 
 
-def write(data_dir, sheet_id, dry_run=False, force=False):
+def write(data_dir, sheet_id=None, dry_run=False, force=False):
+    sheet_id = target(data_dir, sheet_id)
     d = V.load(data_dir)
     errs = in_person_errors(d, V.validate(data_dir, delivery=True, quiet=True)[0])
     if errs and not force:
@@ -235,7 +252,8 @@ def write(data_dir, sheet_id, dry_run=False, force=False):
           f'the tab as it was: {os.path.relpath(backup, data_dir)}')
 
 
-def check(data_dir, sheet_id):
+def check(data_dir, sheet_id=None):
+    sheet_id = target(data_dir, sheet_id)
     sessions, place = ours(data_dir)
     from dqi_sort import gsheets
     _, sheets = gsheets.services()
@@ -259,7 +277,7 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument('cmd', choices=['write', 'check'])
     ap.add_argument('data_dir')
-    ap.add_argument('sheet_id')
+    ap.add_argument('sheet_id', nargs='?')
     ap.add_argument('--dry-run', action='store_true')
     ap.add_argument('--force', action='store_true')
     a = ap.parse_args()
