@@ -32,3 +32,17 @@ def test_page_from_a_schedule_with_symposia_and_room_lines(tmp_path):
     assert page.count('</script>') == 2
     assert data['room_desc']['R1'] == 'A 1 of 1: A 1' and data['room_desc']['R3'] == '1 DQI symposium'
     assert [r['rec'] for r in data['rooms']] == [True, False, False] and data['open'] == ['Mon|08:00|R1', 'Mon|08:00|R2', 'Mon|08:00|R3']
+
+
+def test_strip_numbers_keeps_colour_drops_numbers():
+    from dqi_sort import schedule_page as P
+    data = {'rooms': [{'id': 'R1', 'cap': 100}],
+            'cells': [{'id': 'A01', 'room': 'R1', 'est': 120, 'low': 80, 'high': 180, 'coh': 0.91, 'talks': [{'t': 'x', 'fit': 0.9}]},
+                      {'id': 'A02', 'room': 'R1', 'est': 30, 'low': 20, 'high': 50, 'talks': []},
+                      {'id': 'A03', 'room': 'R1', 'talks': []}]}
+    P.strip_numbers(data)
+    a, b, c = data['cells']
+    assert a['heat'] == round((P.math.log(120) - P.math.log(P.LO)) / (P.math.log(P.HI) - P.math.log(P.LO)), 2) and a['over'] is True
+    assert b['heat'] == 0.0 and 'over' not in b and 'heat' not in c
+    assert not any(k in x for x in (a, b) for k in ('est', 'low', 'high', 'coh'))
+    assert a['talks'][0]['fit'] is None
